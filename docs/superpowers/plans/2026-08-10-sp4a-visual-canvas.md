@@ -4,7 +4,7 @@
 
 **Goal:** Replace the Tauri-React greet scaffold with a production visual-query canvas that ports Swift block-card behaviour against real `src/core/` and a mocked `DragonIpc`.
 
-**Architecture:** Swift file-boundary mirror under `src/ui/visual-query/`. `App.tsx` owns mock IPC wiring (fixture `ConnectionId`, table/column loads) and mounts the canvas full-window. Component-local `QueryDocument` state; no `src/stores/`. Live SQL preview uses `generateSQL(doc)?.display ?? "—"`. Validation help uses a status strip (`canRun` messages as-is); no Run button.
+**Architecture:** Swift file-boundary mirror under `src/ui/visual-query/`. `App.tsx` owns mock IPC wiring (fixture `ConnectionId`, table/column loads) and mounts the canvas full-window. Component-local `QueryDocument` plus an explicit **revision counter** so in-place mutators still re-render. No `src/stores/`. Live SQL preview uses `generateSQL(doc)?.display ?? "—"`. Validation help uses a status strip (`canRun` messages as-is); no Run button.
 
 **Tech Stack:** Tauri v2, React 19, TypeScript, Bun, Vitest (+ jsdom + Testing Library for UI), Biome, CSS custom properties from the creative brief, `@fontsource/inter` + `@fontsource/jetbrains-mono` for local fonts.
 
@@ -20,9 +20,13 @@
 - Do not call `runQuery` from UI; do not add Run chrome.
 - CREATE is in scope; UPDATE/DELETE are Coming soon selectable states.
 - Mirror Swift file boundaries (scheduled tech debt — do not regroup into idiomatic React).
-- Scaffold purge is a hard exit: zero greet/demo leftovers.
+- Scaffold purge is a hard exit: zero greet/demo leftovers — includes `src/`, `index.html`, `public/`, and Rust `greet`.
 - Package manager: Bun (`bun add`, `bun run check`).
-- Manual verify on macOS + Linux after Task 10 (checklist in spec §11.2); not automated in CI.
+- Manual verify on macOS + Linux after Task 10 (checklist in spec §11.2); not automated in CI. Sign-off artifact required (Task 11).
+- **QueryDocument reactivity:** mutators update the instance in place. Every canvas mutation must bump a React revision (`setRevision(r => r + 1)` or equivalent) after the mutator returns so DOM/preview re-render. Tests must prove choosing a statement, typing a field, and Start over update the DOM without remounting a new `QueryDocument` instance.
+- **Committed-FROM invalidation:** expose `QueryDocument.committedFromTable` getter; canvas mutations go through one wrapper that compares committed FROM before/after and calls `onCommittedFromChange` on any change (commit, popover select, delete FROM, start over). Typing via `setFromTableText` must **not** notify.
+- **Types:** reuse core `TableReference` in helpers/callbacks; convert to IPC `TableRef` only at the `listColumns` call site.
+- **Git hygiene:** before each commit step, `git status` must show only the files for that task (or untracked noise the worker explicitly leaves alone). Stage with **explicit pathspecs only** — never `git add -A`. If the worktree has unrelated dirty files, stop and ask; do not scoop them up.
 
 ## Deferred work (do not implement in this plan)
 
@@ -54,19 +58,24 @@
 | `src/ui/visual-query/statement-root-card.tsx` | CREATE / Coming-soon roots |
 | `src/ui/visual-query/canvas.tsx` | Assembles chain, status strips, pickers |
 | `src/ui/visual-query/visual-query.css` | Canvas/card layout using tokens |
-| `src/App.tsx` | Mock wiring + mount canvas |
+| `src/App.tsx` | Mock wiring + mount canvas; optional `ipc` prop for tests |
 | `src/App.css` | Delete scaffold; re-export or replace with tokens |
+| `index.html` | Title `DragonDB`; favicon `/favicon.svg` |
+| `public/favicon.svg` | Production favicon (not vite/tauri/react logos) |
 | `src/main.tsx` | Import fonts + tokens |
 | `src-tauri/src/lib.rs` | Remove `greet` |
 | `tests/ipc/mock.test.ts` | Mock fixture modes |
 | `tests/ui/visual-query/copy.test.ts` | Ported copy tests |
-| `tests/ui/visual-query/accessibility.test.ts` | Unique id set |
+| `tests/ui/visual-query/accessibility.test.ts` | Unique + Swift-parity ids |
 | `tests/ui/visual-query/*.test.tsx` | Component tests (jsdom) |
-| `tests/ui/scaffold-purge.test.ts` | Grep-gate exit for scaffold strings |
+| `tests/ui/scaffold-purge.test.ts` | Hard exit gate for scaffold leftovers |
+| `tests/ui/app-wiring.test.tsx` | Tables/columns/error/stale/`runQuery` ban |
+| `tests/core/query-document-committed-from.test.ts` | `committedFromTable` getter |
+| `docs/superpowers/plans/2026-08-10-sp4a-manual-verify-log.md` | Mac/Linux sign-off |
 | `vitest.config.ts` | Allow `.tsx` tests; keep default node, per-file jsdom |
 | `package.json` | Add fontsource + testing-library + jsdom |
 
-**Swift → TS map (invariant: one Swift file ≈ one module):** see spec §6.
+**Amendment (validation review):** QueryDocument revision counter + `committedFromTable` invalidation; full TDD for Tasks 6–10; scaffold purge covers `index.html`/`public/`; explicit git pathspecs; clipboard + stale column-load tests; manual verify sign-off log.
 
 ---
 
@@ -90,8 +99,10 @@
   - `export const FIXTURE_CONNECTION_ID: ConnectionId = "fixture";`
   - `export type MockMode = "happy" | "emptyTables" | "emptyColumns" | "columnsError";`
   - `export function createMockDragonIpc(mode?: MockMode): DragonIpc;`
-  - `export function tableRefToCore(ref: TableRef): { schema: string | null; name: string };`
-  - `export function formatTableDisplayName(ref: { schema: string | null; name: string }): string;` — bare name when schema is null or `"public"`
+  - `export function tableRefToCore(ref: TableRef): TableReference;` — import type from `../core`
+  - `export function coreToTableRef(ref: TableReference): TableRef;`
+  - `export function formatTableDisplayName(ref: TableReference): string;` — bare name when schema is null or `"public"`
+  - `export function sameTable(a: TableReference | null, b: TableReference | null): boolean;`
 
 - [ ] **Step 1: Write the failing mock test**
 
@@ -143,9 +154,17 @@ describe("mock DragonIpc", () => {
 });
 
 describe("table ref helpers", () => {
-  it("maps optional schema to null", () => {
+  it("maps optional schema to TableReference", () => {
     expect(tableRefToCore({ name: "users" })).toEqual({ schema: null, name: "users" });
     expect(tableRefToCore({ schema: "analytics", name: "events" })).toEqual({
+      schema: "analytics",
+      name: "events",
+    });
+  });
+
+  it("round-trips TableReference to TableRef", () => {
+    expect(coreToTableRef({ schema: null, name: "users" })).toEqual({ name: "users" });
+    expect(coreToTableRef({ schema: "analytics", name: "events" })).toEqual({
       schema: "analytics",
       name: "events",
     });
@@ -158,6 +177,8 @@ describe("table ref helpers", () => {
   });
 });
 ```
+
+Update the test import line to also pull `coreToTableRef` from `../../src/ipc/table-ref`.
 
 - [ ] **Step 2: Run test to verify it fails**
 
@@ -232,10 +253,55 @@ expect(VisualQueryCopy.noMatchesTitle).toBe("No matches");
 expect(VisualQueryCopy.columnsLoadError).toContain("Could not load columns");
 ```
 
-Accessibility test:
+Accessibility test — uniqueness **and** parity with Swift's expected static ids:
 
 ```ts
 import { VisualQueryAccessibility } from "../../../src/ui/visual-query/accessibility";
+
+const EXPECTED_STATICS = [
+  "visualQuery.modeToggle",
+  "visualQuery.initialAddBlock",
+  "visualQuery.trailingAddBlock",
+  "visualQuery.statementMenu",
+  "visualQuery.clauseMenu",
+  "visualQuery.startOver",
+  "visualQuery.runQuery",
+  "visualQuery.viewGeneratedSQL",
+  "visualQuery.generatedSQLText",
+  "visualQuery.copySQL",
+  "visualQuery.generatedSQLDone",
+  "visualQuery.allColumnsToggle",
+  "visualQuery.selectColumnsField",
+  "visualQuery.selectColumnsPicker",
+  "visualQuery.fromTableField",
+  "visualQuery.fromTablePicker",
+  "visualQuery.whereColumnField",
+  "visualQuery.whereColumnPicker",
+  "visualQuery.whereOperatorField",
+  "visualQuery.whereValueField",
+  "visualQuery.orderByColumnField",
+  "visualQuery.orderByColumnPicker",
+  "visualQuery.orderByDirectionField",
+  "visualQuery.limitField",
+  "visualQuery.createTableNameField",
+  "visualQuery.createColumnsList",
+  "visualQuery.addCreateColumn",
+  "visualQuery.schemaPopoverSearch",
+  "visualQuery.schemaPopoverList",
+  "visualQuery.confirmCreateContinue",
+  "visualQuery.confirmCreateCancel",
+] as const;
+
+it("static identifiers match Swift VisualQueryAccessibility", () => {
+  for (const id of EXPECTED_STATICS) {
+    expect(VisualQueryAccessibility.allInteractiveIdentifiers).toContain(id);
+  }
+  expect(VisualQueryAccessibility.modeToggle).toBe("visualQuery.modeToggle");
+  expect(VisualQueryAccessibility.clauseCard("orderBy")).toBe("visualQuery.clauseCard.orderBy");
+  expect(VisualQueryAccessibility.statementMenuItem("createTable")).toBe(
+    "visualQuery.statementMenu.createTable",
+  );
+});
 
 it("interactive identifiers are unique", () => {
   const ids = VisualQueryAccessibility.allInteractiveIdentifiers;
@@ -308,18 +374,30 @@ import { describe, expect, it } from "vitest";
 
 describe("tokens.css", () => {
   const css = readFileSync(join(process.cwd(), "src/ui/tokens.css"), "utf8");
-  it("defines required brief variables", () => {
-    for (const name of [
-      "--primary-600",
-      "--neutral-100",
-      "--neutral-900",
-      "--error-solid",
-      "--radius",
-    ]) {
-      expect(css).toContain(name);
+
+  it("defines full primary / neutral / semantic sets from the brief", () => {
+    for (const shade of [100, 200, 300, 400, 500, 600, 700, 800, 900]) {
+      expect(css).toContain(`--primary-${shade}`);
+      expect(css).toContain(`--neutral-${shade}`);
+    }
+    for (const role of ["success", "warning", "error", "info"]) {
+      expect(css).toContain(`--${role}-tint`);
+      expect(css).toContain(`--${role}-solid`);
+      expect(css).toContain(`--${role}-text`);
     }
     expect(css).toMatch(/--radius:\s*4px/);
     expect(css).toContain("oklch(0.55 0.123 245)"); // primary-600
+    expect(css).toMatch(/:focus-visible/);
+    expect(css).toContain("outline-offset: 2px");
+  });
+});
+
+describe("fonts.css", () => {
+  const css = readFileSync(join(process.cwd(), "src/ui/fonts.css"), "utf8");
+  it("loads Inter and JetBrains Mono locally (no CDN)", () => {
+    expect(css).toMatch(/@fontsource\/inter/);
+    expect(css).toMatch(/@fontsource\/jetbrains-mono/);
+    expect(css).not.toMatch(/fonts\.googleapis|cdn\.jsdelivr|unpkg\.com/i);
   });
 });
 ```
@@ -530,6 +608,7 @@ Toolbar: Start over button disabled or hidden when `canStartOver === false`; cal
 - [ ] **Step 5: Commit**
 
 ```bash
+git status
 git add src/ui/visual-query/statement-picker.tsx src/ui/visual-query/toolbar.tsx tests/ui/visual-query/statement-picker.test.tsx tests/ui/visual-query/toolbar.test.tsx
 git commit -m "$(cat <<'EOF'
 feat(ui): add statement picker and start-over toolbar
@@ -553,30 +632,84 @@ EOF
 export function GeneratedSQLPreview(props: {
   sql: string; // already null-coalesced by parent to "—" when needed
 }): JSX.Element;
-// read-only <pre> with data-testid generatedSQLText
-// Copy button data-testid copySQL using VisualQueryCopy.copySQLTitle
-// uses navigator.clipboard.writeText(sql) when allowsCopy (always true for non-empty policy: allow copy even for "—")
+// read-only <pre data-testid={generatedSQLText}>
+// Copy button data-testid={copySQL}; label VisualQueryCopy.copySQLTitle
+// onClick: try { await navigator.clipboard.writeText(sql) } catch { /* ignore — no toast in SP-4a */ }
 ```
 
-- [ ] **Step 1: Failing test**
+- [ ] **Step 1: Write the failing tests** (`/** @vitest-environment jsdom */`)
 
 ```tsx
-it("renders sql text", () => {
-  render(<GeneratedSQLPreview sql={'SELECT * FROM "users"'} />);
-  expect(screen.getByTestId(VisualQueryAccessibility.generatedSQLText)).toHaveTextContent(
-    'SELECT * FROM "users"',
-  );
-});
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
+import { GeneratedSQLPreview } from "../../../src/ui/visual-query/generated-sql-preview";
+import { VisualQueryAccessibility } from "../../../src/ui/visual-query/accessibility";
+import { VisualQueryCopy } from "../../../src/ui/visual-query/copy";
 
-it("renders em dash placeholder", () => {
-  render(<GeneratedSQLPreview sql={VisualQueryCopy.sqlPreviewEmpty} />);
-  expect(screen.getByTestId(VisualQueryAccessibility.generatedSQLText)).toHaveTextContent("—");
+describe("GeneratedSQLPreview", () => {
+  const writeText = vi.fn().mockResolvedValue(undefined);
+
+  beforeEach(() => {
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+    writeText.mockClear();
+  });
+
+  afterEach(() => {
+    // leave clipboard stub; next test redefines
+  });
+
+  it("renders sql text", () => {
+    render(<GeneratedSQLPreview sql={'SELECT * FROM "users"'} />);
+    expect(screen.getByTestId(VisualQueryAccessibility.generatedSQLText)).toHaveTextContent(
+      'SELECT * FROM "users"',
+    );
+  });
+
+  it("renders em dash placeholder", () => {
+    render(<GeneratedSQLPreview sql={VisualQueryCopy.sqlPreviewEmpty} />);
+    expect(screen.getByTestId(VisualQueryAccessibility.generatedSQLText)).toHaveTextContent("—");
+  });
+
+  it("Copy calls navigator.clipboard.writeText with the sql", async () => {
+    const user = userEvent.setup();
+    render(<GeneratedSQLPreview sql={'SELECT 1'} />);
+    await user.click(screen.getByTestId(VisualQueryAccessibility.copySQL));
+    expect(writeText).toHaveBeenCalledWith("SELECT 1");
+  });
+
+  it("Copy still succeeds in UI when clipboard rejects", async () => {
+    writeText.mockRejectedValueOnce(new Error("denied"));
+    const user = userEvent.setup();
+    render(<GeneratedSQLPreview sql={'SELECT 1'} />);
+    await user.click(screen.getByTestId(VisualQueryAccessibility.copySQL));
+    expect(screen.getByTestId(VisualQueryAccessibility.generatedSQLText)).toBeInTheDocument();
+  });
 });
 ```
 
-- [ ] **Step 2: FAIL → Step 3: implement with mono font `var(--font-mono)` → Step 4: PASS → Step 5: Commit**
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `bun run test tests/ui/visual-query/generated-sql-preview.test.tsx`  
+Expected: FAIL — module not found / component missing.
+
+- [ ] **Step 3: Write minimal implementation**
+
+Port chrome from `GeneratedSQLPreviewView.swift` as an always-on panel (no Done dismiss). Mono font via `var(--font-mono)`. Swallow clipboard errors.
+
+- [ ] **Step 4: Run test to verify it passes**
+
+Run: `bun run test tests/ui/visual-query/generated-sql-preview.test.tsx`  
+Expected: PASS
+
+- [ ] **Step 5: Commit**
 
 ```bash
+git status
+git add src/ui/visual-query/generated-sql-preview.tsx tests/ui/visual-query/generated-sql-preview.test.tsx
 git commit -m "$(cat <<'EOF'
 feat(ui): add always-on generated SQL preview
 
@@ -596,9 +729,15 @@ EOF
 
 **Interfaces:**
 
-Port props from `VisualClauseCardView.swift` / `VisualClauseCardFieldViews.swift`:
-
 ```tsx
+import type {
+  ClauseKind,
+  OrderDirection,
+  QueryDocument,
+  WhereOperator,
+} from "../../core";
+import type { TableRef } from "../../ipc/contract";
+
 export type ClauseCardProps = {
   kind: ClauseKind;
   document: QueryDocument;
@@ -614,23 +753,206 @@ export type ClauseCardProps = {
   onSetOrderBy: (column: string, direction: OrderDirection) => void;
   onSetLimitText: (text: string) => void;
 };
+
+export function ClauseCard(props: ClauseCardProps): JSX.Element;
 ```
 
-Wire popovers via `SchemaFieldPopover`. FROM display uses `formatTableDisplayName`. Column popovers pass `needsFromMessage` when FROM not set (same predicate as Swift `needsFrom`).
+Wire popovers via `SchemaFieldPopover`. FROM display uses `formatTableDisplayName(tableRefToCore(ref))` or format after converting. Column popovers pass `needsFromMessage` when FROM not set (same predicate as Swift `needsFrom`).
 
-- [ ] **Step 1: Failing integration-style tests** (jsdom)
+- [ ] **Step 1: Write the failing tests** (`/** @vitest-environment jsdom */`)
 
-Minimum:
-1. FROM: select `users` from popover → `onSelectFromTable` called with schema public/null appropriately.
-2. LIMIT: type `abc` → `onSetLimitText("abc")`.
-3. Helper text from `VisualQueryCopy.helper(kind)` visible.
-4. Delete control present with `data-testid` `deleteClause(kind)`.
+```tsx
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { describe, expect, it, vi } from "vitest";
+import { QueryDocument } from "../../../src/core";
+import { ClauseCard } from "../../../src/ui/visual-query/clause-card";
+import { VisualQueryAccessibility } from "../../../src/ui/visual-query/accessibility";
+import { VisualQueryCopy } from "../../../src/ui/visual-query/copy";
 
-Implementers must open Swift files and port field UX (all-columns toggle, where operator select, order direction). Do not invent different operators — use `WhereOperator` union from core.
+function docWithSelectFrom(): QueryDocument {
+  const doc = new QueryDocument();
+  doc.chooseStatement("select");
+  doc.addClause("from");
+  return doc;
+}
 
-- [ ] **Step 2: FAIL → Step 3: Implement both modules → Step 4: PASS → Step 5: Commit**
+describe("ClauseCard", () => {
+  it("shows clause helper copy", () => {
+    const doc = docWithSelectFrom();
+    render(
+      <ClauseCard
+        kind="from"
+        document={doc}
+        tables={[{ name: "users", schema: "public" }]}
+        columnNames={[]}
+        metadataErrorMessage={null}
+        onDelete={() => {}}
+        onSetSelectColumns={() => {}}
+        onSetFromTableText={() => {}}
+        onCommitFromTable={() => {}}
+        onSelectFromTable={() => {}}
+        onSetWhereCondition={() => {}}
+        onSetOrderBy={() => {}}
+        onSetLimitText={() => {}}
+      />,
+    );
+    expect(screen.getByText(VisualQueryCopy.helper("from"))).toBeInTheDocument();
+    expect(screen.getByTestId(VisualQueryAccessibility.deleteClause("from"))).toBeInTheDocument();
+  });
+
+  it("FROM popover select calls onSelectFromTable", async () => {
+    const user = userEvent.setup();
+    const onSelectFromTable = vi.fn();
+    const doc = docWithSelectFrom();
+    render(
+      <ClauseCard
+        kind="from"
+        document={doc}
+        tables={[
+          { name: "users", schema: "public" },
+          { name: "events", schema: "analytics" },
+        ]}
+        columnNames={[]}
+        metadataErrorMessage={null}
+        onDelete={() => {}}
+        onSetSelectColumns={() => {}}
+        onSetFromTableText={() => {}}
+        onCommitFromTable={() => {}}
+        onSelectFromTable={onSelectFromTable}
+        onSetWhereCondition={() => {}}
+        onSetOrderBy={() => {}}
+        onSetLimitText={() => {}}
+      />,
+    );
+    await user.click(screen.getByTestId(VisualQueryAccessibility.fromTablePicker));
+    await user.click(screen.getByRole("button", { name: "analytics.events" }));
+    expect(onSelectFromTable).toHaveBeenCalledWith("events", "analytics");
+  });
+
+  it("LIMIT typing calls onSetLimitText", async () => {
+    const user = userEvent.setup();
+    const onSetLimitText = vi.fn();
+    const doc = new QueryDocument();
+    doc.chooseStatement("select");
+    doc.addClause("limit");
+    render(
+      <ClauseCard
+        kind="limit"
+        document={doc}
+        tables={[]}
+        columnNames={[]}
+        metadataErrorMessage={null}
+        onDelete={() => {}}
+        onSetSelectColumns={() => {}}
+        onSetFromTableText={() => {}}
+        onCommitFromTable={() => {}}
+        onSelectFromTable={() => {}}
+        onSetWhereCondition={() => {}}
+        onSetOrderBy={() => {}}
+        onSetLimitText={onSetLimitText}
+      />,
+    );
+    await user.type(screen.getByTestId(VisualQueryAccessibility.limitField), "abc");
+    expect(onSetLimitText).toHaveBeenCalled();
+    expect(onSetLimitText.mock.calls.at(-1)?.[0]).toContain("abc");
+  });
+
+  it("WHERE column popover needs FROM message when from unset", async () => {
+    const user = userEvent.setup();
+    const doc = new QueryDocument();
+    doc.chooseStatement("select");
+    doc.addClause("where");
+    render(
+      <ClauseCard
+        kind="where"
+        document={doc}
+        tables={[]}
+        columnNames={[]}
+        metadataErrorMessage={null}
+        onDelete={() => {}}
+        onSetSelectColumns={() => {}}
+        onSetFromTableText={() => {}}
+        onCommitFromTable={() => {}}
+        onSelectFromTable={() => {}}
+        onSetWhereCondition={() => {}}
+        onSetOrderBy={() => {}}
+        onSetLimitText={() => {}}
+      />,
+    );
+    await user.click(screen.getByTestId(VisualQueryAccessibility.whereColumnPicker));
+    expect(screen.getByText(VisualQueryCopy.columnPopoverNeedsFromMessage)).toBeInTheDocument();
+  });
+
+  it("SELECT all-columns toggle and ORDER BY direction call mutator props", async () => {
+    const user = userEvent.setup();
+    const onSetSelectColumns = vi.fn();
+    const onSetOrderBy = vi.fn();
+    const doc = new QueryDocument();
+    doc.chooseStatement("select");
+    doc.addClause("orderBy");
+    const { rerender } = render(
+      <ClauseCard
+        kind="select"
+        document={doc}
+        tables={[]}
+        columnNames={["id"]}
+        metadataErrorMessage={null}
+        onDelete={() => {}}
+        onSetSelectColumns={onSetSelectColumns}
+        onSetFromTableText={() => {}}
+        onCommitFromTable={() => {}}
+        onSelectFromTable={() => {}}
+        onSetWhereCondition={() => {}}
+        onSetOrderBy={() => {}}
+        onSetLimitText={() => {}}
+      />,
+    );
+    await user.click(screen.getByTestId(VisualQueryAccessibility.allColumnsToggle));
+    expect(onSetSelectColumns).toHaveBeenCalled();
+
+    rerender(
+      <ClauseCard
+        kind="orderBy"
+        document={doc}
+        tables={[]}
+        columnNames={["id"]}
+        metadataErrorMessage={null}
+        onDelete={() => {}}
+        onSetSelectColumns={() => {}}
+        onSetFromTableText={() => {}}
+        onCommitFromTable={() => {}}
+        onSelectFromTable={() => {}}
+        onSetWhereCondition={() => {}}
+        onSetOrderBy={onSetOrderBy}
+        onSetLimitText={() => {}}
+      />,
+    );
+    await user.selectOptions(screen.getByTestId(VisualQueryAccessibility.orderByDirectionField), "desc");
+    expect(onSetOrderBy).toHaveBeenCalled();
+  });
+});
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `bun run test tests/ui/visual-query/clause-card.test.tsx`  
+Expected: FAIL
+
+- [ ] **Step 3: Write minimal implementation**
+
+Port `VisualClauseCardView.swift` + `VisualClauseCardFieldViews.swift`. Operators/directions from core unions only. Do not invent UX.
+
+- [ ] **Step 4: Run test to verify it passes**
+
+Run: `bun run test tests/ui/visual-query/clause-card.test.tsx`  
+Expected: PASS
+
+- [ ] **Step 5: Commit**
 
 ```bash
+git status
+git add src/ui/visual-query/clause-card-fields.tsx src/ui/visual-query/clause-card.tsx tests/ui/visual-query/clause-card.test.tsx src/ui/visual-query/visual-query.css
 git commit -m "$(cat <<'EOF'
 feat(ui): port clause cards and field editors
 
@@ -651,7 +973,7 @@ EOF
 
 ```tsx
 export function StatementRootCard(props: {
-  kind: StatementKind; // createTable | update | delete (caller only mounts when showsStatementRootCard)
+  kind: StatementKind; // createTable | update | delete
   document: QueryDocument;
   onStartOver: () => void;
   onSetCreateTableName: (name: string) => void;
@@ -659,16 +981,108 @@ export function StatementRootCard(props: {
 }): JSX.Element;
 ```
 
-- [ ] **Step 1: Tests**
+- [ ] **Step 1: Write the failing tests**
 
-- UPDATE shows Coming soon badge; no create fields.
-- CREATE: change table name → `onSetCreateTableName`; add column row → `onSetCreateColumns` with types from `CreateColumnType`.
-- Use `createColumnTypeTitle` for type labels.
+```tsx
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { describe, expect, it, vi } from "vitest";
+import { QueryDocument } from "../../../src/core";
+import { StatementRootCard } from "../../../src/ui/visual-query/statement-root-card";
+import { VisualQueryAccessibility } from "../../../src/ui/visual-query/accessibility";
+import { VisualQueryCopy } from "../../../src/ui/visual-query/copy";
 
-- [ ] **Step 2–4: TDD cycle porting `VisualStatementRootCardView.swift`**
+describe("StatementRootCard", () => {
+  it("UPDATE shows Coming soon and no create fields", () => {
+    const doc = new QueryDocument();
+    doc.chooseStatement("update");
+    render(
+      <StatementRootCard
+        kind="update"
+        document={doc}
+        onStartOver={() => {}}
+        onSetCreateTableName={() => {}}
+        onSetCreateColumns={() => {}}
+      />,
+    );
+    expect(screen.getByText(/coming soon/i)).toBeInTheDocument();
+    expect(screen.queryByTestId(VisualQueryAccessibility.createTableNameField)).toBeNull();
+  });
+
+  it("CREATE table name typing calls onSetCreateTableName", async () => {
+    const user = userEvent.setup();
+    const onSetCreateTableName = vi.fn();
+    const doc = new QueryDocument();
+    doc.chooseStatement("createTable");
+    render(
+      <StatementRootCard
+        kind="createTable"
+        document={doc}
+        onStartOver={() => {}}
+        onSetCreateTableName={onSetCreateTableName}
+        onSetCreateColumns={() => {}}
+      />,
+    );
+    await user.type(screen.getByTestId(VisualQueryAccessibility.createTableNameField), "orders");
+    expect(onSetCreateTableName).toHaveBeenCalled();
+    expect(onSetCreateTableName.mock.calls.at(-1)?.[0]).toContain("orders");
+  });
+
+  it("CREATE add column calls onSetCreateColumns", async () => {
+    const user = userEvent.setup();
+    const onSetCreateColumns = vi.fn();
+    const doc = new QueryDocument();
+    doc.chooseStatement("createTable");
+    render(
+      <StatementRootCard
+        kind="createTable"
+        document={doc}
+        onStartOver={() => {}}
+        onSetCreateTableName={() => {}}
+        onSetCreateColumns={onSetCreateColumns}
+      />,
+    );
+    await user.click(screen.getByTestId(VisualQueryAccessibility.addCreateColumn));
+    expect(onSetCreateColumns).toHaveBeenCalled();
+    const cols = onSetCreateColumns.mock.calls.at(-1)?.[0];
+    expect(Array.isArray(cols)).toBe(true);
+    expect(cols.length).toBeGreaterThan(0);
+    expect(cols[0]).toEqual(expect.objectContaining({ name: expect.any(String), type: expect.any(String) }));
+  });
+
+  it("start-over control fires onStartOver", async () => {
+    const user = userEvent.setup();
+    const onStartOver = vi.fn();
+    const doc = new QueryDocument();
+    doc.chooseStatement("delete");
+    render(
+      <StatementRootCard
+        kind="delete"
+        document={doc}
+        onStartOver={onStartOver}
+        onSetCreateTableName={() => {}}
+        onSetCreateColumns={() => {}}
+      />,
+    );
+    await user.click(screen.getByTestId(VisualQueryAccessibility.deleteStatementRoot("delete")));
+    expect(onStartOver).toHaveBeenCalled();
+  });
+});
+```
+
+- [ ] **Step 2: Run — expect FAIL**
+
+Run: `bun run test tests/ui/visual-query/statement-root-card.test.tsx`
+
+- [ ] **Step 3: Implement** — port `VisualStatementRootCardView.swift`; type labels via `VisualQueryCopy.createColumnTypeTitle`.
+
+- [ ] **Step 4: Run — expect PASS**
+
 - [ ] **Step 5: Commit**
 
 ```bash
+git status
+git add src/ui/visual-query/statement-root-card.tsx tests/ui/visual-query/statement-root-card.test.tsx
 git commit -m "$(cat <<'EOF'
 feat(ui): port statement root card for CREATE and coming soon
 
@@ -679,77 +1093,268 @@ EOF
 
 ---
 
-### Task 9: Canvas container
+### Task 9: Canvas container + QueryDocument reactivity
 
 **Files:**
+- Modify: `src/core/query-document.ts` — add public `committedFromTable` getter
+- Test: `tests/core/query-document-committed-from.test.ts`
 - Create: `src/ui/visual-query/canvas.tsx`
 - Test: `tests/ui/visual-query/canvas.test.tsx`
 
 **Interfaces:**
 
+```ts
+// src/core/query-document.ts — ADD:
+get committedFromTable(): Readonly<TableReference> | null {
+  return this.#committedFromTable === null ? null : { ...this.#committedFromTable };
+}
+```
+
 ```tsx
+import type { QueryDocument, TableReference } from "../../core";
+import type { TableRef } from "../../ipc/contract";
+
 export type VisualQueryCanvasProps = {
   tables: TableRef[];
   columnNames: string[];
   metadataErrorMessage: string | null;
-  /** Always true in SP-4a App wiring; kept as prop so tests can assert help text. */
   isConnected: boolean;
-  /** Optional controlled document for tests; default internal state. */
+  /**
+   * Uncontrolled by default: canvas owns one QueryDocument instance for the
+   * lifetime of the mount. If `document` is passed, canvas still mutates that
+   * instance in place and bumps an internal revision; it does NOT clone.
+   * There is no prop→state sync on later document identity changes — pass a
+   * stable instance (tests) or omit the prop (App).
+   */
   document?: QueryDocument;
   onDocumentChange?: (doc: QueryDocument) => void;
-  /** Notified when committed FROM identity changes — App reloads columns. */
-  onCommittedFromChange?: (table: { schema: string | null; name: string } | null) => void;
+  /** Fires when committed FROM identity changes (including to null). */
+  onCommittedFromChange?: (table: TableReference | null) => void;
 };
 
 export function VisualQueryCanvas(props: VisualQueryCanvasProps): JSX.Element;
 ```
 
-Behaviour (fold ViewModel + `VisualQueryCanvasView.swift`):
-- Hold `QueryDocument` in state (or use provided instance).
-- `CanvasPresentation` from `new CanvasPresentation(doc, canRun(doc, isConnected).helpMessage)`.
-- Status strip: `presentation.visibleStatusMessage`.
-- Metadata strip: `metadataErrorMessage` when non-empty.
-- Empty canvas → Add block → `StatementPicker`.
-- Chain: root card and/or clause cards from presentation; trailing Add for `trailingOptions`.
-- Toolbar `canStartOver={!presentation.showsInitialAddButton}`.
-- Preview sql = `generateSQL(doc)?.display ?? VisualQueryCopy.sqlPreviewEmpty`.
-- On FROM commit / selectFromTable success path, call `onCommittedFromChange(doc.fromTable)`.
-- **Do not** mount create-confirmation sheet or Run.
-
-- [ ] **Step 1: Failing canvas tests**
+**Required mutation wrapper (implement exactly this shape):**
 
 ```tsx
-it("empty → SELECT shows clause card and preview updates", async () => {
-  const user = userEvent.setup();
-  render(
-    <VisualQueryCanvas tables={[{ name: "users", schema: "public" }]} columnNames={[]} metadataErrorMessage={null} isConnected={true} />,
-  );
-  await user.click(screen.getByTestId(VisualQueryAccessibility.initialAddBlock));
-  await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("select")));
-  expect(screen.getByTestId(VisualQueryAccessibility.clauseCard("select"))).toBeInTheDocument();
-});
+const [doc] = useState(() => props.document ?? new QueryDocument());
+const [revision, setRevision] = useState(0);
+// read revision in render so React subscribes: void revision;
 
-it("shows canRun help on status strip when incomplete", async () => {
-  // choose SELECT only → help contains /table/i or /FROM/i
-});
+function mutate(fn: (d: QueryDocument) => void): void {
+  const before = doc.committedFromTable;
+  fn(doc);
+  const after = doc.committedFromTable;
+  setRevision((r) => r + 1);
+  props.onDocumentChange?.(doc);
+  if (!sameTable(before, after)) {
+    props.onCommittedFromChange?.(after);
+  }
+}
+// sameTable from src/ipc/table-ref.ts (or a tiny local helper using TableReference)
+```
 
-it("CREATE path updates preview text", async () => {
-  // choose createTable, type table name, expect preview to contain CREATE or table name from generateSQL
-});
+All document edits (chooseStatement, addClause, removeClause, startOver, field setters, FROM commit/select) **must** go through `mutate`. Typing `setFromTableText` goes through `mutate` but must not notify when committed identity unchanged.
 
-it("UPDATE shows Coming soon and preview —", async () => {
-  // preview test id text is "—"
+- [ ] **Step 1a: Failing core test for committedFromTable getter**
+
+```ts
+// tests/core/query-document-committed-from.test.ts
+import { describe, expect, it } from "vitest";
+import { QueryDocument } from "../../src/core";
+
+describe("QueryDocument.committedFromTable", () => {
+  it("stays null while typing FROM text", () => {
+    const doc = new QueryDocument();
+    doc.chooseStatement("select");
+    doc.addClause("from");
+    doc.setFromTableText("users");
+    expect(doc.committedFromTable).toBeNull();
+    expect(doc.fromTable).toEqual({ schema: null, name: "users" });
+  });
+
+  it("updates on selectFromTable and clears on startOver / removeClause from", () => {
+    const doc = new QueryDocument();
+    doc.chooseStatement("select");
+    doc.addClause("from");
+    doc.selectFromTable("users", "public");
+    expect(doc.committedFromTable).toEqual({ schema: "public", name: "users" });
+    doc.startOver();
+    expect(doc.committedFromTable).toBeNull();
+  });
 });
 ```
 
-- [ ] **Step 2–4: Implement canvas; keep mutations thin wrappers around `QueryDocument` methods**
+- [ ] **Step 1b: Run core test — expect FAIL** (getter missing)
+
+Run: `bun run test tests/core/query-document-committed-from.test.ts`
+
+- [ ] **Step 1c: Add getter — expect PASS**
+
+- [ ] **Step 1d: Write failing canvas tests** (`/** @vitest-environment jsdom */`)
+
+```tsx
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { describe, expect, it, vi } from "vitest";
+import { VisualQueryCanvas } from "../../../src/ui/visual-query/canvas";
+import { VisualQueryAccessibility } from "../../../src/ui/visual-query/accessibility";
+import { VisualQueryCopy } from "../../../src/ui/visual-query/copy";
+
+const tables = [
+  { name: "users", schema: "public" },
+  { name: "events", schema: "analytics" },
+];
+
+describe("VisualQueryCanvas", () => {
+  it("empty → SELECT shows clause card and re-renders preview without new doc instance", async () => {
+    const user = userEvent.setup();
+    const onDocumentChange = vi.fn();
+    render(
+      <VisualQueryCanvas
+        tables={tables}
+        columnNames={[]}
+        metadataErrorMessage={null}
+        isConnected={true}
+        onDocumentChange={onDocumentChange}
+      />,
+    );
+    await user.click(screen.getByTestId(VisualQueryAccessibility.initialAddBlock));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("select")));
+    expect(screen.getByTestId(VisualQueryAccessibility.clauseCard("select"))).toBeInTheDocument();
+    expect(onDocumentChange).toHaveBeenCalled();
+    const doc = onDocumentChange.mock.calls.at(-1)?.[0];
+    onDocumentChange.mockClear();
+    await user.click(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.clauseMenuItem("from")));
+    expect(onDocumentChange.mock.calls.at(-1)?.[0]).toBe(doc); // same instance
+  });
+
+  it("shows canRun help on status strip when SELECT incomplete", async () => {
+    const user = userEvent.setup();
+    render(
+      <VisualQueryCanvas tables={tables} columnNames={[]} metadataErrorMessage={null} isConnected={true} />,
+    );
+    await user.click(screen.getByTestId(VisualQueryAccessibility.initialAddBlock));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("select")));
+    expect(screen.getByText(/table/i)).toBeInTheDocument();
+  });
+
+  it("notifies onCommittedFromChange on select, clear via delete FROM, and start over", async () => {
+    const user = userEvent.setup();
+    const onCommittedFromChange = vi.fn();
+    render(
+      <VisualQueryCanvas
+        tables={tables}
+        columnNames={["id"]}
+        metadataErrorMessage={null}
+        isConnected={true}
+        onCommittedFromChange={onCommittedFromChange}
+      />,
+    );
+    await user.click(screen.getByTestId(VisualQueryAccessibility.initialAddBlock));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("select")));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.clauseMenuItem("from")));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.fromTablePicker));
+    await user.click(screen.getByRole("button", { name: "users" }));
+    expect(onCommittedFromChange).toHaveBeenCalledWith({ schema: "public", name: "users" });
+
+    onCommittedFromChange.mockClear();
+    await user.click(screen.getByTestId(VisualQueryAccessibility.deleteClause("from")));
+    expect(onCommittedFromChange).toHaveBeenCalledWith(null);
+
+    // rebuild FROM then start over
+    await user.click(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.clauseMenuItem("from")));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.fromTablePicker));
+    await user.click(screen.getByRole("button", { name: "users" }));
+    onCommittedFromChange.mockClear();
+    await user.click(screen.getByTestId(VisualQueryAccessibility.startOver));
+    expect(onCommittedFromChange).toHaveBeenCalledWith(null);
+  });
+
+  it("does not notify onCommittedFromChange while typing FROM text", async () => {
+    const user = userEvent.setup();
+    const onCommittedFromChange = vi.fn();
+    render(
+      <VisualQueryCanvas
+        tables={tables}
+        columnNames={[]}
+        metadataErrorMessage={null}
+        isConnected={true}
+        onCommittedFromChange={onCommittedFromChange}
+      />,
+    );
+    await user.click(screen.getByTestId(VisualQueryAccessibility.initialAddBlock));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("select")));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.clauseMenuItem("from")));
+    onCommittedFromChange.mockClear();
+    await user.type(screen.getByTestId(VisualQueryAccessibility.fromTableField), "u");
+    expect(onCommittedFromChange).not.toHaveBeenCalled();
+  });
+
+  it("CREATE path updates live preview text", async () => {
+    const user = userEvent.setup();
+    render(
+      <VisualQueryCanvas tables={tables} columnNames={[]} metadataErrorMessage={null} isConnected={true} />,
+    );
+    await user.click(screen.getByTestId(VisualQueryAccessibility.initialAddBlock));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("createTable")));
+    await user.type(screen.getByTestId(VisualQueryAccessibility.createTableNameField), "orders");
+    expect(screen.getByTestId(VisualQueryAccessibility.generatedSQLText).textContent).toMatch(/orders/i);
+  });
+
+  it("UPDATE shows Coming soon and preview em dash", async () => {
+    const user = userEvent.setup();
+    render(
+      <VisualQueryCanvas tables={tables} columnNames={[]} metadataErrorMessage={null} isConnected={true} />,
+    );
+    await user.click(screen.getByTestId(VisualQueryAccessibility.initialAddBlock));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("update")));
+    expect(screen.getByText(/coming soon/i)).toBeInTheDocument();
+    expect(screen.getByTestId(VisualQueryAccessibility.generatedSQLText)).toHaveTextContent(
+      VisualQueryCopy.sqlPreviewEmpty,
+    );
+  });
+
+  it("renders metadata error strip when provided", () => {
+    render(
+      <VisualQueryCanvas
+        tables={tables}
+        columnNames={[]}
+        metadataErrorMessage={VisualQueryCopy.columnsLoadError}
+        isConnected={true}
+      />,
+    );
+    expect(screen.getByText(VisualQueryCopy.columnsLoadError)).toBeInTheDocument();
+  });
+});
+```
+
+- [ ] **Step 2: Run canvas tests — expect FAIL**
+
+Run: `bun run test tests/ui/visual-query/canvas.test.tsx`
+
+- [ ] **Step 3: Implement canvas** using the `mutate` wrapper above; fold ViewModel behaviours from spec §5.2; **no** Run / create-confirm sheet.
+
+- [ ] **Step 4: Run core + canvas tests — expect PASS**
+
+```bash
+bun run test tests/core/query-document-committed-from.test.ts tests/ui/visual-query/canvas.test.tsx
+```
+
 - [ ] **Step 5: Commit**
 
 ```bash
+git status
+git add src/core/query-document.ts tests/core/query-document-committed-from.test.ts src/ui/visual-query/canvas.tsx tests/ui/visual-query/canvas.test.tsx
 git commit -m "$(cat <<'EOF'
-feat(ui): assemble visual query canvas container
+feat(ui): assemble visual query canvas with revisioned mutations
 
-Wire presentation, status strips, live SQL preview, and card chain without Run or stores.
+Expose committed FROM for metadata invalidation and bump a revision after in-place QueryDocument edits.
 EOF
 )"
 ```
@@ -760,43 +1365,49 @@ EOF
 
 **Files:**
 - Modify: `src/App.tsx` (replace entirely)
-- Modify: `src/App.css` (replace with minimal layout importing visual-query.css or empty)
-- Modify: `src-tauri/src/lib.rs` (remove greet command + handler)
-- Delete unused: `src/assets/react.svg` if unused; any other demo logos only referenced by old App
-- Test: `tests/ui/scaffold-purge.test.ts`
-- Test: `tests/ui/visual-query/app-wiring.test.tsx` (optional but recommended)
+- Modify: `src/App.css` (replace scaffold styles)
+- Modify: `index.html` — title `DragonDB`; favicon not vite/tauri demo (use a simple production favicon path under `public/`, e.g. `public/favicon.svg` branded or neutral — **not** `vite.svg` / `tauri.svg` / `react.svg`)
+- Modify: `src-tauri/src/lib.rs` — remove `greet`
+- Delete: `src/assets/react.svg`, `public/vite.svg`, `public/tauri.svg` (and any unused demo logos)
+- Create: `public/favicon.svg` (minimal mark; may be a simple SVG using brief primary-600)
+- Test: `tests/ui/scaffold-purge.test.ts` (**required**)
+- Test: `tests/ui/app-wiring.test.tsx` (**required**)
 
-**Interfaces:**
-- App uses `createMockDragonIpc("happy")` by default.
-- `FIXTURE_CONNECTION_ID`, `isConnected={true}`.
-- On mount: `listTables` → `tables` state.
-- On `onCommittedFromChange`: if null, clear columns + metadata; else `listColumns` → set `columnNames` from `.map(c => c.name)`; on reject set `metadataErrorMessage` to `VisualQueryCopy.columnsLoadError` and `columnNames=[]`.
+**Interfaces / App behaviour:**
+- Default `createMockDragonIpc("happy")`.
+- `isConnected={true}`.
+- Mount: `listTables` → set tables; on reject → `tables=[]` (no throw to UI).
+- `onCommittedFromChange`: null → clear columns + metadata; else `listColumns` via `coreToTableRef`.
+- Column load: track a monotonic `requestId`; ignore stale resolutions; clear on unmount (`cancelled` flag).
+- On `listColumns` reject → `columnNames=[]` + `metadataErrorMessage = VisualQueryCopy.columnsLoadError`.
+- **Assert UI never calls `runQuery`:** in wiring tests, spy mock `runQuery` and expect zero calls after SELECT/FROM/CREATE flows.
 
-- [ ] **Step 1: Write scaffold purge test**
+- [ ] **Step 1: Write failing scaffold-purge + app-wiring tests**
 
 ```ts
 // tests/ui/scaffold-purge.test.ts
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
-const ROOT = join(process.cwd(), "src");
-const FORBIDDEN = [/Welcome to Tauri/, /greet-input/, /You've been greeted/, /react\.svg/];
+const ROOT = process.cwd();
 
 function walk(dir: string): string[] {
   const out: string[] = [];
   for (const e of readdirSync(dir)) {
     const full = join(dir, e);
     if (statSync(full).isDirectory()) out.push(...walk(full));
-    else if (/\.(tsx?|css)$/.test(e)) out.push(full);
+    else out.push(full);
   }
   return out;
 }
 
 describe("scaffold purge", () => {
-  it("removes Tauri greet demo UI strings from src", () => {
+  it("removes greet demo strings from src and index.html", () => {
+    const FORBIDDEN = [/Welcome to Tauri/, /greet-input/, /You've been greeted/, /Tauri \+ React \+ Typescript/];
     const hits: string[] = [];
-    for (const file of walk(ROOT)) {
+    for (const file of [...walk(join(ROOT, "src")), join(ROOT, "index.html")]) {
+      if (!/\.(tsx?|css|html)$/.test(file)) continue;
       const text = readFileSync(file, "utf8");
       for (const re of FORBIDDEN) {
         if (re.test(text)) hits.push(`${file} matches ${re}`);
@@ -804,95 +1415,199 @@ describe("scaffold purge", () => {
     }
     expect(hits).toEqual([]);
   });
+
+  it("index.html uses DragonDB title and non-scaffold favicon", () => {
+    const html = readFileSync(join(ROOT, "index.html"), "utf8");
+    expect(html).toMatch(/<title>DragonDB<\/title>/);
+    expect(html).not.toMatch(/vite\.svg|tauri\.svg|react\.svg/);
+    expect(html).toMatch(/rel="icon"[^>]+href="\/favicon\.svg"/);
+  });
+
+  it("deletes scaffold public/src logos", () => {
+    expect(existsSync(join(ROOT, "public/vite.svg"))).toBe(false);
+    expect(existsSync(join(ROOT, "public/tauri.svg"))).toBe(false);
+    expect(existsSync(join(ROOT, "src/assets/react.svg"))).toBe(false);
+    expect(existsSync(join(ROOT, "public/favicon.svg"))).toBe(true);
+  });
+
+  it("removes greet from Rust lib", () => {
+    const rust = readFileSync(join(ROOT, "src-tauri/src/lib.rs"), "utf8");
+    expect(rust).not.toMatch(/\bgreet\b/);
+  });
 });
 ```
 
-Also assert `src-tauri/src/lib.rs` has no `greet`:
+```tsx
+/** @vitest-environment jsdom */
+// tests/ui/app-wiring.test.tsx
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { describe, expect, it, vi, beforeEach } from "vitest";
 
-```ts
-const rust = readFileSync(join(process.cwd(), "src-tauri/src/lib.rs"), "utf8");
-expect(rust).not.toMatch(/\bgreet\b/);
+// App must accept an injectable ipc for tests. If production App closes over
+// createMockDragonIpc(), export a named `AppView` that takes `ipc: DragonIpc`
+// OR export `__test__` seam — prefer:
+//   export function App(props?: { ipc?: DragonIpc })
+vi.mock("../../src/ipc/mock", async () => {
+  const actual = await vi.importActual<typeof import("../../src/ipc/mock")>("../../src/ipc/mock");
+  return actual;
+});
+
+import App from "../../src/App";
+import { createMockDragonIpc } from "../../src/ipc/mock";
+import { VisualQueryAccessibility } from "../../src/ui/visual-query/accessibility";
+import { VisualQueryCopy } from "../../src/ui/visual-query/copy";
+
+describe("App wiring", () => {
+  it("loads tables on mount into FROM picker", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    render(<App ipc={ipc} />);
+    await user.click(await screen.findByTestId(VisualQueryAccessibility.initialAddBlock));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("select")));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.clauseMenuItem("from")));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.fromTablePicker));
+    expect(await screen.findByRole("button", { name: "users" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "analytics.events" })).toBeInTheDocument();
+  });
+
+  it("reloads columns after FROM commit and clears on start over", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    const listColumns = vi.spyOn(ipc, "listColumns");
+    render(<App ipc={ipc} />);
+    await user.click(await screen.findByTestId(VisualQueryAccessibility.initialAddBlock));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("select")));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.clauseMenuItem("from")));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.fromTablePicker));
+    await user.click(await screen.findByRole("button", { name: "users" }));
+    await waitFor(() => expect(listColumns).toHaveBeenCalled());
+    await user.click(screen.getByTestId(VisualQueryAccessibility.startOver));
+    // columns cleared — WHERE needs-from if added; at minimum listColumns not required again until new FROM
+  });
+
+  it("maps columnsError to metadata copy", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("columnsError");
+    // still need tables: override listTables from happy tables
+    const happy = createMockDragonIpc("happy");
+    ipc.listTables = happy.listTables.bind(happy);
+    render(<App ipc={ipc} />);
+    await user.click(await screen.findByTestId(VisualQueryAccessibility.initialAddBlock));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("select")));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.clauseMenuItem("from")));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.fromTablePicker));
+    await user.click(await screen.findByRole("button", { name: "users" }));
+    expect(await screen.findByText(VisualQueryCopy.columnsLoadError)).toBeInTheDocument();
+  });
+
+  it("never calls runQuery during canvas editing", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    const runQuery = vi.spyOn(ipc, "runQuery");
+    render(<App ipc={ipc} />);
+    await user.click(await screen.findByTestId(VisualQueryAccessibility.initialAddBlock));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("select")));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.clauseMenuItem("from")));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.fromTablePicker));
+    await user.click(await screen.findByRole("button", { name: "users" }));
+    expect(runQuery).not.toHaveBeenCalled();
+  });
+
+  it("ignores stale listColumns resolution", async () => {
+    const user = userEvent.setup();
+    let releaseFirst!: (cols: unknown) => void;
+    const first = new Promise((resolve) => {
+      releaseFirst = resolve;
+    });
+    const ipc = createMockDragonIpc("happy");
+    const realTables = ipc.listTables.bind(ipc);
+    const realColumns = createMockDragonIpc("happy").listColumns.bind(createMockDragonIpc("happy"));
+    let call = 0;
+    ipc.listTables = realTables;
+    ipc.listColumns = async (c, table) => {
+      call += 1;
+      if (call === 1) {
+        await first;
+        return [{ name: "stale", dataType: "text", isNullable: true, defaultValue: null, isPrimaryKey: false, isUnique: false, isForeignKey: false }];
+      }
+      return realColumns(c, table);
+    };
+    render(<App ipc={ipc} />);
+    await user.click(await screen.findByTestId(VisualQueryAccessibility.initialAddBlock));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("select")));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.clauseMenuItem("from")));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.fromTablePicker));
+    await user.click(await screen.findByRole("button", { name: "users" }));
+    // switch FROM to analytics.events before first resolves
+    await user.click(screen.getByTestId(VisualQueryAccessibility.fromTablePicker));
+    await user.click(await screen.findByRole("button", { name: "analytics.events" }));
+    releaseFirst([]);
+    await waitFor(async () => {
+      await user.click(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock));
+      // open WHERE picker — should not list "stale" if columns for events loaded
+    });
+    // Minimal assertion: second listColumns completed and UI did not crash
+    expect(call).toBeGreaterThanOrEqual(2);
+  });
+});
 ```
 
-- [ ] **Step 2: Run purge test — expect FAIL (scaffold still present)**
-
-- [ ] **Step 3: Replace App, CSS, Rust; delete unused demo assets**
-
-Example App shape:
+**App prop seam (required for tests):**
 
 ```tsx
-import { useCallback, useEffect, useState } from "react";
-import type { TableRef } from "./ipc/contract";
-import { FIXTURE_CONNECTION_ID, createMockDragonIpc } from "./ipc/mock";
-import { VisualQueryCopy } from "./ui/visual-query/copy";
-import { VisualQueryCanvas } from "./ui/visual-query/canvas";
-import "./ui/visual-query/visual-query.css";
-
-const ipc = createMockDragonIpc("happy");
-
-export default function App() {
-  const [tables, setTables] = useState<TableRef[]>([]);
-  const [columnNames, setColumnNames] = useState<string[]>([]);
-  const [metadataErrorMessage, setMetadataErrorMessage] = useState<string | null>(null);
-
-  useEffect(() => {
-    void ipc.listTables(FIXTURE_CONNECTION_ID).then(setTables);
-  }, []);
-
-  const onCommittedFromChange = useCallback(
-    (table: { schema: string | null; name: string } | null) => {
-      if (table === null) {
-        setColumnNames([]);
-        setMetadataErrorMessage(null);
-        return;
-      }
-      const ref: TableRef = {
-        name: table.name,
-        ...(table.schema !== null ? { schema: table.schema } : {}),
-      };
-      void ipc
-        .listColumns(FIXTURE_CONNECTION_ID, ref)
-        .then((cols) => {
-          setColumnNames(cols.map((c) => c.name));
-          setMetadataErrorMessage(null);
-        })
-        .catch(() => {
-          setColumnNames([]);
-          setMetadataErrorMessage(VisualQueryCopy.columnsLoadError);
-        });
-    },
-    [],
-  );
-
-  return (
-    <VisualQueryCanvas
-      tables={tables}
-      columnNames={columnNames}
-      metadataErrorMessage={metadataErrorMessage}
-      isConnected={true}
-      onCommittedFromChange={onCommittedFromChange}
-    />
-  );
-}
+export type AppProps = { ipc?: DragonIpc };
+export default function App({ ipc = createMockDragonIpc("happy") }: AppProps = {}) { /* … */ }
 ```
 
-`lib.rs` becomes builder with empty invoke list (or only plugins), no greet.
-
-- [ ] **Step 4: Run purge test + `bun run check` — PASS**
-
-- [ ] **Step 5: Manual smoke on macOS**
-
-Run: `bun run tauri dev`  
-Walk spec §11.2 checklist items 1–9 on macOS. Fix gaps before committing if checklist fails.
-
-- [ ] **Step 6: Commit**
+- [ ] **Step 2: Run tests — expect FAIL**
 
 ```bash
-git add src/App.tsx src/App.css src-tauri/src/lib.rs src/assets tests/ui/scaffold-purge.test.ts
+bun run test tests/ui/scaffold-purge.test.ts tests/ui/app-wiring.test.tsx
+```
+
+- [ ] **Step 3: Implement App, purge assets, fix index.html, remove greet**
+
+Include abort/stale guards:
+
+```tsx
+useEffect(() => {
+  let cancelled = false;
+  void ipc.listTables(FIXTURE_CONNECTION_ID).then(
+    (rows) => { if (!cancelled) setTables(rows); },
+    () => { if (!cancelled) setTables([]); },
+  );
+  return () => { cancelled = true; };
+}, [ipc]);
+
+// columns: increment requestId; only apply if requestId matches latest; cleanup on unmount
+```
+
+- [ ] **Step 4: Run tests + `bun run check` — expect PASS**
+
+- [ ] **Step 5: Manual smoke on macOS** — `bun run tauri dev`, walk spec §11.2 items 1–9.
+
+- [ ] **Step 6: Commit with explicit pathspecs**
+
+```bash
+git status
+git add \
+  src/App.tsx src/App.css src/main.tsx index.html \
+  src-tauri/src/lib.rs \
+  public/favicon.svg \
+  tests/ui/scaffold-purge.test.ts tests/ui/app-wiring.test.tsx
+git add -u public/vite.svg public/tauri.svg src/assets/react.svg 2>/dev/null || true
+# If deletions: `git add -u -- public src/assets` is OK only scoped to those dirs — never repo-wide -A
+git add -u -- public src/assets
 git commit -m "$(cat <<'EOF'
 feat(app): mount visual canvas and purge Tauri greet scaffold
 
-Wire mock IPC schema loading into App and remove demo UI/Rust greet command.
+Wire injectable mock IPC with stale-safe column loads; remove demo HTML/assets/Rust greet.
 EOF
 )"
 ```
@@ -902,8 +1617,7 @@ EOF
 ### Task 11: Full check + Linux verification handoff
 
 **Files:**
-- Modify: none required unless fixes arise
-- Optional: add `docs/superpowers/plans/2026-08-10-sp4a-manual-verify.md` only if you need a writable checklist log — otherwise use spec §11.2 directly (prefer **no** extra doc unless user asks)
+- Create: `docs/superpowers/plans/2026-08-10-sp4a-manual-verify-log.md` (sign-off artifact)
 
 - [ ] **Step 1: Run full gate**
 
@@ -911,22 +1625,40 @@ EOF
 bun run check
 ```
 
-Expected: typecheck + lint + all tests PASS (including architecture boundary).
+Expected: typecheck + lint + all tests PASS (including architecture boundary + scaffold purge).
 
-- [ ] **Step 2: Linux manual verify**
+- [ ] **Step 2: Write the sign-off log template and fill macOS results**
 
-On a Linux device: `bun install && bun run tauri dev` (install WebKitGTK/system deps per Tauri v2 Linux docs if needed). Complete spec §11.2 checklist. Record any engine-specific bugs as follow-up issues — do not silently drop checklist items.
+Create `docs/superpowers/plans/2026-08-10-sp4a-manual-verify-log.md`:
 
-- [ ] **Step 3: Windows optional** — same checklist if convenient.
+```markdown
+# SP-4a Manual Verify Log
 
-- [ ] **Step 4: Final commit only if fixes were needed**; otherwise done.
+| OS | Device | Date | Tester | §11.2 1-9 | Notes |
+|----|--------|------|--------|-----------|-------|
+| macOS | | YYYY-MM-DD | | PASS/FAIL | |
+| Linux | | YYYY-MM-DD | | PASS/FAIL | |
+| Windows (optional) | | | | | |
+
+Checklist reference: spec §11.2. Every required OS row must be PASS before SP-4a exit.
+```
+
+Fill the macOS row after Task 10 smoke.
+
+- [ ] **Step 3: Linux manual verify**
+
+On Linux: install Tauri v2 WebKitGTK deps as needed, `bun install && bun run tauri dev`, complete §11.2, set Linux row to PASS/FAIL with notes. Failures become fix commits (explicit pathspecs) or recorded blockers — do not claim exit while FAIL.
+
+- [ ] **Step 4: Windows optional** — same log row if convenient.
+
+- [ ] **Step 5: Commit sign-off log (and any fixes) with explicit paths**
 
 ```bash
 git status
-# if fixes:
-git add -A
+git add docs/superpowers/plans/2026-08-10-sp4a-manual-verify-log.md
+# plus any explicit fix paths — never git add -A
 git commit -m "$(cat <<'EOF'
-fix(ui): address SP-4a manual verification findings
+docs: record SP-4a manual verification sign-off
 
 EOF
 )"
@@ -936,23 +1668,26 @@ EOF
 
 ## Self-review (author checklist)
 
-| Spec requirement | Task |
+| Spec / validation requirement | Task |
 |---|---|
 | IPC contract + mock fixtures §5.1 / §7 | Task 1 |
-| Copy + accessibility + empty/No matches strings | Task 2 |
-| Brief tokens, fonts, radius, focus | Task 3 |
+| `TableReference` reuse in helpers | Task 1 |
+| Copy + accessibility parity with Swift ids | Task 2 |
+| Full brief tokens + local fonts | Task 3 |
 | Schema popover | Task 4 |
 | Statement picker SELECT/CREATE/Coming soon | Task 5 |
 | Toolbar without Run | Task 5 |
-| Live SQL preview null-safe | Task 6 + 9 |
-| Clause cards five kinds | Task 7 |
-| CREATE root card | Task 8 |
-| Canvas + status strip + metadata | Task 9 |
-| App wiring isConnected=true, column reload | Task 10 |
-| Scaffold purge + greet removal | Task 10 |
-| Manual Mac + Linux | Task 10–11 |
+| Live SQL preview + Copy clipboard | Task 6 |
+| Clause cards five kinds (executable TDD) | Task 7 |
+| CREATE root card (executable TDD) | Task 8 |
+| Revision counter + committed FROM invalidation | Task 9 |
+| Canvas status strip + live preview null-safe | Task 9 |
+| App wiring stale-safe columns + no `runQuery` | Task 10 |
+| Scaffold purge incl. `index.html` + `public/` | Task 10 |
+| Manual Mac + Linux with sign-off log | Task 10–11 |
+| Explicit pathspec commits (no `git add -A`) | All commit steps |
 | Tech debt deferred (documented) | Deferred section |
 | No stores / no runQuery UI | Tasks 5, 9, 10 |
 
 Placeholder scan: none intentional.  
-Type consistency: `TableRef` / `QueryDocument` / `StatementKind` / `ClauseKind` shared via `src/core` + `src/ipc/contract.ts`.
+Type consistency: `TableReference` from core; IPC `TableRef` only at `listColumns` boundary; canvas `mutate` + `revision` required.
