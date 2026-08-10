@@ -60,3 +60,50 @@
 .vq-popover__item:hover {
   background: var(--neutral-200);
 }
+
+.vq-sql-preview {
+  background: var(--neutral-100);
+  border: 1px solid var(--neutral-200);
+  border-radius: 8px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+}
+
+.vq-sql-preview__header {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.vq-sql-preview__copy {
+  background: transparent;
+  border: none;
+  color: var(--primary-600);
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.4;
+  padding: 0;
+}
+
+.vq-sql-preview__copy:hover {
+  color: var(--primary-700);
+  text-decoration: underline;
+}
+
+.vq-sql-preview__copy:focus-visible {
+  outline: 2px solid var(--primary-600);
+  outline-offset: 2px;
+}
+
+.vq-sql-preview__text {
+  color: var(--neutral-900);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.4;
+  margin: 0;
+  overflow-x: auto;
+  white-space: pre;
+}
