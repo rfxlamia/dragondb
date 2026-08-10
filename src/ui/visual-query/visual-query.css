@@ -225,3 +225,28 @@
 .vq-clause-card__popover {
   margin-top: 4px;
 }
+
+.vq-statement-root-card {
+  min-width: 260px;
+}
+
+.vq-clause-card__title-row {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+}
+
+.vq-statement-menu__item-badge {
+  background: rgba(234, 88, 12, 0.15);
+  border-radius: 4px;
+  color: #ea580c;
+  font-family: var(--font-sans);
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.4;
+  padding: 2px 6px;
+}
+
+.vq-clause-card__select--type {
+  width: 100px;
+}
