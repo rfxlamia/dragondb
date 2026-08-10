@@ -157,8 +157,62 @@ export class QueryDocument {
     this.#createColumns = columns.map((c) => ({ ...c }));
   }
 
+  /**
+   * Typed input. Tracks the field character by character without discarding the
+   * user's column picks — an unfinished edit is not a table change.
+   */
+  setFromTableText(raw: string): void {
+    this.#fromTable = QueryDocument.#parseTableReference(raw);
+  }
+
+  /**
+   * Submitted input (Return in the FROM field). A change of table since the last
+   * commit resets the projection and dependent column references.
+   */
+  commitFromTable(raw: string): void {
+    this.#fromTable = QueryDocument.#parseTableReference(raw);
+    this.#commitCurrentFromTable();
+  }
+
+  /** Popover selection. Choosing a table is itself a commit. */
+  selectFromTable(name: string, schema: string | null): void {
+    this.#fromTable = { schema, name };
+    this.#commitCurrentFromTable();
+  }
+
   /** Written only by the FROM commit methods added in Task 6. */
   #committedFromTable: TableReference | null = null;
+
+  /**
+   * Parses `schema.table` when both halves are present; otherwise treats the
+   * whole string as a bare table name. An empty field means no table at all.
+   */
+  static #parseTableReference(raw: string): TableReference | null {
+    const trimmed = raw.trim();
+    if (trimmed.length === 0) return null;
+
+    const dot = trimmed.indexOf(".");
+    if (dot !== -1) {
+      const schema = trimmed.slice(0, dot);
+      const name = trimmed.slice(dot + 1);
+      if (schema.length > 0 && name.length > 0 && !name.includes(".")) {
+        return { schema, name };
+      }
+    }
+    return { schema: null, name: trimmed };
+  }
+
+  #commitCurrentFromTable(): void {
+    if (!QueryDocument.#sameTable(this.#committedFromTable, this.#fromTable)) {
+      this.#resetProjectionAndDependentColumns();
+    }
+    this.#committedFromTable = this.#fromTable;
+  }
+
+  static #sameTable(a: TableReference | null, b: TableReference | null): boolean {
+    if (a === null || b === null) return a === b;
+    return a.schema === b.schema && a.name === b.name;
+  }
 
   #resetProjectionAndDependentColumns(): void {
     this.#selectProjection = { kind: "allColumns" };
