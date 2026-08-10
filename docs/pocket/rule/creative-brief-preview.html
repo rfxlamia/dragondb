@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Creative Brief Preview — DragonDB</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --font: "Inter", system-ui, sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+    /* Primary — hue 245°, chroma base 0.13 */
+    --primary-100: oklch(0.97 0.013 245);
+    --primary-200: oklch(0.92 0.038 245);
+    --primary-300: oklch(0.84 0.085 245);
+    --primary-400: oklch(0.74 0.111 245);
+    --primary-500: oklch(0.64 0.130 245);
+    --primary-600: oklch(0.55 0.123 245);
+    --primary-700: oklch(0.46 0.111 245);
+    --primary-800: oklch(0.37 0.091 245);
+    --primary-900: oklch(0.28 0.061 245);
+
+    /* Neutrals — hue 245°, chroma ≈ 0.01 */
+    --neutral-100: oklch(0.97 0.006 245);
+    --neutral-200: oklch(0.92 0.007 245);
+    --neutral-300: oklch(0.84 0.008 245);
+    --neutral-400: oklch(0.74 0.009 245);
+    --neutral-500: oklch(0.64 0.010 245);
+    --neutral-600: oklch(0.55 0.010 245);
+    --neutral-700: oklch(0.46 0.009 245);
+    --neutral-800: oklch(0.37 0.009 245);
+    --neutral-900: oklch(0.28 0.008 245);
+
+    /* Semantic */
+    --success-tint: oklch(0.95 0.045 145); --success-solid: oklch(0.55 0.123 145); --success-text: oklch(0.35 0.091 145);
+    --warning-tint: oklch(0.95 0.045 85);  --warning-solid: oklch(0.55 0.103 85);  --warning-text: oklch(0.35 0.071 85);
+    --error-tint:   oklch(0.95 0.015 25);  --error-solid:   oklch(0.55 0.123 25);  --error-text:   oklch(0.35 0.091 25);
+    --info-tint:    oklch(0.95 0.025 245); --info-solid:    oklch(0.55 0.123 245); --info-text:    oklch(0.35 0.081 245);
+
+    --radius: 4px;
+  }
+
+  body { font-family: var(--font); margin:0; padding:2rem; color: var(--neutral-900); background:#fff; line-height:1.5; }
+  h1 { font-weight:700; font-size:33px; margin:0 0 .25rem; letter-spacing:-0.01em; }
+  h2 { font-weight:700; font-size:23px; margin-top:3rem; border-bottom:1px solid var(--neutral-200); padding-bottom:.5rem; }
+  h3 { font-weight:600; font-size:19px; margin-top:2rem; }
+  .lede { color: var(--neutral-700); max-width:70ch; }
+
+  .revision { border:1px solid var(--primary-300); background: var(--primary-100); border-radius:8px; padding:1rem 1.25rem; margin:1.5rem 0; }
+  .revision h2 { margin-top:0; border:none; padding:0; font-size:19px; }
+  .revision table { border-collapse:collapse; width:100%; font-size:13px; margin-top:.5rem; }
+  .revision th, .revision td { text-align:left; padding:.4rem .6rem; border-bottom:1px solid var(--primary-200); vertical-align:top; }
+  .revision th { color: var(--neutral-700); font-weight:600; }
+  .was { color: var(--neutral-600); text-decoration:line-through; }
+  .now { color: var(--primary-700); font-weight:500; }
+  .tag-new { display:inline-block; background:var(--success-tint); color:var(--success-text); font-size:11px; font-weight:600; padding:1px 6px; border-radius:99px; }
+  .tag-same { display:inline-block; background:var(--neutral-200); color:var(--neutral-700); font-size:11px; font-weight:600; padding:1px 6px; border-radius:99px; }
+
+  .swatches { display:flex; flex-wrap:wrap; gap:1rem; }
+  .swatch { width:170px; border:1px solid var(--neutral-200); border-radius:8px; overflow:hidden; font-size:12px; }
+  .swatch .chip { height:64px; }
+  .swatch .meta { padding:.5rem; line-height:1.45; }
+  .swatch code { font-family:var(--font-mono); font-size:11px; color:var(--neutral-700); }
+  .badge { display:inline-block; padding:1px 6px; border-radius:99px; font-weight:600; font-size:11px; }
+  .badge.pass { background:#dcfce7; color:#166534; }
+  .badge.fail { background:#fee2e2; color:#991b1b; }
+
+  .typerow { display:flex; align-items:baseline; gap:1rem; margin:.5rem 0; }
+  .typerow .label { width:80px; color:var(--neutral-600); font-size:12px; font-family:var(--font-mono); flex:none; }
+
+  .stategrid { display:grid; grid-template-columns:repeat(5,1fr); gap:1rem; max-width:940px; align-items:start; }
+  .stategrid .cell { text-align:center; font-size:12px; color:var(--neutral-600); }
+  .stategrid .cell > * { margin-top:.4rem; }
+
+  /* ---- Atoms: every state hard-coded so nothing needs interaction ---- */
+  .btn { font-family:var(--font); font-size:13px; font-weight:500; padding:.45rem .9rem; border-radius:var(--radius); border:none; cursor:pointer; }
+
+  .btn-primary { background:var(--primary-600); color:#fff; box-shadow:0 1px 2px rgba(0,0,0,.08); }
+  .btn-primary.is-hover { background:var(--primary-700); }
+  .btn-primary.is-focus { background:var(--primary-600); outline:2px solid var(--primary-600); outline-offset:2px; }
+  .btn-primary.is-disabled { background:var(--neutral-200); color:var(--neutral-600); box-shadow:none; cursor:not-allowed; }
+  .btn-primary.is-error { background:var(--error-solid); color:#fff; }
+
+  .btn-secondary { background:var(--neutral-100); color:var(--neutral-900); border:1px solid var(--neutral-300); }
+  .btn-secondary.is-hover { background:var(--neutral-200); border-color:var(--neutral-400); }
+  .btn-secondary.is-focus { outline:2px solid var(--primary-600); outline-offset:2px; }
+  .btn-secondary.is-disabled { background:var(--neutral-200); color:var(--neutral-600); border-color:var(--neutral-200); cursor:not-allowed; }
+  .btn-secondary.is-error { background:var(--error-tint); color:var(--error-text); border-color:var(--error-solid); }
+
+  .btn-ghost { background:transparent; color:var(--primary-600); }
+  .btn-ghost.is-hover { background:var(--primary-100); color:var(--primary-700); }
+  .btn-ghost.is-focus { outline:2px solid var(--primary-600); outline-offset:2px; }
+  .btn-ghost.is-disabled { color:var(--neutral-600); cursor:not-allowed; }
+  .btn-ghost.is-error { background:var(--error-tint); color:var(--error-text); }
+
+  .input { font-family:var(--font); font-size:13px; padding:.45rem .6rem; border-radius:var(--radius); border:1px solid var(--neutral-300); background:#fff; color:var(--neutral-900); width:100%; box-sizing:border-box; }
+  .input::placeholder { color:var(--neutral-600); }
+  .input.is-hover { border-color:var(--neutral-400); }
+  .input.is-focus { border-color:var(--primary-600); outline:2px solid var(--primary-600); outline-offset:2px; }
+  .input.is-disabled { background:var(--neutral-100); color:var(--neutral-600); border-color:var(--neutral-200); cursor:not-allowed; }
+  .input.is-error { border-color:var(--error-solid); }
+  .helper-error { color:var(--error-text); font-size:11px; text-align:left; margin-top:.25rem; }
+
+  .tag { display:inline-block; font-size:11px; font-weight:500; padding:2px 8px; border-radius:8px; background:var(--info-tint); color:var(--info-text); }
+  .tag.is-hover { background:var(--primary-200); }
+  .tag.is-focus { outline:2px solid var(--primary-600); outline-offset:2px; }
+  .tag.is-disabled { background:var(--neutral-200); color:var(--neutral-600); cursor:not-allowed; }
+  .tag.is-error { background:var(--error-tint); color:var(--error-text); }
+
+  .lnk { font-size:13px; color:var(--primary-600); text-decoration:none; cursor:pointer; }
+  .lnk.is-hover { color:var(--primary-700); text-decoration:underline; }
+  .lnk.is-focus { outline:2px solid var(--primary-600); outline-offset:2px; }
+  .lnk.is-disabled { color:var(--neutral-600); cursor:not-allowed; }
+  .lnk.is-error { color:var(--error-text); }
+
+  .panel { background:var(--neutral-100); border:1px solid var(--neutral-200); border-radius:8px; padding:1rem; }
+  .sql { font-family:var(--font-mono); font-size:13px; color:var(--neutral-900); white-space:pre; overflow-x:auto; }
+  .sql .kw { color:var(--primary-700); font-weight:500; }
+  table.grid { border-collapse:collapse; font-size:13px; }
+  table.grid th, table.grid td { border:1px solid var(--neutral-200); padding:.35rem .6rem; text-align:left; }
+  table.grid th { background:var(--neutral-100); color:var(--neutral-700); font-weight:600; }
+  table.grid td.num { font-variant-numeric: tabular-nums; text-align:right; }
+  ul.copy { max-width:70ch; } ul.copy li { margin:.35rem 0; }
+</style>
+</head>
+<body>
+
+<h1>Creative Brief Preview — DragonDB</h1>
+<p class="lede">Multi-database client with a visual SQL builder — so beginners can query without writing syntax. · Persona: professional, friendly, precise · Goal: feel <strong>“tidak takut SQL lagi”</strong></p>
+
+<div class="revision">
+  <h2>What changed in this revision — cross-platform amendment</h2>
+  <p style="margin:.25rem 0 0;font-size:13px;color:var(--neutral-700)">Scope: platform, font, focus rings, implementation notes. <strong>The OKLCH palette and every contrast ratio are unchanged</strong> — <code style="font-family:var(--font-mono)">oklch()</code> is native CSS and transfers verbatim.</p>
+  <table>
+    <tr><th style="width:150px">Item</th><th>Was</th><th>Now</th></tr>
+    <tr>
+      <td>Platform</td>
+      <td class="was">macOS desktop (SwiftUI) only</td>
+      <td class="now">Cross-platform desktop — Tauri v2 webview on macOS, Windows, Linux</td>
+    </tr>
+    <tr>
+      <td>Persona / one-liner</td>
+      <td class="was">“a calm <em>native Mac</em> tool” · “…for Mac”</td>
+      <td class="now">“a calm, native-feeling desktop tool on every platform”, platform dropped from the one-liner</td>
+    </tr>
+    <tr>
+      <td>Body font</td>
+      <td class="was">SF Pro (<code>-apple-system</code>)</td>
+      <td class="now">Inter, bundled locally <span class="tag-new">changed</span> — consistent metrics on all three OSes; system stack only as fallback</td>
+    </tr>
+    <tr>
+      <td>Mono font</td>
+      <td class="was">not defined</td>
+      <td class="now">JetBrains Mono <span class="tag-new">new</span> — required by the SQL editor and the Generated SQL inspector</td>
+    </tr>
+    <tr>
+      <td>Type scale</td>
+      <td colspan="2"><span class="tag-same">unchanged</span> 1.20 Minor Third → 11/13/16/19/23/28/33/40. Ratio is set by platform class (data-dense desktop), not by font choice.</td>
+    </tr>
+    <tr>
+      <td>Focus rings</td>
+      <td class="was">“use system focus rings where possible”</td>
+      <td class="now">A webview has none — every ring is an explicit <code style="font-family:var(--font-mono)">outline</code> + <code style="font-family:var(--font-mono)">outline-offset</code>, validated ≥3:1</td>
+    </tr>
+    <tr>
+      <td>Implementation notes</td>
+      <td class="was">SwiftUI only</td>
+      <td class="now">CSS custom properties + Tauri, with the SwiftUI mapping retained as legacy for the frozen macOS app</td>
+    </tr>
+    <tr>
+      <td>Palette · radius · tone</td>
+      <td colspan="2"><span class="tag-same">unchanged</span> hue 245°, chroma 0.13, radius 4px, neutral-friendly register</td>
+    </tr>
+  </table>
+</div>
+
+<h2>Color System</h2>
+
+<h3>Primary — hue 245°, chroma base 0.13</h3>
+<div class="swatches">
+  <div class="swatch"><div class="chip" style="background:var(--primary-100)"></div><div class="meta">primary-100<br><code>oklch(0.97 0.013 245)</code><br>#EEF6FD · surface</div></div>
+  <div class="swatch"><div class="chip" style="background:var(--primary-200)"></div><div class="meta">primary-200<br><code>oklch(0.92 0.038 245)</code><br>#D0E8FD · surface</div></div>
+  <div class="swatch"><div class="chip" style="background:var(--primary-300)"></div><div class="meta">primary-300<br><code>oklch(0.84 0.085 245)</code><br>#9CD1FF · surface</div></div>
+  <div class="swatch"><div class="chip" style="background:var(--primary-400)"></div><div class="meta">primary-400<br><code>oklch(0.74 0.111 245)</code><br>white 2.28:1 <span class="badge fail">fail</span><br>black 9.20:1 <span class="badge pass">AAA</span></div></div>
+  <div class="swatch"><div class="chip" style="background:var(--primary-500)"></div><div class="meta">primary-500<br><code>oklch(0.64 0.130 245)</code><br>white 3.33:1 <span class="badge fail">fail</span><br>black 6.31:1 <span class="badge pass">AA</span></div></div>
+  <div class="swatch" style="border-color:var(--primary-600);border-width:2px"><div class="chip" style="background:var(--primary-600)"></div><div class="meta"><strong>primary-600 · CTA fill</strong><br><code>oklch(0.55 0.123 245)</code><br>white 4.81:1 <span class="badge pass">AA</span></div></div>
+  <div class="swatch"><div class="chip" style="background:var(--primary-700)"></div><div class="meta">primary-700 · hover<br><code>oklch(0.46 0.111 245)</code><br>white 7.07:1 <span class="badge pass">AAA</span></div></div>
+  <div class="swatch"><div class="chip" style="background:var(--primary-800)"></div><div class="meta">primary-800 · active<br><code>oklch(0.37 0.091 245)</code><br>white 10.37:1 <span class="badge pass">AAA</span></div></div>
+  <div class="swatch"><div class="chip" style="background:var(--primary-900)"></div><div class="meta">primary-900<br><code>oklch(0.28 0.061 245)</code><br>white 14.54:1 <span class="badge pass">AAA</span></div></div>
+</div>
+<p style="font-size:13px;color:var(--neutral-700);max-width:70ch">CTA fill uses <strong>primary-600</strong>, not 500 — white on 500 is 3.33:1 and fails AA; white on 600 is 4.81:1 and passes. Gate 3 auto-adjust, carried over unchanged.</p>
+
+<h3>Neutrals — hue 245°, chroma ≈ 0.01</h3>
+<div class="swatches">
+  <div class="swatch"><div class="chip" style="background:var(--neutral-100)"></div><div class="meta">neutral-100<br><code>oklch(0.97 0.006 245)</code><br>#F2F6F9 · page / panel</div></div>
+  <div class="swatch"><div class="chip" style="background:var(--neutral-200)"></div><div class="meta">neutral-200<br><code>oklch(0.92 0.007 245)</code><br>#E1E5E9 · dividers</div></div>
+  <div class="swatch"><div class="chip" style="background:var(--neutral-300)"></div><div class="meta">neutral-300<br><code>oklch(0.84 0.008 245)</code><br>#C6CBD0 · borders</div></div>
+  <div class="swatch"><div class="chip" style="background:var(--neutral-400)"></div><div class="meta">neutral-400<br><code>oklch(0.74 0.009 245)</code><br>#A6ACB0 · hover borders</div></div>
+  <div class="swatch"><div class="chip" style="background:var(--neutral-500)"></div><div class="meta">neutral-500<br><code>oklch(0.64 0.010 245)</code><br>#878D92 · muted icons</div></div>
+  <div class="swatch"><div class="chip" style="background:var(--neutral-600)"></div><div class="meta">neutral-600<br><code>oklch(0.55 0.010 245)</code><br>on white 4.84:1 <span class="badge pass">AA</span></div></div>
+  <div class="swatch"><div class="chip" style="background:var(--neutral-700)"></div><div class="meta">neutral-700<br><code>oklch(0.46 0.009 245)</code><br>on white 7.12:1 <span class="badge pass">AAA</span></div></div>
+  <div class="swatch"><div class="chip" style="background:var(--neutral-800)"></div><div class="meta">neutral-800<br><code>oklch(0.37 0.009 245)</code><br>#3C4044</div></div>
+  <div class="swatch"><div class="chip" style="background:var(--neutral-900)"></div><div class="meta">neutral-900 · body text<br><code>oklch(0.28 0.008 245)</code><br>on n-100 13.38:1 <span class="badge pass">AAA</span></div></div>
+</div>
+
+<h3>Semantic</h3>
+<div class="swatches">
+  <div class="swatch"><div class="chip" style="background:var(--success-tint);color:var(--success-text);display:flex;align-items:center;justify-content:center;font-weight:600">Connected.</div><div class="meta">success<br><code>tint 0.95 0.045 145</code><br>text-on-tint 9.56:1 <span class="badge pass">AAA</span><br>white on solid 4.60:1 <span class="badge pass">AA</span></div></div>
+  <div class="swatch"><div class="chip" style="background:var(--warning-tint);color:var(--warning-text);display:flex;align-items:center;justify-content:center;font-weight:600">Read-only</div><div class="meta">warning<br><code>tint 0.95 0.045 85</code><br>text-on-tint 9.82:1 <span class="badge pass">AAA</span><br>white on solid 4.89:1 <span class="badge pass">AA</span></div></div>
+  <div class="swatch"><div class="chip" style="background:var(--error-tint);color:var(--error-text);display:flex;align-items:center;justify-content:center;font-weight:600">Query failed</div><div class="meta">error<br><code>tint 0.95 0.015 25</code><br>text-on-tint 10.14:1 <span class="badge pass">AAA</span><br>white on solid 5.16:1 <span class="badge pass">AA</span></div></div>
+  <div class="swatch"><div class="chip" style="background:var(--info-tint);color:var(--info-text);display:flex;align-items:center;justify-content:center;font-weight:600">PostgreSQL</div><div class="meta">info<br><code>tint 0.95 0.025 245</code><br>text-on-tint 9.75:1 <span class="badge pass">AAA</span><br>white on solid 4.81:1 <span class="badge pass">AA</span></div></div>
+</div>
+
+<h2>Typography — Inter · base 16px · ratio 1.20 (Minor Third)</h2>
+<div class="typerow"><span class="label">xs 11</span><span style="font-size:11px">Build SQL visually. Understand what it generates.</span></div>
+<div class="typerow"><span class="label">sm 13</span><span style="font-size:13px">Build SQL visually. Understand what it generates.</span></div>
+<div class="typerow"><span class="label">base 16</span><span style="font-size:16px">Build SQL visually. Understand what it generates.</span></div>
+<div class="typerow"><span class="label">md 19</span><span style="font-size:19px">Build SQL visually. Understand what it generates.</span></div>
+<div class="typerow"><span class="label">lg 23</span><span style="font-size:23px">Build SQL visually. Understand what it generates.</span></div>
+<div class="typerow"><span class="label">xl 28</span><span style="font-size:28px">Build SQL visually.</span></div>
+<div class="typerow"><span class="label">2xl 33</span><span style="font-size:33px">Build SQL visually.</span></div>
+<div class="typerow"><span class="label">3xl 40</span><span style="font-size:40px">Build SQL.</span></div>
+
+<h3>Monospace — JetBrains Mono <span class="tag-new">new in this revision</span></h3>
+<p style="font-size:13px;color:var(--neutral-700);max-width:70ch">The SQL editor and the Generated SQL inspector (Roadmap Phase 1) need a mono face. SwiftUI got one free from the system; CSS needs it declared.</p>
+<div class="panel" style="max-width:520px">
+  <div class="sql"><span class="kw">SELECT</span> name, email
+<span class="kw">FROM</span> users
+<span class="kw">WHERE</span> name <span class="kw">LIKE</span> '%Agus%'
+<span class="kw">ORDER BY</span> created_at <span class="kw">DESC</span>
+<span class="kw">LIMIT</span> 20;</div>
+</div>
+
+<h3>Tabular numerals — result grid</h3>
+<p style="font-size:13px;color:var(--neutral-700);max-width:70ch">Digits must align vertically in the results table. Inter supports <code style="font-family:var(--font-mono)">font-variant-numeric: tabular-nums</code>; the Windows system font does not do this reliably, which is part of why the font is bundled rather than left to the OS.</p>
+<table class="grid">
+  <tr><th>customer_id</th><th>country</th><th style="text-align:right">total_amount</th></tr>
+  <tr><td>1042</td><td>Indonesia</td><td class="num">1.250.000</td></tr>
+  <tr><td>887</td><td>Singapore</td><td class="num">98.400</td></tr>
+  <tr><td>13</td><td>Malaysia</td><td class="num">7.311.900</td></tr>
+</table>
+
+<h2>Atoms — all 5 states, rendered statically</h2>
+
+<h3>Button — Primary</h3>
+<div class="stategrid">
+  <div class="cell">Default<div><button class="btn btn-primary">Run query</button></div></div>
+  <div class="cell">Hover<div><button class="btn btn-primary is-hover">Run query</button></div></div>
+  <div class="cell">Focus<div><button class="btn btn-primary is-focus">Run query</button></div></div>
+  <div class="cell">Disabled<div><button class="btn btn-primary is-disabled" disabled>Run query</button></div></div>
+  <div class="cell">Error<div><button class="btn btn-primary is-error">Delete table</button></div></div>
+</div>
+
+<h3>Button — Secondary</h3>
+<div class="stategrid">
+  <div class="cell">Default<div><button class="btn btn-secondary">Cancel</button></div></div>
+  <div class="cell">Hover<div><button class="btn btn-secondary is-hover">Cancel</button></div></div>
+  <div class="cell">Focus<div><button class="btn btn-secondary is-focus">Cancel</button></div></div>
+  <div class="cell">Disabled<div><button class="btn btn-secondary is-disabled" disabled>Cancel</button></div></div>
+  <div class="cell">Error<div><button class="btn btn-secondary is-error">Discard</button></div></div>
+</div>
+
+<h3>Button — Ghost</h3>
+<div class="stategrid">
+  <div class="cell">Default<div><button class="btn btn-ghost">Add block</button></div></div>
+  <div class="cell">Hover<div><button class="btn btn-ghost is-hover">Add block</button></div></div>
+  <div class="cell">Focus<div><button class="btn btn-ghost is-focus">Add block</button></div></div>
+  <div class="cell">Disabled<div><button class="btn btn-ghost is-disabled" disabled>Add block</button></div></div>
+  <div class="cell">Error<div><button class="btn btn-ghost is-error">Remove block</button></div></div>
+</div>
+
+<h3>Input / Text Field</h3>
+<div class="stategrid">
+  <div class="cell">Default<div><input class="input" placeholder="Host (e.g. localhost)"></div></div>
+  <div class="cell">Hover<div><input class="input is-hover" placeholder="Host (e.g. localhost)"></div></div>
+  <div class="cell">Focus<div><input class="input is-focus" value="localhost"></div></div>
+  <div class="cell">Disabled<div><input class="input is-disabled" placeholder="Host (e.g. localhost)" disabled></div></div>
+  <div class="cell">Error<div><input class="input is-error" value="localhos"><div class="helper-error">That host doesn’t look reachable. Check the address and try again.</div></div></div>
+</div>
+
+<h3>Badge / Tag</h3>
+<div class="stategrid">
+  <div class="cell">Default<div><span class="tag">PostgreSQL</span></div></div>
+  <div class="cell">Hover<div><span class="tag is-hover">PostgreSQL</span></div></div>
+  <div class="cell">Focus<div><span class="tag is-focus">PostgreSQL</span></div></div>
+  <div class="cell">Disabled<div><span class="tag is-disabled">MySQL</span></div></div>
+  <div class="cell">Error<div><span class="tag is-error">Disconnected</span></div></div>
+</div>
+
+<h3>Link</h3>
+<div class="stategrid">
+  <div class="cell">Default<div><a class="lnk">View generated SQL</a></div></div>
+  <div class="cell">Hover<div><a class="lnk is-hover">View generated SQL</a></div></div>
+  <div class="cell">Focus<div><a class="lnk is-focus">View generated SQL</a></div></div>
+  <div class="cell">Disabled<div><a class="lnk is-disabled">View generated SQL</a></div></div>
+  <div class="cell">Error<div><a class="lnk is-error">Retry connection</a></div></div>
+</div>
+
+<h3>Focus ring — the changed rule</h3>
+<p style="font-size:13px;color:var(--neutral-700);max-width:70ch">
+  <code style="font-family:var(--font-mono)">outline: 2px solid var(--primary-600); outline-offset: 2px;</code><br>
+  The 2px offset gap shows the page background, so the ratio that matters is ring-against-background, not ring-against-button. Computed: primary-600 vs white <strong>4.81:1</strong>, vs neutral-100 panel <strong>4.43:1</strong> — both clear the 3:1 UI-component threshold. Using an inset shadow instead would put the ring against the button fill and make it invisible on primary buttons.
+</p>
+
+<h2>Molecules</h2>
+<div style="display:flex;gap:2rem;flex-wrap:wrap">
+  <div class="panel" style="width:280px">
+    <div style="font-size:11px;color:var(--neutral-700);margin-bottom:.5rem">Connection Form — error state</div>
+    <label style="font-size:11px;color:var(--neutral-700)">Host</label>
+    <input class="input is-error" value="localhos" style="margin:.25rem 0">
+    <div class="helper-error" style="margin-bottom:.75rem">That host doesn’t look reachable. Check the address and try again.</div>
+    <button class="btn btn-primary">Connect database</button>
+    <button class="btn btn-secondary" style="margin-left:.35rem">Cancel</button>
+  </div>
+  <div class="panel" style="width:280px">
+    <div style="font-size:11px;color:var(--neutral-700);margin-bottom:.5rem">Query Canvas Toolbar</div>
+    <button class="btn btn-ghost">Add block</button>
+    <button class="btn btn-primary" style="margin-left:.35rem">Run query</button>
+    <div style="margin-top:.6rem"><a class="lnk">View generated SQL</a></div>
+  </div>
+  <div class="panel" style="width:280px">
+    <div style="font-size:11px;color:var(--neutral-700);margin-bottom:.5rem">Engine Filter Row</div>
+    <span class="tag">PostgreSQL</span>
+    <span class="tag is-disabled" style="margin-left:.25rem">MySQL</span>
+    <div style="margin-top:.6rem"><a class="lnk">Clear filters</a></div>
+  </div>
+</div>
+
+<h2>Micro-copy — neutral-friendly register</h2>
+<ul class="copy">
+  <li><strong>CTA:</strong> “Connect database” · “Run query” · “Add block” — verb-led, 1–3 words</li>
+  <li><strong>Secondary:</strong> “Cancel” · “Not now”</li>
+  <li><strong>Placeholder:</strong> “Host (e.g. localhost)” · “Search tables”</li>
+  <li><strong>Validation error:</strong> “That host doesn’t look reachable. Check the address and try again.”</li>
+  <li><strong>Failed action:</strong> “Couldn’t run this query. Check the blocks, then try again.”</li>
+  <li><strong>Empty state:</strong> “No tables yet — connect a database to get started.”</li>
+  <li><strong>Success:</strong> “Connected.” / “Query finished.”</li>
+</ul>
+
+<h2>Known gap — not covered by this brief</h2>
+<p style="font-size:13px;color:var(--neutral-700);max-width:70ch">
+  <strong>Dark mode.</strong> The SwiftUI app inherited some system appearance handling for free; a webview does not. Multi-theme support is an explicit later extension of brand-design and is <em>not</em> defined here. Until it is, the app ships light-only on all three platforms — Windows and Linux users will notice. Flagging it so nobody assumes it is covered.
+</p>
+
+<hr style="margin-top:3rem;border:none;border-top:1px solid var(--neutral-200)">
+<p style="font-size:12px;color:var(--neutral-600)">Preview regenerated for the cross-platform amendment · palette and contrast ratios carried over unchanged · fonts loaded from Google Fonts <em>for this preview only</em> — the shipped app bundles Inter and JetBrains Mono locally, since a Tauri artifact must not depend on a CDN.</p>
+
+</body>
+</html>
