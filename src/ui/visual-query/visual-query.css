@@ -1,0 +1,62 @@
+.vq-popover {
+  background: var(--neutral-100);
+  border: 1px solid var(--neutral-300);
+  border-radius: var(--radius);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  width: 240px;
+}
+
+.vq-popover__title {
+  color: var(--neutral-600);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.vq-popover__search {
+  border: 1px solid var(--neutral-300);
+  border-radius: var(--radius);
+  box-sizing: border-box;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.4;
+  padding: 4px 8px;
+  width: 100%;
+}
+
+.vq-popover__message {
+  color: var(--neutral-600);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.vq-popover__list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.vq-popover__item {
+  background: transparent;
+  border: none;
+  color: var(--neutral-900);
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.4;
+  padding: 4px 6px;
+  text-align: left;
+  width: 100%;
+}
+
+.vq-popover__item:hover {
+  background: var(--neutral-200);
+}
