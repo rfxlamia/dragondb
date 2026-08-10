@@ -110,7 +110,7 @@
 // tests/ipc/mock.test.ts
 import { describe, expect, it } from "vitest";
 import { FIXTURE_CONNECTION_ID, createMockDragonIpc } from "../../src/ipc/mock";
-import { formatTableDisplayName, tableRefToCore } from "../../src/ipc/table-ref";
+import { coreToTableRef, formatTableDisplayName, tableRefToCore } from "../../src/ipc/table-ref";
 
 describe("mock DragonIpc", () => {
   it("happy path lists public + non-public schema tables", async () => {
@@ -194,7 +194,7 @@ Put `tableRefToCore` / `formatTableDisplayName` in `src/ipc/table-ref.ts` and re
 ```ts
 // tests import:
 import { FIXTURE_CONNECTION_ID, createMockDragonIpc } from "../../src/ipc/mock";
-import { formatTableDisplayName, tableRefToCore } from "../../src/ipc/table-ref";
+import { coreToTableRef, formatTableDisplayName, tableRefToCore } from "../../src/ipc/table-ref";
 ```
 
 Update the test imports accordingly when implementing.
