@@ -88,6 +88,95 @@ export function VisualQueryCanvas(props: VisualQueryCanvasProps): React.JSX.Elem
   }
 
   const statementKind = presentation.statementKind;
+  const chainCards: React.ReactNode[] = [];
+
+  if (presentation.showsStatementRootCard && statementKind !== null) {
+    chainCards.push(
+      <div key={`root-${statementKind}`} className="vq-canvas__chain-item">
+        <StatementRootCard
+          kind={statementKind}
+          document={doc}
+          onStartOver={() => {
+            mutate((d) => {
+              d.startOver();
+            });
+          }}
+          onSetCreateTableName={(name) => {
+            mutate((d) => {
+              d.setCreateTableName(name);
+            });
+          }}
+          onSetCreateColumns={(columns) => {
+            mutate((d) => {
+              d.setCreateColumns(columns);
+            });
+          }}
+        />
+      </div>,
+    );
+  }
+
+  for (const kind of presentation.visibleClauseKinds) {
+    chainCards.push(
+      <div key={kind} className="vq-canvas__chain-item">
+        <ClauseCard
+          kind={kind}
+          document={doc}
+          tables={tables}
+          columnNames={columnNames}
+          metadataErrorMessage={metadataErrorMessage}
+          onDelete={() => handleDeleteClause(kind)}
+          onSetSelectColumns={(columns) => {
+            mutate((d) => {
+              d.setSelectColumns(columns);
+            });
+          }}
+          onSetFromTableText={(raw) => {
+            mutate((d) => {
+              d.setFromTableText(raw);
+            });
+          }}
+          onCommitFromTable={(raw) => {
+            mutate((d) => {
+              d.commitFromTable(raw);
+            });
+          }}
+          onSelectFromTable={(table) => {
+            mutate((d) => {
+              d.selectFromTable(table.name, table.schema);
+            });
+          }}
+          onSetWhereCondition={(column, op, value) => {
+            mutate((d) => {
+              d.setWhereCondition(column, op, value);
+            });
+          }}
+          onSetOrderBy={(column, direction) => {
+            mutate((d) => {
+              d.setOrderBy(column, direction);
+            });
+          }}
+          onSetLimitText={(text) => {
+            mutate((d) => {
+              d.setLimitText(text);
+            });
+          }}
+        />
+      </div>,
+    );
+  }
+
+  const chainWithConnectors: React.ReactNode[] = [];
+  for (let i = 0; i < chainCards.length; i += 1) {
+    if (i > 0) {
+      chainWithConnectors.push(
+        <span key={`connector-${i}`} className="vq-canvas__connector" aria-hidden="true">
+          →
+        </span>,
+      );
+    }
+    chainWithConnectors.push(chainCards[i]);
+  }
 
   return (
     <div className="vq-canvas">
@@ -109,121 +198,60 @@ export function VisualQueryCanvas(props: VisualQueryCanvasProps): React.JSX.Elem
       ) : null}
 
       <div className="vq-canvas__body">
-        <div className="vq-canvas__chain">
-          {presentation.showsInitialAddButton ? (
-            <div className="vq-canvas__empty">
-              <div className="vq-canvas__empty-title">{VisualQueryCopy.emptyCanvasTitle}</div>
-              <div className="vq-canvas__empty-body">{VisualQueryCopy.emptyCanvasBody}</div>
+        {presentation.showsInitialAddButton ? (
+          <div className="vq-canvas__empty">
+            <div className="vq-canvas__empty-title">{VisualQueryCopy.emptyCanvasTitle}</div>
+            <div className="vq-canvas__empty-body">{VisualQueryCopy.emptyCanvasBody}</div>
+            <div className="vq-canvas__empty-action">
               <button
                 type="button"
                 className="vq-canvas__add-block"
                 data-testid={VisualQueryAccessibility.initialAddBlock}
-                onClick={() => setShowStatementPicker(true)}
+                onClick={() => setShowStatementPicker((open) => !open)}
               >
                 {VisualQueryCopy.addBlockTitle}
               </button>
-              {showStatementPicker ? <StatementPicker onChoose={handleChooseStatement} /> : null}
-            </div>
-          ) : null}
-
-          {presentation.showsStatementRootCard && statementKind !== null ? (
-            <StatementRootCard
-              kind={statementKind}
-              document={doc}
-              onStartOver={() => {
-                mutate((d) => {
-                  d.startOver();
-                });
-              }}
-              onSetCreateTableName={(name) => {
-                mutate((d) => {
-                  d.setCreateTableName(name);
-                });
-              }}
-              onSetCreateColumns={(columns) => {
-                mutate((d) => {
-                  d.setCreateColumns(columns);
-                });
-              }}
-            />
-          ) : null}
-
-          {presentation.visibleClauseKinds.map((kind) => (
-            <ClauseCard
-              key={kind}
-              kind={kind}
-              document={doc}
-              tables={tables}
-              columnNames={columnNames}
-              metadataErrorMessage={metadataErrorMessage}
-              onDelete={() => handleDeleteClause(kind)}
-              onSetSelectColumns={(columns) => {
-                mutate((d) => {
-                  d.setSelectColumns(columns);
-                });
-              }}
-              onSetFromTableText={(raw) => {
-                mutate((d) => {
-                  d.setFromTableText(raw);
-                });
-              }}
-              onCommitFromTable={(raw) => {
-                mutate((d) => {
-                  d.commitFromTable(raw);
-                });
-              }}
-              onSelectFromTable={(table) => {
-                mutate((d) => {
-                  d.selectFromTable(table.name, table.schema);
-                });
-              }}
-              onSetWhereCondition={(column, op, value) => {
-                mutate((d) => {
-                  d.setWhereCondition(column, op, value);
-                });
-              }}
-              onSetOrderBy={(column, direction) => {
-                mutate((d) => {
-                  d.setOrderBy(column, direction);
-                });
-              }}
-              onSetLimitText={(text) => {
-                mutate((d) => {
-                  d.setLimitText(text);
-                });
-              }}
-            />
-          ))}
-
-          {presentation.showsTrailingAddButton ? (
-            <>
-              <button
-                type="button"
-                className="vq-canvas__add-block"
-                data-testid={VisualQueryAccessibility.trailingAddBlock}
-                onClick={() => setShowClauseMenu(true)}
-              >
-                {VisualQueryCopy.addBlockTitle}
-              </button>
-              {showClauseMenu ? (
-                <div className="vq-clause-menu" data-testid={VisualQueryAccessibility.clauseMenu}>
-                  {VisualQueryCopy.clauseMenuItems(doc).map((item) => (
-                    <button
-                      key={item.kind}
-                      type="button"
-                      className="vq-clause-menu__item"
-                      data-testid={VisualQueryAccessibility.clauseMenuItem(item.kind)}
-                      onClick={() => handleAddClause(item.kind)}
-                    >
-                      <div className="vq-clause-menu__item-title">{item.title}</div>
-                      <div className="vq-clause-menu__item-helper">{item.helper}</div>
-                    </button>
-                  ))}
+              {showStatementPicker ? (
+                <div className="vq-canvas__menu-anchor">
+                  <StatementPicker onChoose={handleChooseStatement} />
                 </div>
               ) : null}
-            </>
-          ) : null}
-        </div>
+            </div>
+          </div>
+        ) : (
+          <div className="vq-canvas__chain">
+            {chainWithConnectors}
+
+            {presentation.showsTrailingAddButton ? (
+              <div className="vq-canvas__trailing">
+                <button
+                  type="button"
+                  className="vq-canvas__add-block vq-canvas__add-block--trailing"
+                  data-testid={VisualQueryAccessibility.trailingAddBlock}
+                  onClick={() => setShowClauseMenu((open) => !open)}
+                >
+                  {VisualQueryCopy.addBlockTitle}
+                </button>
+                {showClauseMenu ? (
+                  <div className="vq-clause-menu" data-testid={VisualQueryAccessibility.clauseMenu}>
+                    {VisualQueryCopy.clauseMenuItems(doc).map((item) => (
+                      <button
+                        key={item.kind}
+                        type="button"
+                        className="vq-clause-menu__item"
+                        data-testid={VisualQueryAccessibility.clauseMenuItem(item.kind)}
+                        onClick={() => handleAddClause(item.kind)}
+                      >
+                        <div className="vq-clause-menu__item-title">{item.title}</div>
+                        <div className="vq-clause-menu__item-helper">{item.helper}</div>
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        )}
 
         <GeneratedSQLPreview sql={sql} />
       </div>
