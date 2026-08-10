@@ -51,4 +51,30 @@ describe("SchemaFieldPopover", () => {
     await user.click(screen.getByRole("button", { name: "users" }));
     expect(onSelect).toHaveBeenCalledWith("users");
   });
+
+  it("keys table rows by stable identity when display titles collide", () => {
+    type Table = { schema: string | null; name: string };
+    const items: Table[] = [
+      { schema: null, name: "users" },
+      { schema: "public", name: "users" },
+    ];
+    const { container } = render(
+      <SchemaFieldPopover
+        title="Tables"
+        items={items}
+        itemTitle={(table) =>
+          table.schema === "public" || table.schema === null
+            ? table.name
+            : `${table.schema}.${table.name}`
+        }
+        itemKey={(table) => `${table.schema ?? ""}:${table.name}`}
+        onSelect={() => {}}
+      />,
+    );
+    const buttons = container.querySelectorAll(".vq-popover__item");
+    expect(buttons).toHaveLength(2);
+    expect(buttons[0]?.getAttribute("data-testid")).not.toBe(
+      buttons[1]?.getAttribute("data-testid"),
+    );
+  });
 });

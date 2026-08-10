@@ -60,5 +60,7 @@ describe("VisualQueryCopy", () => {
     expect(VisualQueryCopy.emptyCanvasTitle).toBe("Build a query visually");
     expect(VisualQueryCopy.noMatchesTitle).toBe("No matches");
     expect(VisualQueryCopy.columnsLoadError).toContain("Could not load columns");
+    expect(VisualQueryCopy.tablesLoadError).toContain("Could not load tables");
+    expect(VisualQueryCopy.copySQLDoneTitle).toBe("Done");
   });
 });

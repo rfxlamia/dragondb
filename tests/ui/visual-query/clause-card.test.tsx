@@ -327,8 +327,19 @@ describe("ClauseCard", () => {
 
     await user.click(screen.getByTestId(VisualQueryAccessibility.fromTablePicker));
     await user.click(screen.getByRole("button", { name: "users" }));
-    expect(field).toHaveValue("users");
+    expect(field).toHaveValue("public.users");
     expect(doc.fromTable).toEqual({ name: "users", schema: "public" });
+  });
+
+  it("FROM field retains public schema while typing a qualified name", async () => {
+    const user = userEvent.setup();
+    const doc = docWithSelectFrom();
+    render(<HarnessedClauseCard kind="from" initialDoc={doc} tables={[]} />);
+
+    const field = screen.getByTestId(VisualQueryAccessibility.fromTableField);
+    await user.type(field, "public.users");
+    expect(field).toHaveValue("public.users");
+    expect(doc.fromTable).toEqual({ schema: "public", name: "users" });
   });
 
   it("SELECT column field and picker update the harnessed projection", async () => {

@@ -26,7 +26,10 @@ export default function App({ ipc = DEFAULT_IPC }: AppProps = {}) {
         if (!cancelled) setTables(rows.map(tableRefToCore));
       },
       () => {
-        if (!cancelled) setTables([]);
+        if (!cancelled) {
+          setTables([]);
+          setMetadataErrorMessage(VisualQueryCopy.tablesLoadError);
+        }
       },
     );
     return () => {

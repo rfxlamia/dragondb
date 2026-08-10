@@ -59,6 +59,27 @@ describe("VisualQueryCanvas layout chrome", () => {
     expect(trailing).not.toBeNull();
     expect(trailing?.contains(menu)).toBe(true);
   });
+
+  it("closes clause menu on Start over so SELECT does not reopen it", async () => {
+    const user = userEvent.setup();
+    render(
+      <VisualQueryCanvas
+        tables={tables}
+        columnNames={[]}
+        metadataErrorMessage={null}
+        isConnected={true}
+      />,
+    );
+    await user.click(screen.getByTestId(VisualQueryAccessibility.initialAddBlock));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("select")));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock));
+    expect(screen.getByTestId(VisualQueryAccessibility.clauseMenu)).toBeInTheDocument();
+
+    await user.click(screen.getByTestId(VisualQueryAccessibility.startOver));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.initialAddBlock));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("select")));
+    expect(screen.queryByTestId(VisualQueryAccessibility.clauseMenu)).toBeNull();
+  });
 });
 
 describe("visual-query.css layout contracts", () => {
@@ -124,6 +145,27 @@ describe("VisualQueryCanvas", () => {
     await user.click(screen.getByTestId(VisualQueryAccessibility.initialAddBlock));
     await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("select")));
     expect(screen.getByText(/table/i)).toBeInTheDocument();
+  });
+
+  it("shows empty SQL preview when named projection columns are blank", async () => {
+    const user = userEvent.setup();
+    render(
+      <VisualQueryCanvas
+        tables={tables}
+        columnNames={[]}
+        metadataErrorMessage={null}
+        isConnected={true}
+      />,
+    );
+    await user.click(screen.getByTestId(VisualQueryAccessibility.initialAddBlock));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("select")));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.clauseMenuItem("from")));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.fromTablePicker));
+    await user.click(screen.getByRole("button", { name: "users" }));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.allColumnsToggle));
+    expect(screen.getByTestId(VisualQueryAccessibility.generatedSQLText)).toHaveTextContent("—");
+    expect(screen.getByText(/Choose at least one column/i)).toBeInTheDocument();
   });
 
   it("notifies onCommittedFromChange on select, clear via delete FROM, and start over", async () => {

@@ -7,6 +7,8 @@ export type SchemaFieldPopoverProps<T> = {
   title: string;
   items: T[];
   itemTitle: (item: T) => string;
+  /** Stable list identity; defaults to `itemTitle` (unsafe when titles collide). */
+  itemKey?: (item: T) => string;
   needsFromMessage?: string | null;
   errorMessage?: string | null;
   onSelect: (item: T) => void;
@@ -24,8 +26,9 @@ export function schemaPopoverEmptyStateMessage(args: {
 }
 
 export function SchemaFieldPopover<T>(props: SchemaFieldPopoverProps<T>): React.JSX.Element {
-  const { title, items, itemTitle, needsFromMessage, errorMessage, onSelect } = props;
+  const { title, items, itemTitle, itemKey, needsFromMessage, errorMessage, onSelect } = props;
   const [searchText, setSearchText] = useState("");
+  const keyOf = itemKey ?? itemTitle;
 
   const emptyStateMessage = schemaPopoverEmptyStateMessage({
     itemsAreEmpty: items.length === 0,
@@ -63,11 +66,11 @@ export function SchemaFieldPopover<T>(props: SchemaFieldPopoverProps<T>): React.
         <div className="vq-popover__list" data-testid={VisualQueryAccessibility.schemaPopoverList}>
           {filteredItems.map((item) => (
             <button
-              key={itemTitle(item)}
+              key={keyOf(item)}
               type="button"
               className="vq-popover__item"
               onClick={() => onSelect(item)}
-              data-testid={VisualQueryAccessibility.schemaPopoverItem(title, itemTitle(item))}
+              data-testid={VisualQueryAccessibility.schemaPopoverItem(title, keyOf(item))}
             >
               {itemTitle(item)}
             </button>

@@ -33,7 +33,7 @@
   --radius: 4px;
   --font-sans: "Inter", -apple-system, "Segoe UI Variable Text", "Segoe UI", system-ui, "Cantarell",
     "Ubuntu", sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, "Cascadia Mono", "Liberation Mono",
+  --font-mono: "JetBrains Mono", ui-monospace, sfmono-regular, "Cascadia Mono", "Liberation Mono",
     monospace;
 }
 

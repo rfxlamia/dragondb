@@ -130,6 +130,7 @@ export function ClauseCard(props: ClauseCardProps): React.JSX.Element {
               title="Tables"
               items={tables}
               itemTitle={formatTableDisplayName}
+              itemKey={(table) => `${table.schema ?? ""}:${table.name}`}
               onSelect={(table) => {
                 onSelectFromTable(table);
                 setShowSchemaPopover(false);

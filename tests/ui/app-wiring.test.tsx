@@ -85,6 +85,15 @@ describe("App wiring", () => {
     expect(await screen.findByText(VisualQueryCopy.columnsLoadError)).toBeInTheDocument();
   });
 
+  it("maps listTables rejection to metadata copy", async () => {
+    const ipc = createMockDragonIpc("happy");
+    ipc.listTables = async () => {
+      throw new Error("tables unavailable");
+    };
+    render(<App ipc={ipc} />);
+    expect(await screen.findByText(VisualQueryCopy.tablesLoadError)).toBeInTheDocument();
+  });
+
   it("never calls runQuery during canvas editing", async () => {
     const user = userEvent.setup();
     const ipc = createMockDragonIpc("happy");
@@ -203,14 +212,22 @@ describe("App wiring", () => {
     const first = new Promise<void>((_resolve, reject) => {
       rejectFirst = reject;
     });
+    let settleFirst!: () => void;
+    const firstSettled = new Promise<void>((resolve) => {
+      settleFirst = resolve;
+    });
     const ipc = createMockDragonIpc("happy");
     const realColumns = ipc.listColumns.bind(ipc);
     let call = 0;
     ipc.listColumns = async (c, table) => {
       call += 1;
       if (call === 1) {
-        await first;
-        throw new Error("stale rejection");
+        try {
+          await first;
+          throw new Error("stale rejection");
+        } finally {
+          settleFirst();
+        }
       }
       return realColumns(c, table);
     };
@@ -225,6 +242,7 @@ describe("App wiring", () => {
     await user.click(await screen.findByRole("button", { name: "analytics.events" }));
     await waitFor(() => expect(call).toBe(2));
     rejectFirst(new Error("stale rejection"));
+    await firstSettled;
     await waitFor(() => expect(screen.queryByText(VisualQueryCopy.columnsLoadError)).toBeNull());
 
     await user.click(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock));

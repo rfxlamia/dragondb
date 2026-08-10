@@ -72,9 +72,11 @@ export function StatementRootCard(props: {
     const next = copyDocumentColumns();
     if (next.length === 0) {
       onSetCreateColumns([{ name: "", type: "text" }]);
+      setColumnRowKeys([createColumnRowKey()]);
       return;
     }
     onSetCreateColumns([...next, { name: "", type: "text" }]);
+    setColumnRowKeys((keys) => [...keys, createColumnRowKey()]);
   }
 
   return (
@@ -161,6 +163,11 @@ export function StatementRootCard(props: {
                   onClick={() => {
                     mutateColumns((next) => {
                       next.splice(index, 1);
+                    });
+                    setColumnRowKeys((keys) => {
+                      const next = [...keys];
+                      next.splice(index, 1);
+                      return next;
                     });
                   }}
                   data-testid={VisualQueryAccessibility.removeCreateColumn(index)}

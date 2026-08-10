@@ -11,6 +11,18 @@ import { StatementRootCard } from "./statement-root-card";
 import { VisualQueryToolbar } from "./toolbar";
 import "./visual-query.css";
 
+/** Align live preview with canRun when a named projection has only blank columns. */
+function previewSQL(doc: QueryDocument): string {
+  const projection = doc.selectProjection;
+  if (projection.kind === "columns") {
+    const named = projection.columns.filter((column) => column.trim().length > 0);
+    if (named.length === 0) {
+      return VisualQueryCopy.sqlPreviewEmpty;
+    }
+  }
+  return generateSQL(doc)?.display ?? VisualQueryCopy.sqlPreviewEmpty;
+}
+
 export type VisualQueryCanvasProps = {
   tables: TableReference[];
   columnNames: string[];
@@ -48,7 +60,7 @@ export function VisualQueryCanvas(props: VisualQueryCanvasProps): React.JSX.Elem
 
   const presentation = new CanvasPresentation(doc);
   const eligibility = canRun(doc, isConnected);
-  const sql = generateSQL(doc)?.display ?? VisualQueryCopy.sqlPreviewEmpty;
+  const sql = previewSQL(doc);
 
   function mutate(fn: (d: QueryDocument) => void): void {
     const before = doc.committedFromTable;
@@ -75,11 +87,17 @@ export function VisualQueryCanvas(props: VisualQueryCanvasProps): React.JSX.Elem
     setShowClauseMenu(false);
   }
 
+  function handleStartOver(): void {
+    mutate((d) => {
+      d.startOver();
+    });
+    setShowClauseMenu(false);
+    setShowStatementPicker(false);
+  }
+
   function handleDeleteClause(kind: ClauseKind): void {
     if (kind === "select") {
-      mutate((d) => {
-        d.startOver();
-      });
+      handleStartOver();
       return;
     }
     mutate((d) => {
@@ -96,11 +114,7 @@ export function VisualQueryCanvas(props: VisualQueryCanvasProps): React.JSX.Elem
         <StatementRootCard
           kind={statementKind}
           document={doc}
-          onStartOver={() => {
-            mutate((d) => {
-              d.startOver();
-            });
-          }}
+          onStartOver={handleStartOver}
           onSetCreateTableName={(name) => {
             mutate((d) => {
               d.setCreateTableName(name);
@@ -180,14 +194,7 @@ export function VisualQueryCanvas(props: VisualQueryCanvasProps): React.JSX.Elem
 
   return (
     <div className="vq-canvas">
-      <VisualQueryToolbar
-        canStartOver={doc.statementKind !== null}
-        onStartOver={() => {
-          mutate((d) => {
-            d.startOver();
-          });
-        }}
-      />
+      <VisualQueryToolbar canStartOver={doc.statementKind !== null} onStartOver={handleStartOver} />
 
       {metadataErrorMessage ? (
         <div className="vq-canvas__metadata-error">{metadataErrorMessage}</div>

@@ -43,6 +43,9 @@ describe("GeneratedSQLPreview", () => {
     });
     await user.click(screen.getByTestId(VisualQueryAccessibility.copySQL));
     expect(writeText).toHaveBeenCalledWith("SELECT 1");
+    expect(await screen.findByTestId(VisualQueryAccessibility.generatedSQLDone)).toHaveTextContent(
+      VisualQueryCopy.copySQLDoneTitle,
+    );
   });
 
   it("Copy still succeeds in UI when clipboard rejects", async () => {
@@ -55,5 +58,9 @@ describe("GeneratedSQLPreview", () => {
     });
     await user.click(screen.getByTestId(VisualQueryAccessibility.copySQL));
     expect(screen.getByTestId(VisualQueryAccessibility.generatedSQLText)).toBeInTheDocument();
+    expect(screen.queryByTestId(VisualQueryAccessibility.generatedSQLDone)).toBeNull();
+    expect(screen.getByTestId(VisualQueryAccessibility.copySQL)).toHaveTextContent(
+      VisualQueryCopy.copySQLTitle,
+    );
   });
 });

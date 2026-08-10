@@ -1,5 +1,5 @@
 import type { ClauseKind, OrderDirection, QueryDocument, WhereOperator } from "../../core";
-import { formatTableCommitRaw, formatTableDisplayName } from "../../ipc/table-ref";
+import { formatTableCommitRaw } from "../../ipc/table-ref";
 import { VisualQueryAccessibility } from "./accessibility";
 import { VisualQueryCopy } from "./copy";
 import "./visual-query.css";
@@ -136,7 +136,8 @@ export function ClauseCardFields(props: ClauseCardFieldsProps): React.JSX.Elemen
     }
 
     case "from": {
-      const fromDisplayName = document.fromTable ? formatTableDisplayName(document.fromTable) : "";
+      // Commit-faithful raw text — display names strip `public`, which collapses mid-edit.
+      const fromFieldValue = document.fromTable ? formatTableCommitRaw(document.fromTable) : "";
       return (
         <div className="vq-clause-card__fields">
           <div className="vq-clause-card__field-row">
@@ -144,16 +145,11 @@ export function ClauseCardFields(props: ClauseCardFieldsProps): React.JSX.Elemen
               className="vq-clause-card__input"
               type="text"
               placeholder="table"
-              value={fromDisplayName}
+              value={fromFieldValue}
               onChange={(event) => onSetFromTableText(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === "Enter") {
-                  const typed = event.currentTarget.value;
-                  const commitRaw =
-                    typed === fromDisplayName && document.fromTable
-                      ? formatTableCommitRaw(document.fromTable)
-                      : typed;
-                  onCommitFromTable(commitRaw);
+                  onCommitFromTable(event.currentTarget.value);
                 }
               }}
               data-testid={VisualQueryAccessibility.fromTableField}

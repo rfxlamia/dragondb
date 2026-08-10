@@ -176,6 +176,32 @@ describe("StatementRootCard", () => {
     expect(screen.getByTestId(VisualQueryAccessibility.removeCreateColumn(0))).toBeDisabled();
   });
 
+  it("CREATE remove first of three rows keeps remaining names aligned", async () => {
+    const user = userEvent.setup();
+    const doc = new QueryDocument();
+    doc.chooseStatement("createTable");
+    doc.setCreateColumns([
+      { name: "a", type: "text" },
+      { name: "b", type: "number" },
+      { name: "c", type: "boolean" },
+    ]);
+    render(<HarnessedStatementRootCard kind="createTable" initialDoc={doc} />);
+
+    await user.click(screen.getByTestId(VisualQueryAccessibility.removeCreateColumn(0)));
+    expect(doc.createColumns).toEqual([
+      { name: "b", type: "number" },
+      { name: "c", type: "boolean" },
+    ]);
+    expect(screen.getByTestId(VisualQueryAccessibility.createColumnNameField(0))).toHaveValue("b");
+    expect(screen.getByTestId(VisualQueryAccessibility.createColumnTypePicker(0))).toHaveValue(
+      "number",
+    );
+    expect(screen.getByTestId(VisualQueryAccessibility.createColumnNameField(1))).toHaveValue("c");
+    expect(screen.getByTestId(VisualQueryAccessibility.createColumnTypePicker(1))).toHaveValue(
+      "boolean",
+    );
+  });
+
   it("onSetCreateColumns receives fresh arrays rather than mutating getter results", async () => {
     const user = userEvent.setup();
     const doc = new QueryDocument();
