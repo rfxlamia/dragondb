@@ -166,14 +166,16 @@ export interface DragonIpc {
 |----|-------|-----------:|------------|------|
 | SP-0 | Repo bootstrap: create `rfxlamia/dragondb`, scaffold Tauri v2, carry over brief + `.claude/` enforcement + this spec, port LICENSE and attribution | scaffold | — | Low |
 | **SP-1** | Visual query IR → TypeScript | 585 | SP-0 | **High** (gate) |
-| **SP-4a** | First UI slice: visual canvas, IPC mocked | ~950 | SP-1 | **Highest** |
+| **SP-4a** | First UI slice: visual canvas + its container, IPC mocked | ~1,220 | SP-1 | **Highest** |
 | SP-2 | Rust I/O: postgres, SSH, keyring, sqlite | ~2,500 | — | Medium |
 | SP-3 | Stores + real IPC | ~5,000 | SP-1, SP-2 | Medium |
-| SP-4b | Remaining UI: connection, sidebar, results grid, query editor | ~8,200 | SP-3, SP-4a | High (split further) |
+| SP-4b | Remaining UI — **ten clusters, enumerated in §12.1** | ~7,926 | SP-3, SP-4a | High (one spec per cluster) |
 | SP-5 | Distribution: cask, installer, CI matrix | ~1,100 | SP-4b | **Low** (proven prior art) |
-| SP-6 | Freeze the Swift app | policy | — | — |
+| SP-6 | Freeze the Swift app, **gated on the §13.1 parity checklist** | policy | SP-5 | — |
 
 Total new code to reach parity with today's macOS app: roughly 17,000–19,000 LOC. Realistically 3–4 months solo, during which roadmap Phases 2–6 are paused.
+
+**SP-4b is a container, not a task.** Its ten clusters are listed in §12.1 and each needs its own spec before implementation. Treating it as one unit is what allowed ten of the app's fifteen screens to go unnamed in the first draft of this document.
 
 **Why SP-4a sits second.** UI is the largest and least test-guarded work, but its dependency chain is long, so it would normally be touched last. Mocking the §4 IPC surface breaks that chain and lets the highest risk be tested immediately after the core turns green.
 
@@ -258,21 +260,25 @@ It is sequenced second because it carries the highest risk in the whole migratio
 
 ### 7.2 Scope
 
-Port the seven files in `DragonDB/Views/Components/VisualQuery/`:
+The seven card components in `DragonDB/Views/Components/VisualQuery/`:
 
 ```
-VisualStatementRootCardView.swift    6.2K
-VisualClauseCardFieldViews.swift     7.5K
-VisualClauseCardView.swift           4.8K
-SchemaFieldPopover.swift             3.4K
-GeneratedSQLPreviewView.swift        2.0K
-VisualQueryToolbar.swift             1.9K
-VisualStatementPickerView.swift      2.0K
-                              ─────────────
-                              767 LOC total
+VisualClauseCardFieldViews.swift     226
+VisualStatementRootCardView.swift    149
+VisualClauseCardView.swift           134
+SchemaFieldPopover.swift              92
+VisualQueryToolbar.swift              59
+GeneratedSQLPreviewView.swift         57
+VisualStatementPickerView.swift       50
+                                   ─────
+                                     767
 ```
 
-Plus `Logic/VisualQueryCopy.swift` (176 LOC) and `VisualQueryClauseCopyTests`, reassigned from SP-1 per §6.1 — ~950 LOC in all.
+**Plus the container that assembles them** — `Views/Containers/Content/VisualQueryCanvasView.swift`, 281 LOC. It sits in a different directory, which is how the first draft of this section missed it; without it there is no canvas to render the cards into.
+
+Plus `Logic/VisualQueryCopy.swift` (176 LOC) and `VisualQueryClauseCopyTests`, reassigned from SP-1 per §6.1.
+
+**~1,220 LOC in all.**
 
 It runs against the **real** `core/` from SP-1 and a **mocked** `DragonIpc` (§4) returning fixture tables and columns.
 
@@ -323,7 +329,8 @@ User-facing strings come from the creative brief's Copy Guidelines: what happene
 ## 10. Known gaps
 
 - **Dark mode is undefined.** Multi-theme support is an explicit later extension of the brand-design skill. Until refined in, the app ships light-only on all three platforms. SwiftUI inherited some of this free from system appearance; a webview does not. Windows and Linux users will notice.
-- **SP-4b needs further decomposition** before implementation — likely one spec per screen (connection form, sidebar, results grid, query editor).
+- **SP-4b needs further decomposition** — now enumerated as ten clusters in §12.1, each requiring its own spec before implementation.
+- **No data migration path exists.** Connection profiles, saved queries, query history, and tab state live in SwiftData in the old app and rusqlite in the new one. Nothing in this plan carries that data across. Either SP-2 gains an importer or the release notes state plainly that existing data does not transfer — decided before SP-6, not at archive time. Tracked as a checklist item in §13.1.
 - **Nothing ships to users until near the end**, a consequence of D6. Accepted as a scheduling cost.
 
 ---
@@ -349,14 +356,86 @@ The §9 restart-round-trip test exists to make a regression here visible in CI r
 
 ---
 
-## 12. SP-6 — Swift freeze rule
+## 12. Parity inventory — the SP-6 gate
+
+**Why this section exists.** §5 described SP-4b as "connection form, sidebar, results grid, query editor" and sized it at ~8,200 LOC. The arithmetic was right — `Views/` totals 8,974 and SP-4a takes 767 — so nothing looked wrong. But those four names were *illustrations*, not an inventory, and ten of the Swift app's fifteen screens appeared nowhere in this document. Arithmetic consistency is not feature coverage.
+
+Without the table below, this failure mode is available and silent: SP-4b ships the four named screens, every test passes, SP-5 releases, SP-6 archives the Swift repo — and saved queries, query history, the tab bar, CSV export, and row editing are buried with it. Nothing errors. Nothing fails.
+
+### 12.1 UI surface — every file in `Views/`, assigned
+
+| Cluster | Files | LOC | Sub-project |
+|---|---:|---:|---|
+| Visual query cards | 7 | 767 | **SP-4a** |
+| Visual canvas container (`VisualQueryCanvasView`) | 1 | 281 | **SP-4a** — see §12.3 |
+| App shell (`MainSplitView`, `RootView`, split/loading/badge/toast primitives) | 7 | 709 | SP-4b |
+| Connection (form, list, dropdown, database picker, status banner) | 5 | 1,464 | SP-4b |
+| Sidebar, saved queries, folders (rows, move/edit sheets, schema picker) | 8 | 1,544 | SP-4b |
+| Results grid and row editing (`RowEditorView`, results component, toolbar, JSON viewer, modals) | 7 | 1,374 | SP-4b |
+| Table browser (list, rows, schema groups, export sheet, DDL sheet, context menus) | 6 | 1,164 | SP-4b |
+| Query editor (syntax highlighting, line numbers, editor component) | 4 | 937 | SP-4b |
+| Query history | 1 | 232 | SP-4b |
+| Tab bar | 1 | 170 | SP-4b |
+| Database management (`CreateDatabaseView`) | 1 | 102 | SP-4b |
+| Static pages (help, keyboard shortcuts, welcome, settings) | 4 | 230 | SP-4b |
+| **Total** | **52** | **8,974** | |
+
+SP-4a = 1,048 LOC of views. SP-4b = 7,926 LOC across **ten clusters**, each of which should become its own spec.
+
+### 12.2 Capabilities with no screen of their own
+
+These live in services and utilities and are easy to lose because no view names them:
+
+| Capability | Swift source | Destination |
+|---|---|---|
+| CSV export | `CSVExporter` + `TableExportSheet` | SP-3 + SP-4b (table browser) |
+| Multi-statement queries | `SQLStatementSplitter` | SP-3 |
+| Query type detection | `QueryTypeDetector` | SP-3 |
+| Result-grid editability | `QueryEditability`, `RowOperationsService` | SP-3 + SP-4b (results grid) |
+| Create / delete database | `DatabaseManagementService` | SP-2 + SP-4b |
+| Connection string parsing | `ConnectionStringParser` | SP-3 |
+| Large-result compaction | `TableBrowseResultCompactor` | SP-3 |
+| Query history persistence | `QueryHistory` model + SwiftData | SP-2 (rusqlite) + SP-4b |
+| Saved queries and folders | `SavedQuery`, `QueryFolder` | SP-2 + SP-4b |
+| Tab state persistence | `TabState`, `TabManager`, `TabService` | SP-2 + SP-3 |
+| SSL modes | `SSLMode` | SP-2 |
+| Keyboard shortcuts | `KeyboardShortcutsView` | SP-4b |
+
+### 12.3 Correction to SP-4a's scope
+
+§7.2 lists the seven files in `Views/Components/VisualQuery/`. It omits `Views/Containers/Content/VisualQueryCanvasView.swift` (281 LOC) — the container that assembles those cards into a canvas. SP-4a cannot render anything without it.
+
+**SP-4a's scope is 1,048 LOC of views, not 767**, plus the 176 LOC of `VisualQueryCopy.swift`. Roughly 1,220 LOC in total. This does not change SP-4a's sequencing or its exit criteria.
+
+---
+
+## 13. SP-6 — Swift freeze rule and parity gate
 
 This is a written commitment, not an intention. Option D2 collapses into "two apps forever" if any roadmap work lands in Swift.
 
 > **The `rfxlamia/dragondb-swift` Swift application accepts bug fixes only.**
 > No roadmap phase — Phase 2 through Phase 6 — may be implemented against it.
 > Any feature request for the Swift app is either declined or redirected to the Tauri build.
-> Once the Tauri build has shipped and proven stable on macOS, the repository is **archived on GitHub** and its README points to `rfxlamia/dragondb`.
+> Once the Tauri build has shipped and **passed the parity gate below**, the repository is **archived on GitHub** and its README points to `rfxlamia/dragondb`.
+
+### 13.1 Parity gate — archiving is blocked until this passes
+
+"Proven stable on macOS" was the original wording and it is not a criterion — nothing can fail it. Replace it with the following, which can:
+
+Every row of §12.1 and §12.2 must be either **shipped** in the Tauri build, or **explicitly dropped** with the decision recorded here and the reason stated. Silence is not a valid state for any row.
+
+Dropping a capability is a legitimate outcome — `HelpView` and `WelcomeView` may not be worth porting, and a keyboard-shortcuts sheet means something different in a webview. What is not legitimate is discovering after the archive that something was never carried over.
+
+```
+[ ] Every §12.1 cluster: shipped, or dropped with a recorded reason
+[ ] Every §12.2 capability: shipped, or dropped with a recorded reason
+[ ] A user with an existing Swift install can reach their saved queries,
+    query history, and connection profiles in the Tauri build — or has been
+    told in the release notes that they cannot, before the archive
+[ ] The Swift repo's README points at rfxlamia/dragondb
+```
+
+The third item is the one most likely to be skipped. Connection profiles, saved queries, query history, and tab state live in **SwiftData** in the old app and **rusqlite** in the new one. Nothing in this plan migrates that data. Either SP-2 gains an importer, or the release notes say plainly that existing data does not carry over. Deciding that at archive time is too late — a user who upgrades and loses their saved queries has no recourse once the old repo is archived.
 
 Recorded in that repo's `README.md` and `AGENTS.md` when SP-6 executes.
 
