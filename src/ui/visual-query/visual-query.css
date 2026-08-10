@@ -2,9 +2,11 @@
 
 .vq-toolbar {
   align-items: center;
+  border-bottom: 1px solid var(--neutral-200);
   display: flex;
   gap: 8px;
-  min-height: 28px;
+  min-height: 36px;
+  padding-bottom: 8px;
 }
 
 .vq-toolbar__start-over {
@@ -21,8 +23,9 @@
 }
 
 .vq-toolbar__start-over:hover {
+  background: var(--primary-100);
   color: var(--primary-700);
-  text-decoration: underline;
+  text-decoration: none;
 }
 
 .vq-toolbar__start-over:disabled {
@@ -106,10 +109,14 @@
   background: oklch(1 0 0);
   border: 1px solid var(--neutral-300);
   border-radius: var(--radius);
+  box-shadow: 0 4px 16px oklch(0.28 0.008 245 / 0.08);
   box-sizing: border-box;
   display: flex;
+  flex: 0 0 auto;
   flex-direction: column;
   gap: 8px;
+  max-height: 40vh;
+  overflow-y: auto;
   padding: 12px;
 }
 
@@ -150,13 +157,14 @@
   background: oklch(1 0 0);
   border: 1px solid var(--neutral-300);
   border-radius: var(--radius);
+  box-shadow: 0 4px 16px oklch(0.28 0.008 245 / 0.08);
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
   gap: 8px;
   min-width: 220px;
-  padding: 10px 12px;
+  padding: 12px 14px;
 }
 
 .vq-clause-card__header {
@@ -387,7 +395,19 @@
   font-family: var(--font-sans);
   font-size: 13px;
   line-height: 1.4;
-  padding: 2px 0;
+  padding: 6px 10px;
+}
+
+.vq-canvas__status {
+  background: var(--info-tint);
+  border-radius: var(--radius);
+  color: var(--info-text);
+}
+
+.vq-canvas__metadata-error {
+  background: var(--error-tint);
+  border-radius: var(--radius);
+  color: var(--error-text);
 }
 
 .vq-canvas__body {
@@ -398,13 +418,20 @@
   min-height: 0;
 }
 
+.vq-canvas__stage {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  overflow: auto;
+}
+
 .vq-canvas__chain {
   align-items: flex-start;
   display: flex;
   flex-direction: row;
-  gap: 10px;
+  gap: 12px;
   overflow-x: auto;
-  overflow-y: visible;
   padding-bottom: 8px;
 }
 
@@ -413,19 +440,24 @@
 }
 
 .vq-canvas__connector {
-  align-self: center;
+  /* Pin to card-header band — never center on dynamic chain cross-size. */
+  align-self: flex-start;
   color: var(--neutral-500);
   flex-shrink: 0;
   font-family: var(--font-sans);
-  font-size: 16px;
+  font-size: 20px;
+  font-weight: 500;
   line-height: 1;
-  padding: 0 2px;
+  margin-top: 12px;
+  padding: 0 4px;
   user-select: none;
 }
 
 .vq-canvas__trailing {
+  display: flex;
+  flex-direction: column;
   flex-shrink: 0;
-  position: relative;
+  gap: 8px;
 }
 
 .vq-canvas__empty {
@@ -470,12 +502,13 @@
   z-index: 20;
 }
 
+/* Canvas Add block uses brief Button Secondary (not Ghost molecule example). */
 .vq-canvas__add-block {
   align-items: center;
-  background: transparent;
-  border: 1px dashed var(--neutral-400);
+  background: var(--neutral-100);
+  border: 1px solid var(--neutral-300);
   border-radius: var(--radius);
-  color: var(--neutral-800);
+  color: var(--neutral-900);
   cursor: pointer;
   display: inline-flex;
   font-family: var(--font-sans);
@@ -487,14 +520,14 @@
 }
 
 .vq-canvas__add-block:hover {
-  background: var(--neutral-100);
-  border-color: var(--neutral-500);
+  background: var(--neutral-200);
+  border-color: var(--neutral-400);
   color: var(--neutral-900);
 }
 
 .vq-canvas__add-block--trailing {
-  height: 44px;
-  min-width: 44px;
+  align-self: flex-start;
+  min-height: 44px;
   padding: 8px 12px;
   white-space: nowrap;
 }
@@ -507,12 +540,8 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
-  left: 0;
   min-width: 200px;
   padding: 6px;
-  position: absolute;
-  top: calc(100% + 6px);
-  z-index: 20;
 }
 
 .vq-clause-menu__item {

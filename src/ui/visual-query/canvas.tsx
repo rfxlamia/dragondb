@@ -198,60 +198,65 @@ export function VisualQueryCanvas(props: VisualQueryCanvasProps): React.JSX.Elem
       ) : null}
 
       <div className="vq-canvas__body">
-        {presentation.showsInitialAddButton ? (
-          <div className="vq-canvas__empty">
-            <div className="vq-canvas__empty-title">{VisualQueryCopy.emptyCanvasTitle}</div>
-            <div className="vq-canvas__empty-body">{VisualQueryCopy.emptyCanvasBody}</div>
-            <div className="vq-canvas__empty-action">
-              <button
-                type="button"
-                className="vq-canvas__add-block"
-                data-testid={VisualQueryAccessibility.initialAddBlock}
-                onClick={() => setShowStatementPicker((open) => !open)}
-              >
-                {VisualQueryCopy.addBlockTitle}
-              </button>
-              {showStatementPicker ? (
-                <div className="vq-canvas__menu-anchor">
-                  <StatementPicker onChoose={handleChooseStatement} />
-                </div>
-              ) : null}
-            </div>
-          </div>
-        ) : (
-          <div className="vq-canvas__chain">
-            {chainWithConnectors}
-
-            {presentation.showsTrailingAddButton ? (
-              <div className="vq-canvas__trailing">
+        <div className="vq-canvas__stage">
+          {presentation.showsInitialAddButton ? (
+            <div className="vq-canvas__empty">
+              <div className="vq-canvas__empty-title">{VisualQueryCopy.emptyCanvasTitle}</div>
+              <div className="vq-canvas__empty-body">{VisualQueryCopy.emptyCanvasBody}</div>
+              <div className="vq-canvas__empty-action">
                 <button
                   type="button"
-                  className="vq-canvas__add-block vq-canvas__add-block--trailing"
-                  data-testid={VisualQueryAccessibility.trailingAddBlock}
-                  onClick={() => setShowClauseMenu((open) => !open)}
+                  className="vq-canvas__add-block"
+                  data-testid={VisualQueryAccessibility.initialAddBlock}
+                  onClick={() => setShowStatementPicker((open) => !open)}
                 >
                   {VisualQueryCopy.addBlockTitle}
                 </button>
-                {showClauseMenu ? (
-                  <div className="vq-clause-menu" data-testid={VisualQueryAccessibility.clauseMenu}>
-                    {VisualQueryCopy.clauseMenuItems(doc).map((item) => (
-                      <button
-                        key={item.kind}
-                        type="button"
-                        className="vq-clause-menu__item"
-                        data-testid={VisualQueryAccessibility.clauseMenuItem(item.kind)}
-                        onClick={() => handleAddClause(item.kind)}
-                      >
-                        <div className="vq-clause-menu__item-title">{item.title}</div>
-                        <div className="vq-clause-menu__item-helper">{item.helper}</div>
-                      </button>
-                    ))}
+                {showStatementPicker ? (
+                  <div className="vq-canvas__menu-anchor">
+                    <StatementPicker onChoose={handleChooseStatement} />
                   </div>
                 ) : null}
               </div>
-            ) : null}
-          </div>
-        )}
+            </div>
+          ) : (
+            <div className="vq-canvas__chain">
+              {chainWithConnectors}
+
+              {presentation.showsTrailingAddButton ? (
+                <div className="vq-canvas__trailing">
+                  <button
+                    type="button"
+                    className="vq-canvas__add-block vq-canvas__add-block--trailing"
+                    data-testid={VisualQueryAccessibility.trailingAddBlock}
+                    onClick={() => setShowClauseMenu((open) => !open)}
+                  >
+                    {VisualQueryCopy.addBlockTitle}
+                  </button>
+                  {showClauseMenu ? (
+                    <div
+                      className="vq-clause-menu"
+                      data-testid={VisualQueryAccessibility.clauseMenu}
+                    >
+                      {VisualQueryCopy.clauseMenuItems(doc).map((item) => (
+                        <button
+                          key={item.kind}
+                          type="button"
+                          className="vq-clause-menu__item"
+                          data-testid={VisualQueryAccessibility.clauseMenuItem(item.kind)}
+                          onClick={() => handleAddClause(item.kind)}
+                        >
+                          <div className="vq-clause-menu__item-title">{item.title}</div>
+                          <div className="vq-clause-menu__item-helper">{item.helper}</div>
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          )}
+        </div>
 
         <GeneratedSQLPreview sql={sql} />
       </div>

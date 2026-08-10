@@ -1,4 +1,6 @@
 /** @vitest-environment jsdom */
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -15,6 +17,75 @@ const tables = [
   { name: "users", schema: "public" },
   { name: "events", schema: "analytics" },
 ];
+
+describe("VisualQueryCanvas layout chrome", () => {
+  it("places stage and SQL preview as siblings under the canvas body", async () => {
+    const user = userEvent.setup();
+    const { container } = render(
+      <VisualQueryCanvas
+        tables={tables}
+        columnNames={[]}
+        metadataErrorMessage={null}
+        isConnected={true}
+      />,
+    );
+    await user.click(screen.getByTestId(VisualQueryAccessibility.initialAddBlock));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("select")));
+
+    const body = container.querySelector(".vq-canvas__body");
+    expect(body).not.toBeNull();
+    const stage = body?.querySelector(":scope > .vq-canvas__stage");
+    const preview = body?.querySelector(":scope > .vq-sql-preview");
+    expect(stage).not.toBeNull();
+    expect(preview).not.toBeNull();
+  });
+
+  it("keeps open clause menu in-flow under the trailing control", async () => {
+    const user = userEvent.setup();
+    const { container } = render(
+      <VisualQueryCanvas
+        tables={tables}
+        columnNames={[]}
+        metadataErrorMessage={null}
+        isConnected={true}
+      />,
+    );
+    await user.click(screen.getByTestId(VisualQueryAccessibility.initialAddBlock));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("select")));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock));
+
+    const trailing = container.querySelector(".vq-canvas__trailing");
+    const menu = screen.getByTestId(VisualQueryAccessibility.clauseMenu);
+    expect(trailing).not.toBeNull();
+    expect(trailing?.contains(menu)).toBe(true);
+  });
+});
+
+describe("visual-query.css layout contracts", () => {
+  const css = readFileSync(join(process.cwd(), "src/ui/visual-query/visual-query.css"), "utf8");
+
+  it("does not absolutely position the trailing clause menu", () => {
+    const menuBlock = css.match(/\.vq-clause-menu\s*\{[^}]*\}/);
+    expect(menuBlock).not.toBeNull();
+    expect(menuBlock?.[0]).not.toMatch(/position:\s*absolute/);
+    expect(menuBlock?.[0]).not.toMatch(/\bleft:/);
+    expect(menuBlock?.[0]).not.toMatch(/\btop:/);
+  });
+
+  it("docks SQL preview without stealing stage flex growth", () => {
+    expect(css).toMatch(/\.vq-canvas__stage\s*\{[^}]*flex:\s*1/);
+    expect(css).toMatch(/\.vq-sql-preview\s*\{[^}]*flex:\s*0\s+0\s+auto/);
+    expect(css).toMatch(/\.vq-sql-preview\s*\{[^}]*max-height:\s*40vh/);
+  });
+
+  it("keeps chain connectors pinned to a stable top offset", () => {
+    const connectorBlock = css.match(/\.vq-canvas__connector\s*\{[^}]*\}/);
+    expect(connectorBlock).not.toBeNull();
+    expect(connectorBlock?.[0]).not.toMatch(/align-self:\s*center/);
+    expect(connectorBlock?.[0]).toMatch(/align-self:\s*flex-start/);
+    expect(connectorBlock?.[0]).toMatch(/margin-top:/);
+  });
+});
 
 describe("VisualQueryCanvas", () => {
   it("empty → SELECT shows clause card and re-renders preview without new doc instance", async () => {
