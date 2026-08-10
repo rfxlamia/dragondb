@@ -1,24 +1,67 @@
+# Dependencies
+node_modules/
+
+# Frontend build (Vite)
+dist/
+dist-ssr/
+*.local
+
 # Logs
-logs
+logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
+bun-debug.log*
 
-node_modules
-dist
-dist-ssr
-*.local
+# Environment / secrets
+.env
+.env.*
+!.env.example
 
-# Editor directories and files
+# TypeScript
+*.tsbuildinfo
+
+# Test / coverage
+coverage/
+*.lcov
+.nyc_output/
+
+# Bun
+.bun/
+
+# Rust / Cargo (app crate lives under src-tauri/; keep root-safe too)
+target/
+**/*.rs.bk
+debug/
+*.pdb
+
+# Tauri / packaging
+*.app
+*.dmg
+*.AppImage
+*.deb
+*.rpm
+*.msi
+*.exe
+WixTools/
+src-tauri/target/
+src-tauri/gen/schemas/
+
+# Editor / OS
 .vscode/*
 !.vscode/extensions.json
-.idea
+.idea/
 .DS_Store
+Thumbs.db
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
+
+# Agent / local scratch (not project source)
+.superpowers/
+.claude.globals/
