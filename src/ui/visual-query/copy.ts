@@ -177,6 +177,7 @@ function generatedSQLPreviewModel(sql: string): GeneratedSQLPreviewModel {
 
 /** English helpers and chrome copy for the visual query canvas. */
 export const VisualQueryCopy = {
+  helper: helperForClause,
   helperForClause,
   statementHelper,
   statementTitle,
