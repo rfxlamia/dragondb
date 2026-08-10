@@ -83,7 +83,7 @@ describe("VisualQueryCanvas", () => {
     expect(onCommittedFromChange).toHaveBeenCalledWith(null);
   });
 
-  it("does not notify onCommittedFromChange while typing FROM text", async () => {
+  it("does not notify onCommittedFromChange while typing FROM text but notifies on Enter commit", async () => {
     const user = userEvent.setup();
     const onCommittedFromChange = vi.fn();
     render(
@@ -100,8 +100,11 @@ describe("VisualQueryCanvas", () => {
     await user.click(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock));
     await user.click(screen.getByTestId(VisualQueryAccessibility.clauseMenuItem("from")));
     onCommittedFromChange.mockClear();
-    await user.type(screen.getByTestId(VisualQueryAccessibility.fromTableField), "u");
+    const fromField = screen.getByTestId(VisualQueryAccessibility.fromTableField);
+    await user.type(fromField, "users");
     expect(onCommittedFromChange).not.toHaveBeenCalled();
+    await user.keyboard("{Enter}");
+    expect(onCommittedFromChange).toHaveBeenCalledWith({ schema: null, name: "users" });
   });
 
   it("CREATE path updates live preview text", async () => {
@@ -122,7 +125,8 @@ describe("VisualQueryCanvas", () => {
     );
     await user.click(screen.getByTestId(VisualQueryAccessibility.initialAddBlock));
     await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("update")));
-    expect(screen.getByText(/coming soon/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/coming soon/i).length).toBeGreaterThanOrEqual(1);
+    expect(document.querySelector(".vq-canvas__status")).toHaveTextContent("Coming soon");
     expect(screen.getByTestId(VisualQueryAccessibility.generatedSQLText)).toHaveTextContent(
       VisualQueryCopy.sqlPreviewEmpty,
     );

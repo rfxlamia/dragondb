@@ -49,10 +49,6 @@ export function VisualQueryCanvas(props: VisualQueryCanvasProps): React.JSX.Elem
   const presentation = new CanvasPresentation(doc);
   const eligibility = canRun(doc, isConnected);
   const sql = generateSQL(doc)?.display ?? VisualQueryCopy.sqlPreviewEmpty;
-  const showStatusStrip =
-    !eligibility.isRunnable &&
-    eligibility.helpMessage !== null &&
-    !(presentation.showsStatementRootCard && eligibility.helpMessage === "Coming soon");
 
   function mutate(fn: (d: QueryDocument) => void): void {
     const before = doc.committedFromTable;
@@ -108,7 +104,7 @@ export function VisualQueryCanvas(props: VisualQueryCanvasProps): React.JSX.Elem
         <div className="vq-canvas__metadata-error">{metadataErrorMessage}</div>
       ) : null}
 
-      {showStatusStrip ? (
+      {!eligibility.isRunnable && eligibility.helpMessage !== null ? (
         <div className="vq-canvas__status">{eligibility.helpMessage}</div>
       ) : null}
 
