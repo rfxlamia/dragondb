@@ -140,23 +140,33 @@ describe("ClauseCard", () => {
     const doc = new QueryDocument();
     doc.chooseStatement("select");
     doc.addClause("limit");
-    render(
-      <ClauseCard
-        kind="limit"
-        document={doc}
-        tables={[]}
-        columnNames={[]}
-        metadataErrorMessage={null}
-        onDelete={() => {}}
-        onSetSelectColumns={() => {}}
-        onSetFromTableText={() => {}}
-        onCommitFromTable={() => {}}
-        onSelectFromTable={() => {}}
-        onSetWhereCondition={() => {}}
-        onSetOrderBy={() => {}}
-        onSetLimitText={onSetLimitText}
-      />,
-    );
+
+    function LimitWithRevisionBump(): React.JSX.Element {
+      const [, setRevision] = useState(0);
+      return (
+        <ClauseCard
+          kind="limit"
+          document={doc}
+          tables={[]}
+          columnNames={[]}
+          metadataErrorMessage={null}
+          onDelete={() => {}}
+          onSetSelectColumns={() => {}}
+          onSetFromTableText={() => {}}
+          onCommitFromTable={() => {}}
+          onSelectFromTable={() => {}}
+          onSetWhereCondition={() => {}}
+          onSetOrderBy={() => {}}
+          onSetLimitText={(text) => {
+            doc.setLimitText(text);
+            onSetLimitText(text);
+            setRevision((revision) => revision + 1);
+          }}
+        />
+      );
+    }
+
+    render(<LimitWithRevisionBump />);
     await user.type(screen.getByTestId(VisualQueryAccessibility.limitField), "abc");
     expect(onSetLimitText).toHaveBeenCalled();
     expect(onSetLimitText.mock.calls.at(-1)?.[0]).toContain("abc");
@@ -186,6 +196,52 @@ describe("ClauseCard", () => {
     );
     await user.click(screen.getByTestId(VisualQueryAccessibility.whereColumnPicker));
     expect(screen.getByText(VisualQueryCopy.columnPopoverNeedsFromMessage)).toBeInTheDocument();
+  });
+
+  it("column popover gates on committed FROM not typed draft", async () => {
+    const user = userEvent.setup();
+    const doc = new QueryDocument();
+    doc.chooseStatement("select");
+    doc.addClause("from");
+    doc.addClause("where");
+
+    const { unmount: unmountFrom } = render(
+      <HarnessedClauseCard kind="from" initialDoc={doc} tables={[]} />,
+    );
+    await user.type(screen.getByTestId(VisualQueryAccessibility.fromTableField), "users");
+    expect(doc.fromTable).toEqual({ schema: null, name: "users" });
+    expect(doc.committedFromTable).toBeNull();
+    unmountFrom();
+
+    const { unmount: unmountWhereDraft } = render(
+      <HarnessedClauseCard
+        kind="where"
+        initialDoc={doc}
+        columnNames={["status"]}
+      />,
+    );
+    await user.click(screen.getByTestId(VisualQueryAccessibility.whereColumnPicker));
+    expect(screen.getByText(VisualQueryCopy.columnPopoverNeedsFromMessage)).toBeInTheDocument();
+    unmountWhereDraft();
+
+    const { unmount: unmountFromCommit } = render(
+      <HarnessedClauseCard kind="from" initialDoc={doc} tables={[]} />,
+    );
+    const fromField = screen.getByTestId(VisualQueryAccessibility.fromTableField);
+    await user.click(fromField);
+    await user.keyboard("{Enter}");
+    expect(doc.committedFromTable).toEqual({ schema: null, name: "users" });
+    unmountFromCommit();
+
+    render(
+      <HarnessedClauseCard
+        kind="where"
+        initialDoc={doc}
+        columnNames={["status"]}
+      />,
+    );
+    await user.click(screen.getByTestId(VisualQueryAccessibility.whereColumnPicker));
+    expect(screen.getByRole("button", { name: "status" })).toBeInTheDocument();
   });
 
   it("SELECT all-columns toggle and ORDER BY direction call mutator props", async () => {
@@ -311,6 +367,8 @@ describe("ClauseCard", () => {
 
     await user.selectOptions(screen.getByTestId(VisualQueryAccessibility.whereOperatorField), "contains");
     await user.type(screen.getByTestId(VisualQueryAccessibility.whereValueField), "open");
+    expect(screen.getByTestId(VisualQueryAccessibility.whereOperatorField)).toHaveValue("contains");
+    expect(screen.getByTestId(VisualQueryAccessibility.whereValueField)).toHaveValue("open");
     expect(doc.whereCondition).toEqual({
       column: "status",
       op: "contains",
@@ -339,7 +397,22 @@ describe("ClauseCard", () => {
     expect(screen.getByTestId(VisualQueryAccessibility.orderByColumnField)).toHaveValue("event_id");
 
     await user.selectOptions(screen.getByTestId(VisualQueryAccessibility.orderByDirectionField), "desc");
+    expect(screen.getByTestId(VisualQueryAccessibility.orderByDirectionField)).toHaveValue("desc");
     expect(doc.orderBy).toEqual({ column: "event_id", direction: "desc" });
+  });
+
+  it("LIMIT field updates harnessed document and DOM", async () => {
+    const user = userEvent.setup();
+    const doc = new QueryDocument();
+    doc.chooseStatement("select");
+    doc.addClause("limit");
+
+    render(<HarnessedClauseCard kind="limit" initialDoc={doc} />);
+
+    const field = screen.getByTestId(VisualQueryAccessibility.limitField);
+    await user.type(field, "25");
+    expect(field).toHaveValue("25");
+    expect(doc.limitInput).toEqual({ kind: "value", value: 25 });
   });
 
   it("delete button calls onDelete for each clause kind", async () => {

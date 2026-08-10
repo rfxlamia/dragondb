@@ -4,7 +4,6 @@ import type {
   QueryDocument,
   WhereOperator,
 } from "../../core";
-import { useState } from "react";
 import { formatTableDisplayName } from "../../ipc/table-ref";
 import { VisualQueryAccessibility } from "./accessibility";
 import { VisualQueryCopy } from "./copy";
@@ -257,38 +256,20 @@ export function ClauseCardFields(props: ClauseCardFieldsProps): React.JSX.Elemen
     }
 
     case "limit":
-      return <LimitField document={document} onSetLimitText={onSetLimitText} />;
+      return (
+        <div className="vq-clause-card__fields">
+          <input
+            className="vq-clause-card__input vq-clause-card__input--limit"
+            type="text"
+            placeholder="rows"
+            value={limitText(document)}
+            onChange={(event) => onSetLimitText(event.target.value)}
+            data-testid={VisualQueryAccessibility.limitField}
+          />
+        </div>
+      );
 
     case "join":
       return null;
   }
-}
-
-function LimitField(props: {
-  document: QueryDocument;
-  onSetLimitText: (text: string) => void;
-}): React.JSX.Element {
-  const { document, onSetLimitText } = props;
-  const fromDocument = limitText(document);
-  const [value, setValue] = useState(fromDocument);
-
-  if (value !== fromDocument && fromDocument.length > 0) {
-    setValue(fromDocument);
-  }
-
-  return (
-    <div className="vq-clause-card__fields">
-      <input
-        className="vq-clause-card__input vq-clause-card__input--limit"
-        type="text"
-        placeholder="rows"
-        value={value}
-        onChange={(event) => {
-          setValue(event.target.value);
-          onSetLimitText(event.target.value);
-        }}
-        data-testid={VisualQueryAccessibility.limitField}
-      />
-    </div>
-  );
 }

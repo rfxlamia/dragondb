@@ -44,6 +44,10 @@ export class QueryDocument {
     return this.#fromTable === null ? null : { ...this.#fromTable };
   }
 
+  get committedFromTable(): Readonly<TableReference> | null {
+    return this.#committedFromTable === null ? null : { ...this.#committedFromTable };
+  }
+
   get whereCondition(): Readonly<WhereCondition> | null {
     return this.#whereCondition === null ? null : { ...this.#whereCondition };
   }

@@ -52,7 +52,7 @@ export function ClauseCard(props: ClauseCardProps): React.JSX.Element {
   const [popoverMode, setPopoverMode] = useState<SchemaPopoverMode>("columns");
 
   const isRootSelect = kind === "select";
-  const needsFrom = document.fromTable === null;
+  const needsFrom = document.committedFromTable === null;
 
   function openSchemaPopover(mode: SchemaPopoverMode): void {
     setPopoverMode(mode);
