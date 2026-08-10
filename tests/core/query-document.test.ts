@@ -114,4 +114,62 @@ describe("QueryDocument", () => {
     if (createCols[0]) createCols[0].name = "leaked";
     expect(doc.createColumns[0]?.name).toBe("body");
   });
+
+  it("distinguishes empty, malformed, and valid LIMIT input", () => {
+    const doc = new QueryDocument();
+    doc.setLimitText("");
+    expect(doc.limitInput).toEqual({ kind: "empty" });
+    doc.setLimitText("abc");
+    expect(doc.limitInput).toEqual({ kind: "invalid", text: "abc" });
+    doc.setLimitText("25");
+    expect(doc.limitInput).toEqual({ kind: "value", value: 25 });
+  });
+
+  it("rejects trailing-garbage numbers that parseInt would accept", () => {
+    const doc = new QueryDocument();
+    doc.setLimitText("25abc");
+    expect(doc.limitInput).toEqual({ kind: "invalid", text: "25abc" });
+    doc.setLimitText("1.5");
+    expect(doc.limitInput).toEqual({ kind: "invalid", text: "1.5" });
+  });
+
+  it("trims LIMIT input before parsing", () => {
+    const doc = new QueryDocument();
+    doc.setLimitText("  25  ");
+    expect(doc.limitInput).toEqual({ kind: "value", value: 25 });
+    doc.setLimitText("   ");
+    expect(doc.limitInput).toEqual({ kind: "empty" });
+  });
+
+  it("accepts a negative LIMIT as a value, leaving the range check to validation", () => {
+    const doc = new QueryDocument();
+    doc.setLimitText("-1");
+    expect(doc.limitInput).toEqual({ kind: "value", value: -1 });
+  });
+
+  it("rejects integers JavaScript cannot represent exactly", () => {
+    const doc = new QueryDocument();
+
+    // Int64 holds this; Number rounds it to ...992.
+    doc.setLimitText("9007199254740993");
+    expect(doc.limitInput).toEqual({ kind: "invalid", text: "9007199254740993" });
+
+    // Swift's Int(_:) returns nil here. Number gives 1e+39, which would reach
+    // the generator and emit `LIMIT 1e+39`.
+    const huge = "1".padEnd(40, "0");
+    doc.setLimitText(huge);
+    expect(doc.limitInput).toEqual({ kind: "invalid", text: huge });
+
+    // The boundary itself still parses.
+    doc.setLimitText("9007199254740991");
+    expect(doc.limitInput).toEqual({ kind: "value", value: 9007199254740991 });
+  });
+
+  it("stores CREATE TABLE name and columns", () => {
+    const doc = new QueryDocument();
+    doc.setCreateTableName("notes");
+    doc.setCreateColumns([{ name: "body", type: "text" }]);
+    expect(doc.createTableName).toBe("notes");
+    expect(doc.createColumns).toEqual([{ name: "body", type: "text" }]);
+  });
 });

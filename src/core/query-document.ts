@@ -153,6 +153,31 @@ export class QueryDocument {
     this.#orderBy = { column, direction };
   }
 
+  setLimitText(text: string): void {
+    const trimmed = text.trim();
+    if (trimmed.length === 0) {
+      this.#limitInput = { kind: "empty" };
+      return;
+    }
+    // Two ways this diverges from Swift's Int(_:) if written naively:
+    //   1. Number.parseInt would accept "25abc" and "1.5"; Int(_:) rejects both.
+    //      Hence the exact-match regex rather than a parse.
+    //   2. Number cannot represent every integer Int64 can. "9007199254740993"
+    //      silently becomes ...992, and a 40-digit string becomes 1e+39, which
+    //      would reach the generator and emit `LIMIT 1e+39` — not valid SQL.
+    //      isSafeInteger rejects both as malformed input instead.
+    const value = Number(trimmed);
+    if (/^[+-]?\d+$/.test(trimmed) && Number.isSafeInteger(value)) {
+      this.#limitInput = { kind: "value", value };
+    } else {
+      this.#limitInput = { kind: "invalid", text: trimmed };
+    }
+  }
+
+  setCreateTableName(name: string): void {
+    this.#createTableName = name;
+  }
+
   setCreateColumns(columns: CreateColumn[]): void {
     this.#createColumns = columns.map((c) => ({ ...c }));
   }
