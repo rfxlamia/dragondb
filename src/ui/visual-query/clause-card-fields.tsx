@@ -1,5 +1,5 @@
 import type { ClauseKind, OrderDirection, QueryDocument, WhereOperator } from "../../core";
-import { formatTableDisplayName } from "../../ipc/table-ref";
+import { formatTableCommitRaw, formatTableDisplayName } from "../../ipc/table-ref";
 import { VisualQueryAccessibility } from "./accessibility";
 import { VisualQueryCopy } from "./copy";
 import "./visual-query.css";
@@ -148,7 +148,12 @@ export function ClauseCardFields(props: ClauseCardFieldsProps): React.JSX.Elemen
               onChange={(event) => onSetFromTableText(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === "Enter") {
-                  onCommitFromTable(fromDisplayName);
+                  const typed = event.currentTarget.value;
+                  const commitRaw =
+                    typed === fromDisplayName && document.fromTable
+                      ? formatTableCommitRaw(document.fromTable)
+                      : typed;
+                  onCommitFromTable(commitRaw);
                 }
               }}
               data-testid={VisualQueryAccessibility.fromTableField}

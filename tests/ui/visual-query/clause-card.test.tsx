@@ -285,6 +285,27 @@ describe("ClauseCard", () => {
     expect(onSetOrderBy).toHaveBeenCalled();
   });
 
+  it("FROM Enter after popover select preserves public schema on commit", async () => {
+    const user = userEvent.setup();
+    const doc = docWithSelectFrom();
+    render(
+      <HarnessedClauseCard
+        kind="from"
+        initialDoc={doc}
+        tables={[{ name: "users", schema: "public" }]}
+      />,
+    );
+
+    await user.click(screen.getByTestId(VisualQueryAccessibility.fromTablePicker));
+    await user.click(screen.getByRole("button", { name: "users" }));
+    expect(doc.committedFromTable).toEqual({ schema: "public", name: "users" });
+
+    const field = screen.getByTestId(VisualQueryAccessibility.fromTableField);
+    await user.click(field);
+    await user.keyboard("{Enter}");
+    expect(doc.committedFromTable).toEqual({ schema: "public", name: "users" });
+  });
+
   it("FROM field typing, commit, and picker update the harnessed document", async () => {
     const user = userEvent.setup();
     const doc = docWithSelectFrom();

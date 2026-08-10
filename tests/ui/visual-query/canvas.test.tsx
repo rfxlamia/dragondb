@@ -88,6 +88,32 @@ describe("VisualQueryCanvas", () => {
     expect(onCommittedFromChange).toHaveBeenCalledWith(null);
   });
 
+  it("does not notify onCommittedFromChange when Enter confirms unchanged popover FROM", async () => {
+    const user = userEvent.setup();
+    const onCommittedFromChange = vi.fn();
+    render(
+      <VisualQueryCanvas
+        tables={tables}
+        columnNames={["id"]}
+        metadataErrorMessage={null}
+        isConnected={true}
+        onCommittedFromChange={onCommittedFromChange}
+      />,
+    );
+    await user.click(screen.getByTestId(VisualQueryAccessibility.initialAddBlock));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("select")));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.clauseMenuItem("from")));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.fromTablePicker));
+    await user.click(screen.getByRole("button", { name: "users" }));
+    expect(onCommittedFromChange).toHaveBeenCalledOnce();
+
+    onCommittedFromChange.mockClear();
+    await user.click(screen.getByTestId(VisualQueryAccessibility.fromTableField));
+    await user.keyboard("{Enter}");
+    expect(onCommittedFromChange).not.toHaveBeenCalled();
+  });
+
   it("does not notify onCommittedFromChange while typing FROM text but notifies on Enter commit", async () => {
     const user = userEvent.setup();
     const onCommittedFromChange = vi.fn();
