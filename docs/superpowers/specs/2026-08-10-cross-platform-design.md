@@ -262,7 +262,7 @@ It is sequenced second because it carries the highest risk in the whole migratio
 
 The seven card components in `DragonDB/Views/Components/VisualQuery/`:
 
-```
+```text
 VisualClauseCardFieldViews.swift     226
 VisualStatementRootCardView.swift    149
 VisualClauseCardView.swift           134
@@ -426,7 +426,7 @@ Every row of §12.1 and §12.2 must be either **shipped** in the Tauri build, or
 
 Dropping a capability is a legitimate outcome — `HelpView` and `WelcomeView` may not be worth porting, and a keyboard-shortcuts sheet means something different in a webview. What is not legitimate is discovering after the archive that something was never carried over.
 
-```
+```text
 [ ] Every §12.1 cluster: shipped, or dropped with a recorded reason
 [ ] Every §12.2 capability: shipped, or dropped with a recorded reason
 [ ] A user with an existing Swift install can reach their saved queries,

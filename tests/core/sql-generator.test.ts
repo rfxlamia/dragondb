@@ -17,6 +17,13 @@ function displayOf(doc: QueryDocument): string {
   return sql.display;
 }
 
+function sqlOf(doc: QueryDocument): NonNullable<ReturnType<typeof generateSQL>> {
+  const sql = generateSQL(doc);
+  expect(sql).not.toBeNull();
+  if (sql === null) throw new Error("expected SQL");
+  return sql;
+}
+
 describe("generateSQL — display", () => {
   it("generates SELECT * and invents no other clause", () => {
     const display = displayOf(selectFrom("orders"));
@@ -186,7 +193,7 @@ describe("generateSQL — exec", () => {
     const doc = selectFrom("orders");
     doc.addClause("where");
     doc.setWhereCondition("status", "equals", "paid");
-    const { exec } = generateSQL(doc)!;
+    const { exec } = sqlOf(doc);
     expect(exec.text).toContain('"status" = $1');
     expect(exec.params).toEqual(["paid"]);
   });
@@ -195,7 +202,7 @@ describe("generateSQL — exec", () => {
     const doc = selectFrom("orders");
     doc.addClause("where");
     doc.setWhereCondition("name", "contains", "O'Brien%");
-    const { exec } = generateSQL(doc)!;
+    const { exec } = sqlOf(doc);
     expect(exec.text).toContain('"name" LIKE $1');
     expect(exec.text).toContain("ESCAPE '\\'");
     expect(exec.params).toEqual(["%O'Brien\\%%"]);
@@ -205,7 +212,7 @@ describe("generateSQL — exec", () => {
     const doc = selectFrom("orders");
     doc.addClause("where");
     doc.setWhereCondition("email", "isEmpty", null);
-    const { exec } = generateSQL(doc)!;
+    const { exec } = sqlOf(doc);
     expect(exec.text).toContain('"email" IS NULL');
     expect(exec.params).toEqual([]);
   });
@@ -214,7 +221,7 @@ describe("generateSQL — exec", () => {
     const doc = selectFrom("orders");
     doc.addClause("limit");
     doc.setLimitText("20");
-    const { exec } = generateSQL(doc)!;
+    const { exec } = sqlOf(doc);
     expect(exec.text).toContain("LIMIT 20");
     expect(exec.params).toEqual([]);
   });
@@ -224,13 +231,13 @@ describe("generateSQL — exec", () => {
     doc.chooseStatement("select");
     doc.addClause("from");
     doc.selectFromTable('odd"table', "audit");
-    const { exec } = generateSQL(doc)!;
+    const { exec } = sqlOf(doc);
     expect(exec.text).toContain('FROM "audit"."odd""table"');
     expect(exec.params).toEqual([]);
   });
 
   it("produces no parameters for a query without WHERE", () => {
-    const { exec } = generateSQL(selectFrom("orders"))!;
+    const { exec } = sqlOf(selectFrom("orders"));
     expect(exec.text).toBe('SELECT * FROM "orders"');
     expect(exec.params).toEqual([]);
   });
@@ -240,7 +247,7 @@ describe("generateSQL — exec", () => {
     doc.chooseStatement("createTable");
     doc.setCreateTableName("notes");
     doc.setCreateColumns([{ name: "body", type: "text" }]);
-    const sql = generateSQL(doc)!;
+    const sql = sqlOf(doc);
     expect(sql.exec.text).toBe(sql.display);
     expect(sql.exec.params).toEqual([]);
   });
@@ -249,7 +256,7 @@ describe("generateSQL — exec", () => {
     const doc = selectFrom("orders");
     doc.addClause("where");
     doc.setWhereCondition("status", "equals", "paid");
-    const { display, exec } = generateSQL(doc)!;
+    const { display, exec } = sqlOf(doc);
     expect(display).toContain("'paid'");
     expect(exec.text).not.toContain("'paid'");
     // Function replacement, so the `$1` is never read as a capture reference.

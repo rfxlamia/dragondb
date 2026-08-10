@@ -1,0 +1,62 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { describe, expect, it } from "vitest";
+
+describe("tokens.css", () => {
+  const css = readFileSync(join(process.cwd(), "src/ui/tokens.css"), "utf8");
+
+  it("matches every brief color token exactly", () => {
+    const expected = {
+      "primary-100": "oklch(0.97 0.013 245)",
+      "primary-200": "oklch(0.92 0.038 245)",
+      "primary-300": "oklch(0.84 0.085 245)",
+      "primary-400": "oklch(0.74 0.111 245)",
+      "primary-500": "oklch(0.64 0.130 245)",
+      "primary-600": "oklch(0.55 0.123 245)",
+      "primary-700": "oklch(0.46 0.111 245)",
+      "primary-800": "oklch(0.37 0.091 245)",
+      "primary-900": "oklch(0.28 0.061 245)",
+      "neutral-100": "oklch(0.97 0.006 245)",
+      "neutral-200": "oklch(0.92 0.007 245)",
+      "neutral-300": "oklch(0.84 0.008 245)",
+      "neutral-400": "oklch(0.74 0.009 245)",
+      "neutral-500": "oklch(0.64 0.010 245)",
+      "neutral-600": "oklch(0.55 0.010 245)",
+      "neutral-700": "oklch(0.46 0.009 245)",
+      "neutral-800": "oklch(0.37 0.009 245)",
+      "neutral-900": "oklch(0.28 0.008 245)",
+      "success-tint": "oklch(0.95 0.045 145)",
+      "success-solid": "oklch(0.55 0.123 145)",
+      "success-text": "oklch(0.35 0.091 145)",
+      "warning-tint": "oklch(0.95 0.045 85)",
+      "warning-solid": "oklch(0.55 0.103 85)",
+      "warning-text": "oklch(0.35 0.071 85)",
+      "error-tint": "oklch(0.95 0.015 25)",
+      "error-solid": "oklch(0.55 0.123 25)",
+      "error-text": "oklch(0.35 0.091 25)",
+      "info-tint": "oklch(0.95 0.025 245)",
+      "info-solid": "oklch(0.55 0.123 245)",
+      "info-text": "oklch(0.35 0.081 245)",
+    } as const;
+
+    for (const [name, value] of Object.entries(expected)) {
+      expect(css).toContain(`--${name}: ${value}`);
+    }
+  });
+
+  it("locks the brief radius and visible keyboard focus rule", () => {
+    expect(css).toMatch(/--radius:\s*4px/);
+    expect(css).toMatch(/:focus-visible/);
+    expect(css).toContain("outline: 2px solid var(--primary-600)");
+    expect(css).toContain("outline-offset: 2px");
+  });
+});
+
+describe("fonts.css", () => {
+  const css = readFileSync(join(process.cwd(), "src/ui/fonts.css"), "utf8");
+  it("loads Inter and JetBrains Mono locally (no CDN)", () => {
+    expect(css).toMatch(/@fontsource\/inter/);
+    expect(css).toMatch(/@fontsource\/jetbrains-mono/);
+    expect(css).not.toMatch(/fonts\.googleapis|cdn\.jsdelivr|unpkg\.com/i);
+  });
+});
