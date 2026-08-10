@@ -30,14 +30,20 @@ export function generateSQL(doc: QueryDocument): GeneratedSQL | null {
       return { display: text, exec: { text, params: [] } };
     }
     case "select": {
-      const display = generateSelectDisplay(doc);
-      // Task 9 replaces this with a parameterized form.
-      return { display, exec: { text: display, params: [] } };
+      const params: unknown[] = [];
+      return {
+        display: generateSelect(doc, null),
+        exec: { text: generateSelect(doc, params), params },
+      };
     }
   }
 }
 
-function generateSelectDisplay(doc: QueryDocument): string {
+/**
+ * Builds a SELECT. When `params` is null, literals are inlined for display.
+ * When it is an array, WHERE values are pushed onto it and replaced by $n.
+ */
+function generateSelect(doc: QueryDocument, params: unknown[] | null): string {
   const parts: string[] = [];
   parts.push(`SELECT ${projectionSQL(doc.selectProjection)}`);
 
@@ -48,7 +54,7 @@ function generateSelectDisplay(doc: QueryDocument): string {
 
   const where = doc.whereCondition;
   if (doc.clauseKinds.includes("where") && where !== null) {
-    parts.push(`WHERE ${whereDisplaySQL(where)}`);
+    parts.push(`WHERE ${whereSQL(where, params)}`);
   }
 
   const order = doc.orderBy;
@@ -74,20 +80,28 @@ function projectionSQL(projection: SelectProjection): string {
   return named.map(quoteIdentifier).join(", ");
 }
 
-function whereDisplaySQL(condition: WhereCondition): string {
+function whereSQL(condition: WhereCondition, params: unknown[] | null): string {
   const column = quoteIdentifier(condition.column);
   const value = condition.value ?? "";
+
+  /** Inline the literal for display, or bind it and return its placeholder. */
+  const bind = (raw: string): string => {
+    if (params === null) return quoteLiteral(raw);
+    params.push(raw);
+    return `$${params.length}`;
+  };
+
   switch (condition.op) {
     case "equals":
-      return `${column} = ${quoteLiteral(value)}`;
+      return `${column} = ${bind(value)}`;
     case "notEquals":
-      return `${column} <> ${quoteLiteral(value)}`;
+      return `${column} <> ${bind(value)}`;
     case "greaterThan":
-      return `${column} > ${quoteLiteral(value)}`;
+      return `${column} > ${bind(value)}`;
     case "lessThan":
-      return `${column} < ${quoteLiteral(value)}`;
+      return `${column} < ${bind(value)}`;
     case "contains":
-      return `${column} LIKE ${quoteLiteral(`%${escapeLikePattern(value)}%`)} ESCAPE '\\'`;
+      return `${column} LIKE ${bind(`%${escapeLikePattern(value)}%`)} ESCAPE '\\'`;
     case "isEmpty":
       return `${column} IS NULL`;
   }

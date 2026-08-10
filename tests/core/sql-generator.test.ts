@@ -180,3 +180,79 @@ describe("escapeLikePattern — adversarial input", () => {
     expect(escapeLikePattern("日本語")).toBe("日本語");
   });
 });
+
+describe("generateSQL — exec", () => {
+  it("binds an equality value as $1", () => {
+    const doc = selectFrom("orders");
+    doc.addClause("where");
+    doc.setWhereCondition("status", "equals", "paid");
+    const { exec } = generateSQL(doc)!;
+    expect(exec.text).toContain('"status" = $1');
+    expect(exec.params).toEqual(["paid"]);
+  });
+
+  it("keeps LIKE escaping in the parameter but not quote-doubling", () => {
+    const doc = selectFrom("orders");
+    doc.addClause("where");
+    doc.setWhereCondition("name", "contains", "O'Brien%");
+    const { exec } = generateSQL(doc)!;
+    expect(exec.text).toContain('"name" LIKE $1');
+    expect(exec.text).toContain("ESCAPE '\\'");
+    expect(exec.params).toEqual(["%O'Brien\\%%"]);
+  });
+
+  it("emits no parameter for isEmpty", () => {
+    const doc = selectFrom("orders");
+    doc.addClause("where");
+    doc.setWhereCondition("email", "isEmpty", null);
+    const { exec } = generateSQL(doc)!;
+    expect(exec.text).toContain('"email" IS NULL');
+    expect(exec.params).toEqual([]);
+  });
+
+  it("inlines LIMIT rather than binding it", () => {
+    const doc = selectFrom("orders");
+    doc.addClause("limit");
+    doc.setLimitText("20");
+    const { exec } = generateSQL(doc)!;
+    expect(exec.text).toContain("LIMIT 20");
+    expect(exec.params).toEqual([]);
+  });
+
+  it("keeps identifiers quoted in exec, since they cannot be parameterized", () => {
+    const doc = new QueryDocument();
+    doc.chooseStatement("select");
+    doc.addClause("from");
+    doc.selectFromTable('odd"table', "audit");
+    const { exec } = generateSQL(doc)!;
+    expect(exec.text).toContain('FROM "audit"."odd""table"');
+    expect(exec.params).toEqual([]);
+  });
+
+  it("produces no parameters for a query without WHERE", () => {
+    const { exec } = generateSQL(selectFrom("orders"))!;
+    expect(exec.text).toBe('SELECT * FROM "orders"');
+    expect(exec.params).toEqual([]);
+  });
+
+  it("leaves CREATE TABLE identical in both outputs", () => {
+    const doc = new QueryDocument();
+    doc.chooseStatement("createTable");
+    doc.setCreateTableName("notes");
+    doc.setCreateColumns([{ name: "body", type: "text" }]);
+    const sql = generateSQL(doc)!;
+    expect(sql.exec.text).toBe(sql.display);
+    expect(sql.exec.params).toEqual([]);
+  });
+
+  it("keeps display and exec structurally aligned apart from the placeholder", () => {
+    const doc = selectFrom("orders");
+    doc.addClause("where");
+    doc.setWhereCondition("status", "equals", "paid");
+    const { display, exec } = generateSQL(doc)!;
+    expect(display).toContain("'paid'");
+    expect(exec.text).not.toContain("'paid'");
+    // Function replacement, so the `$1` is never read as a capture reference.
+    expect(display.replace("'paid'", () => "$1")).toBe(exec.text);
+  });
+});
