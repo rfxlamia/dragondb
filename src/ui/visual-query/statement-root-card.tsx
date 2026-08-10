@@ -1,15 +1,14 @@
 import { useEffect, useState } from "react";
-import type {
-  CreateColumn,
-  CreateColumnType,
-  QueryDocument,
-  StatementKind,
-} from "../../core";
+import type { CreateColumn, CreateColumnType, QueryDocument, StatementKind } from "../../core";
 import { VisualQueryAccessibility } from "./accessibility";
 import { VisualQueryCopy } from "./copy";
 import "./visual-query.css";
 
 const CREATE_TYPES: CreateColumnType[] = ["text", "number", "date", "boolean"];
+
+function createColumnRowKey(): string {
+  return `create-col-${Math.random().toString(36).slice(2, 11)}`;
+}
 
 export function StatementRootCard(props: {
   kind: StatementKind;
@@ -26,6 +25,25 @@ export function StatementRootCard(props: {
     documentColumns.length > 0
       ? documentColumns.map((column) => ({ ...column }))
       : [{ name: "", type: "text" }];
+  const [columnRowKeys, setColumnRowKeys] = useState<string[]>(() =>
+    Array.from({ length: displayColumns.length }, () => createColumnRowKey()),
+  );
+
+  useEffect(() => {
+    setColumnRowKeys((keys) => {
+      const targetLength = displayColumns.length;
+      if (keys.length === targetLength) {
+        return keys;
+      }
+      if (keys.length < targetLength) {
+        const added = Array.from({ length: targetLength - keys.length }, () =>
+          createColumnRowKey(),
+        );
+        return [...keys, ...added];
+      }
+      return keys.slice(0, targetLength);
+    });
+  }, [displayColumns.length]);
 
   useEffect(() => {
     setTableName(document.createTableName);
@@ -101,7 +119,7 @@ export function StatementRootCard(props: {
             data-testid={VisualQueryAccessibility.createColumnsList}
           >
             {displayColumns.map((column, index) => (
-              <div key={index} className="vq-clause-card__field-row">
+              <div key={columnRowKeys[index] ?? index} className="vq-clause-card__field-row">
                 <input
                   type="text"
                   className="vq-clause-card__input"
@@ -109,7 +127,10 @@ export function StatementRootCard(props: {
                   value={column.name}
                   onChange={(event) => {
                     mutateColumns((next) => {
-                      next[index].name = event.target.value;
+                      const row = next[index];
+                      if (row) {
+                        row.name = event.target.value;
+                      }
                     });
                   }}
                   data-testid={VisualQueryAccessibility.createColumnNameField(index)}
@@ -119,7 +140,10 @@ export function StatementRootCard(props: {
                   value={column.type}
                   onChange={(event) => {
                     mutateColumns((next) => {
-                      next[index].type = event.target.value as CreateColumnType;
+                      const row = next[index];
+                      if (row) {
+                        row.type = event.target.value as CreateColumnType;
+                      }
                     });
                   }}
                   data-testid={VisualQueryAccessibility.createColumnTypePicker(index)}

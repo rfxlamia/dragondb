@@ -4,8 +4,8 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { QueryDocument } from "../../../src/core";
 import { VisualQueryAccessibility } from "../../../src/ui/visual-query/accessibility";
-import { VisualQueryCopy } from "../../../src/ui/visual-query/copy";
 import { VisualQueryCanvas } from "../../../src/ui/visual-query/canvas";
+import { VisualQueryCopy } from "../../../src/ui/visual-query/copy";
 
 afterEach(() => {
   cleanup();
@@ -33,17 +33,22 @@ describe("VisualQueryCanvas", () => {
     await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("select")));
     expect(screen.getByTestId(VisualQueryAccessibility.clauseCard("select"))).toBeInTheDocument();
     expect(onDocumentChange).toHaveBeenCalled();
-    const doc = onDocumentChange.mock.calls.at(-1)?.[0];
+    const doc = onDocumentChange.mock.calls[onDocumentChange.mock.calls.length - 1]?.[0];
     onDocumentChange.mockClear();
     await user.click(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock));
     await user.click(screen.getByTestId(VisualQueryAccessibility.clauseMenuItem("from")));
-    expect(onDocumentChange.mock.calls.at(-1)?.[0]).toBe(doc);
+    expect(onDocumentChange.mock.calls[onDocumentChange.mock.calls.length - 1]?.[0]).toBe(doc);
   });
 
   it("shows canRun help on status strip when SELECT incomplete", async () => {
     const user = userEvent.setup();
     render(
-      <VisualQueryCanvas tables={tables} columnNames={[]} metadataErrorMessage={null} isConnected={true} />,
+      <VisualQueryCanvas
+        tables={tables}
+        columnNames={[]}
+        metadataErrorMessage={null}
+        isConnected={true}
+      />,
     );
     await user.click(screen.getByTestId(VisualQueryAccessibility.initialAddBlock));
     await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("select")));
@@ -110,18 +115,30 @@ describe("VisualQueryCanvas", () => {
   it("CREATE path updates live preview text", async () => {
     const user = userEvent.setup();
     render(
-      <VisualQueryCanvas tables={tables} columnNames={[]} metadataErrorMessage={null} isConnected={true} />,
+      <VisualQueryCanvas
+        tables={tables}
+        columnNames={[]}
+        metadataErrorMessage={null}
+        isConnected={true}
+      />,
     );
     await user.click(screen.getByTestId(VisualQueryAccessibility.initialAddBlock));
     await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("createTable")));
     await user.type(screen.getByTestId(VisualQueryAccessibility.createTableNameField), "orders");
-    expect(screen.getByTestId(VisualQueryAccessibility.generatedSQLText).textContent).toMatch(/orders/i);
+    expect(screen.getByTestId(VisualQueryAccessibility.generatedSQLText).textContent).toMatch(
+      /orders/i,
+    );
   });
 
   it("UPDATE shows Coming soon and preview em dash", async () => {
     const user = userEvent.setup();
     render(
-      <VisualQueryCanvas tables={tables} columnNames={[]} metadataErrorMessage={null} isConnected={true} />,
+      <VisualQueryCanvas
+        tables={tables}
+        columnNames={[]}
+        metadataErrorMessage={null}
+        isConnected={true}
+      />,
     );
     await user.click(screen.getByTestId(VisualQueryAccessibility.initialAddBlock));
     await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("update")));
@@ -160,7 +177,9 @@ describe("VisualQueryCanvas", () => {
     );
 
     expect(screen.getByText(VisualQueryCopy.emptyCanvasTitle)).toBeInTheDocument();
-    const initialPreview = screen.getByTestId(VisualQueryAccessibility.generatedSQLText).textContent;
+    const initialPreview = screen.getByTestId(
+      VisualQueryAccessibility.generatedSQLText,
+    ).textContent;
 
     await user.click(screen.getByTestId(VisualQueryAccessibility.initialAddBlock));
     await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("select")));
@@ -176,7 +195,9 @@ describe("VisualQueryCanvas", () => {
     const fromField = screen.getByTestId(VisualQueryAccessibility.fromTableField);
     await user.type(fromField, "users");
     await user.keyboard("{Enter}");
-    expect(screen.getByTestId(VisualQueryAccessibility.generatedSQLText).textContent).toMatch(/users/i);
+    expect(screen.getByTestId(VisualQueryAccessibility.generatedSQLText).textContent).toMatch(
+      /users/i,
+    );
 
     await user.click(screen.getByTestId(VisualQueryAccessibility.startOver));
     expect(screen.getByText(VisualQueryCopy.emptyCanvasTitle)).toBeInTheDocument();
@@ -205,7 +226,10 @@ describe("VisualQueryCanvas", () => {
 
     await user.click(screen.getByTestId(VisualQueryAccessibility.whereColumnPicker));
     await user.click(screen.getByRole("button", { name: "id" }));
-    await user.selectOptions(screen.getByTestId(VisualQueryAccessibility.whereOperatorField), "equals");
+    await user.selectOptions(
+      screen.getByTestId(VisualQueryAccessibility.whereOperatorField),
+      "equals",
+    );
     await user.type(screen.getByTestId(VisualQueryAccessibility.whereValueField), "42");
 
     const sql = screen.getByTestId(VisualQueryAccessibility.generatedSQLText).textContent ?? "";

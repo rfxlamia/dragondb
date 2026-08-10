@@ -3,7 +3,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { ClauseKind, OrderDirection, TableReference, WhereOperator } from "../../../src/core";
+import type { ClauseKind, TableReference } from "../../../src/core";
 import { QueryDocument } from "../../../src/core";
 import { VisualQueryAccessibility } from "../../../src/ui/visual-query/accessibility";
 import { ClauseCard } from "../../../src/ui/visual-query/clause-card";
@@ -169,7 +169,7 @@ describe("ClauseCard", () => {
     render(<LimitWithRevisionBump />);
     await user.type(screen.getByTestId(VisualQueryAccessibility.limitField), "abc");
     expect(onSetLimitText).toHaveBeenCalled();
-    expect(onSetLimitText.mock.calls.at(-1)?.[0]).toContain("abc");
+    expect(onSetLimitText.mock.calls[onSetLimitText.mock.calls.length - 1]?.[0]).toContain("abc");
   });
 
   it("WHERE column popover needs FROM message when from unset", async () => {
@@ -214,11 +214,7 @@ describe("ClauseCard", () => {
     unmountFrom();
 
     const { unmount: unmountWhereDraft } = render(
-      <HarnessedClauseCard
-        kind="where"
-        initialDoc={doc}
-        columnNames={["status"]}
-      />,
+      <HarnessedClauseCard kind="where" initialDoc={doc} columnNames={["status"]} />,
     );
     await user.click(screen.getByTestId(VisualQueryAccessibility.whereColumnPicker));
     expect(screen.getByText(VisualQueryCopy.columnPopoverNeedsFromMessage)).toBeInTheDocument();
@@ -233,13 +229,7 @@ describe("ClauseCard", () => {
     expect(doc.committedFromTable).toEqual({ schema: null, name: "users" });
     unmountFromCommit();
 
-    render(
-      <HarnessedClauseCard
-        kind="where"
-        initialDoc={doc}
-        columnNames={["status"]}
-      />,
-    );
+    render(<HarnessedClauseCard kind="where" initialDoc={doc} columnNames={["status"]} />);
     await user.click(screen.getByTestId(VisualQueryAccessibility.whereColumnPicker));
     expect(screen.getByRole("button", { name: "status" })).toBeInTheDocument();
   });
@@ -288,7 +278,10 @@ describe("ClauseCard", () => {
         onSetLimitText={() => {}}
       />,
     );
-    await user.selectOptions(screen.getByTestId(VisualQueryAccessibility.orderByDirectionField), "desc");
+    await user.selectOptions(
+      screen.getByTestId(VisualQueryAccessibility.orderByDirectionField),
+      "desc",
+    );
     expect(onSetOrderBy).toHaveBeenCalled();
   });
 
@@ -324,13 +317,7 @@ describe("ClauseCard", () => {
     doc.addClause("from");
     doc.commitFromTable("users");
 
-    render(
-      <HarnessedClauseCard
-        kind="select"
-        initialDoc={doc}
-        columnNames={["id", "email"]}
-      />,
-    );
+    render(<HarnessedClauseCard kind="select" initialDoc={doc} columnNames={["id", "email"]} />);
 
     await user.click(screen.getByTestId(VisualQueryAccessibility.allColumnsToggle));
     const columnsField = screen.getByTestId(VisualQueryAccessibility.selectColumnsField);
@@ -354,18 +341,17 @@ describe("ClauseCard", () => {
     doc.addClause("where");
 
     render(
-      <HarnessedClauseCard
-        kind="where"
-        initialDoc={doc}
-        columnNames={["status", "amount"]}
-      />,
+      <HarnessedClauseCard kind="where" initialDoc={doc} columnNames={["status", "amount"]} />,
     );
 
     await user.click(screen.getByTestId(VisualQueryAccessibility.whereColumnPicker));
     await user.click(screen.getByRole("button", { name: "status" }));
     expect(screen.getByTestId(VisualQueryAccessibility.whereColumnField)).toHaveValue("status");
 
-    await user.selectOptions(screen.getByTestId(VisualQueryAccessibility.whereOperatorField), "contains");
+    await user.selectOptions(
+      screen.getByTestId(VisualQueryAccessibility.whereOperatorField),
+      "contains",
+    );
     await user.type(screen.getByTestId(VisualQueryAccessibility.whereValueField), "open");
     expect(screen.getByTestId(VisualQueryAccessibility.whereOperatorField)).toHaveValue("contains");
     expect(screen.getByTestId(VisualQueryAccessibility.whereValueField)).toHaveValue("open");
@@ -396,7 +382,10 @@ describe("ClauseCard", () => {
     await user.click(screen.getByRole("button", { name: "event_id" }));
     expect(screen.getByTestId(VisualQueryAccessibility.orderByColumnField)).toHaveValue("event_id");
 
-    await user.selectOptions(screen.getByTestId(VisualQueryAccessibility.orderByDirectionField), "desc");
+    await user.selectOptions(
+      screen.getByTestId(VisualQueryAccessibility.orderByDirectionField),
+      "desc",
+    );
     expect(screen.getByTestId(VisualQueryAccessibility.orderByDirectionField)).toHaveValue("desc");
     expect(doc.orderBy).toEqual({ column: "event_id", direction: "desc" });
   });

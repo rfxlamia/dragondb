@@ -9,10 +9,7 @@ export function StatementPicker(props: {
   const { onChoose } = props;
 
   return (
-    <div
-      className="vq-statement-menu"
-      data-testid={VisualQueryAccessibility.statementMenu}
-    >
+    <div className="vq-statement-menu" data-testid={VisualQueryAccessibility.statementMenu}>
       {VisualQueryCopy.statementMenuItems().map((item) => (
         <button
           key={item.kind}

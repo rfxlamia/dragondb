@@ -64,9 +64,7 @@ export function ClauseCard(props: ClauseCardProps): React.JSX.Element {
       case "select": {
         const projection = document.selectProjection;
         if (projection.kind === "columns") {
-          const next = projection.columns.filter(
-            (column) => column.trim().length > 0,
-          );
+          const next = projection.columns.filter((column) => column.trim().length > 0);
           if (!next.includes(name)) {
             next.push(name);
           }
@@ -96,10 +94,7 @@ export function ClauseCard(props: ClauseCardProps): React.JSX.Element {
   }
 
   return (
-    <div
-      className="vq-clause-card"
-      data-testid={VisualQueryAccessibility.clauseCard(kind)}
-    >
+    <div className="vq-clause-card" data-testid={VisualQueryAccessibility.clauseCard(kind)}>
       <div className="vq-clause-card__header">
         <div className="vq-clause-card__titles">
           <div className="vq-clause-card__title">{VisualQueryCopy.clauseTitle(kind)}</div>
@@ -145,9 +140,7 @@ export function ClauseCard(props: ClauseCardProps): React.JSX.Element {
               title="Columns"
               items={needsFrom ? [] : columnNames}
               itemTitle={(name) => name}
-              needsFromMessage={
-                needsFrom ? VisualQueryCopy.columnPopoverNeedsFromMessage : null
-              }
+              needsFromMessage={needsFrom ? VisualQueryCopy.columnPopoverNeedsFromMessage : null}
               errorMessage={needsFrom ? null : metadataErrorMessage}
               onSelect={applyColumnSelection}
             />

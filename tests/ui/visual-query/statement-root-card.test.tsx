@@ -75,7 +75,9 @@ describe("StatementRootCard", () => {
     );
     await user.type(screen.getByTestId(VisualQueryAccessibility.createTableNameField), "orders");
     expect(onSetCreateTableName).toHaveBeenCalled();
-    expect(onSetCreateTableName.mock.calls.at(-1)?.[0]).toContain("orders");
+    expect(
+      onSetCreateTableName.mock.calls[onSetCreateTableName.mock.calls.length - 1]?.[0],
+    ).toContain("orders");
   });
 
   it("CREATE add column calls onSetCreateColumns", async () => {
@@ -94,10 +96,12 @@ describe("StatementRootCard", () => {
     );
     await user.click(screen.getByTestId(VisualQueryAccessibility.addCreateColumn));
     expect(onSetCreateColumns).toHaveBeenCalled();
-    const cols = onSetCreateColumns.mock.calls.at(-1)?.[0];
+    const cols = onSetCreateColumns.mock.calls[onSetCreateColumns.mock.calls.length - 1]?.[0];
     expect(Array.isArray(cols)).toBe(true);
     expect(cols.length).toBeGreaterThan(0);
-    expect(cols[0]).toEqual(expect.objectContaining({ name: expect.any(String), type: expect.any(String) }));
+    expect(cols[0]).toEqual(
+      expect.objectContaining({ name: expect.any(String), type: expect.any(String) }),
+    );
   });
 
   it("start-over control fires onStartOver", async () => {

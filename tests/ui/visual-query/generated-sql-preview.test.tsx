@@ -1,10 +1,10 @@
 /** @vitest-environment jsdom */
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
-import { GeneratedSQLPreview } from "../../../src/ui/visual-query/generated-sql-preview";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { VisualQueryAccessibility } from "../../../src/ui/visual-query/accessibility";
 import { VisualQueryCopy } from "../../../src/ui/visual-query/copy";
+import { GeneratedSQLPreview } from "../../../src/ui/visual-query/generated-sql-preview";
 
 describe("GeneratedSQLPreview", () => {
   const writeText = vi.fn().mockResolvedValue(undefined);

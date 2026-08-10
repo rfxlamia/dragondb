@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { ClauseKind, StatementKind, TableReference } from "../../core";
-import { CanvasPresentation, QueryDocument, canRun, generateSQL } from "../../core";
+import { CanvasPresentation, canRun, generateSQL, QueryDocument } from "../../core";
 import { sameTable } from "../../ipc/table-ref";
 import { VisualQueryAccessibility } from "./accessibility";
 import { ClauseCard } from "./clause-card";
@@ -122,9 +122,7 @@ export function VisualQueryCanvas(props: VisualQueryCanvasProps): React.JSX.Elem
               >
                 {VisualQueryCopy.addBlockTitle}
               </button>
-              {showStatementPicker ? (
-                <StatementPicker onChoose={handleChooseStatement} />
-              ) : null}
+              {showStatementPicker ? <StatementPicker onChoose={handleChooseStatement} /> : null}
             </div>
           ) : null}
 

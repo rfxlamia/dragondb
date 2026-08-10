@@ -1,9 +1,4 @@
-import type {
-  ClauseKind,
-  OrderDirection,
-  QueryDocument,
-  WhereOperator,
-} from "../../core";
+import type { ClauseKind, OrderDirection, QueryDocument, WhereOperator } from "../../core";
 import { formatTableDisplayName } from "../../ipc/table-ref";
 import { VisualQueryAccessibility } from "./accessibility";
 import { VisualQueryCopy } from "./copy";
@@ -240,9 +235,7 @@ export function ClauseCardFields(props: ClauseCardFieldsProps): React.JSX.Elemen
           <select
             className="vq-clause-card__select vq-clause-card__select--direction"
             value={order.direction}
-            onChange={(event) =>
-              onSetOrderBy(order.column, event.target.value as OrderDirection)
-            }
+            onChange={(event) => onSetOrderBy(order.column, event.target.value as OrderDirection)}
             data-testid={VisualQueryAccessibility.orderByDirectionField}
           >
             {ORDER_DIRECTIONS.map((direction) => (
