@@ -18,12 +18,11 @@
             "noRestrictedImports": {
               "level": "error",
               "options": {
-                "paths": {
-                  "@tauri-apps/api": "src/core must not depend on Tauri.",
-                  "@tauri-apps/api/core": "src/core must not depend on Tauri.",
-                  "@tauri-apps/plugin-dialog": "src/core must not depend on Tauri."
-                },
                 "patterns": [
+                  {
+                    "group": ["@tauri-apps", "@tauri-apps/**"],
+                    "message": "src/core must not depend on Tauri."
+                  },
                   {
                     "group": ["**/ui", "**/ui/**"],
                     "message": "src/core must not depend on ui."

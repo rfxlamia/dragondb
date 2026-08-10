@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { TableReference } from "../../src/core/query-clause";
 import { QueryDocument } from "../../src/core/query-document";
@@ -159,5 +161,15 @@ describe("QueryDocument FROM field", () => {
     (doc.fromTable as TableReference).name = "leaked";
 
     expect(doc.fromTable).toEqual({ schema: "public", name: "users" });
+  });
+
+  // #committedFromTable is private; pin the shallow-copy assignment so a future
+  // "simplify" cannot restore reference aliasing (Swift copied the struct).
+  it("commits a shallow copy of fromTable, not a shared reference", () => {
+    const source = readFileSync(join(process.cwd(), "src", "core", "query-document.ts"), "utf8");
+    expect(source).toContain(
+      "this.#committedFromTable = this.#fromTable === null ? null : { ...this.#fromTable }",
+    );
+    expect(source).not.toMatch(/#committedFromTable = this\.#fromTable\s*;/);
   });
 });
