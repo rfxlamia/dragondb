@@ -1,0 +1,33 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.5.7/schema.json",
+  "files": { "includes": ["src/**", "tests/**"] },
+  "formatter": { "enabled": true, "indentStyle": "space", "indentWidth": 2, "lineWidth": 100 },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "preset": "recommended",
+      "suspicious": { "noExplicitAny": "error" }
+    }
+  },
+  "overrides": [
+    {
+      "includes": ["src/core/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "@tauri-apps/api": "src/core must not depend on Tauri.",
+                  "@tauri-apps/api/core": "src/core must not depend on Tauri.",
+                  "@tauri-apps/plugin-dialog": "src/core must not depend on Tauri."
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

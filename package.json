@@ -7,7 +7,13 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.core.json",
+    "lint": "biome check src tests",
+    "lint:fix": "biome check --write src tests",
+    "check": "bun run typecheck && bun run lint && bun run test"
   },
   "dependencies": {
     "react": "^19.1.0",
@@ -16,11 +22,14 @@
     "@tauri-apps/plugin-opener": "^2"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.5.7",
+    "@tauri-apps/cli": "^2",
+    "@types/node": "^26.2.0",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^4.6.0",
     "typescript": "~5.8.3",
     "vite": "^7.0.4",
-    "@tauri-apps/cli": "^2"
+    "vitest": "^4.1.10"
   }
 }
