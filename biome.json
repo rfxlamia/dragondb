@@ -22,7 +22,21 @@
                   "@tauri-apps/api": "src/core must not depend on Tauri.",
                   "@tauri-apps/api/core": "src/core must not depend on Tauri.",
                   "@tauri-apps/plugin-dialog": "src/core must not depend on Tauri."
-                }
+                },
+                "patterns": [
+                  {
+                    "group": ["**/ui", "**/ui/**"],
+                    "message": "src/core must not depend on ui."
+                  },
+                  {
+                    "group": ["**/stores", "**/stores/**"],
+                    "message": "src/core must not depend on stores."
+                  },
+                  {
+                    "group": ["**/ipc", "**/ipc/**"],
+                    "message": "src/core must not depend on ipc."
+                  }
+                ]
               }
             }
           }

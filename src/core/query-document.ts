@@ -231,7 +231,7 @@ export class QueryDocument {
     if (!QueryDocument.#sameTable(this.#committedFromTable, this.#fromTable)) {
       this.#resetProjectionAndDependentColumns();
     }
-    this.#committedFromTable = this.#fromTable;
+    this.#committedFromTable = this.#fromTable === null ? null : { ...this.#fromTable };
   }
 
   static #sameTable(a: TableReference | null, b: TableReference | null): boolean {
