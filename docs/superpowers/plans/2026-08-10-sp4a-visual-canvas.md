@@ -85,7 +85,7 @@
   - `export interface TableRef { schema?: string; name: string; }`
   - `export interface ColumnInfo { name: string; dataType: string; isNullable: boolean; defaultValue: string | null; isPrimaryKey: boolean; isUnique: boolean; isForeignKey: boolean; }`
   - `export interface QueryResult { columns: string[]; rows: unknown[][]; rowsAffected: number | null; durationMs: number; }`
-  - `export type IpcError = { kind: "connection" | "auth" | "syntax" | "permission" | "unknown"; message: string; position?: number | null; }` — match parent §4 (`syntax` includes `position: number | null`)
+  - `export type IpcError = { kind: "connection"; message: string } | { kind: "auth"; message: string } | { kind: "syntax"; message: string; position: number | null } | { kind: "permission"; message: string } | { kind: "unknown"; message: string };`
   - `export interface DragonIpc { listTables(c: ConnectionId): Promise<TableRef[]>; listColumns(c: ConnectionId, table: TableRef): Promise<ColumnInfo[]>; runQuery(c: ConnectionId, sql: ExecutableSQL): Promise<QueryResult>; }`
   - `export const FIXTURE_CONNECTION_ID: ConnectionId = "fixture";`
   - `export type MockMode = "happy" | "emptyTables" | "emptyColumns" | "columnsError";`
