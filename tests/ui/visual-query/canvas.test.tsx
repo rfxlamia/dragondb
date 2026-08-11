@@ -467,6 +467,52 @@ describe("VisualQueryCanvas full lock + Run (SP-2)", () => {
     );
   });
 
+  it("clears stale Run success status when disconnected", async () => {
+    const user = userEvent.setup();
+    const onRunQuery = vi.fn(async () => ({
+      columns: ["id"],
+      rows: [[1]],
+      rowsAffected: null,
+      durationMs: 9,
+    }));
+    const { rerender } = render(
+      <VisualQueryCanvas
+        tables={tables}
+        columnNames={["id"]}
+        metadataErrorMessage={null}
+        isConnected={true}
+        onRunQuery={onRunQuery}
+      />,
+    );
+    await user.click(screen.getByTestId(VisualQueryAccessibility.initialAddBlock));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("select")));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.clauseMenuItem("from")));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.fromTablePicker));
+    await user.click(screen.getByRole("button", { name: "users" }));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.runQuery));
+    await waitFor(() =>
+      expect(document.querySelector(".vq-canvas__status")).toHaveTextContent(
+        /OK\s*\/\s*1 rows\s*\/\s*9 ms/i,
+      ),
+    );
+
+    rerender(
+      <VisualQueryCanvas
+        tables={tables}
+        columnNames={["id"]}
+        metadataErrorMessage={null}
+        isConnected={false}
+        onRunQuery={onRunQuery}
+      />,
+    );
+    await waitFor(() =>
+      expect(document.querySelector(".vq-canvas__status")?.textContent ?? "").not.toMatch(
+        /OK\s*\//i,
+      ),
+    );
+  });
+
   it("Run CREATE is gated in UI — does not call onRunQuery and shows SELECT-only message", async () => {
     const user = userEvent.setup();
     const onRunQuery = vi.fn();

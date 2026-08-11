@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ClauseKind, ExecutableSQL, StatementKind, TableReference } from "../../core";
 import { CanvasPresentation, canRun, generateSQL, QueryDocument } from "../../core";
 import type { QueryResult } from "../../ipc/contract";
@@ -62,6 +62,12 @@ export function VisualQueryCanvas(props: VisualQueryCanvasProps): React.JSX.Elem
   const [showStatementPicker, setShowStatementPicker] = useState(false);
   const [showClauseMenu, setShowClauseMenu] = useState(false);
   const [runOutcome, setRunOutcome] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isConnected) {
+      setRunOutcome(null);
+    }
+  }, [isConnected]);
 
   const presentation = new CanvasPresentation(doc);
   const eligibility = canRun(doc, isConnected);
