@@ -183,8 +183,16 @@ export function ConnectionPanel(props: ConnectionPanelProps): React.JSX.Element 
     setErrorMessage(null);
     try {
       await ipc.disconnect();
-      setSessionClaimed(false);
-      setConnectedProfileId(null);
+    } catch (error) {
+      // Keep Connected claim; disconnect failure is not connect-B failure.
+      setErrorMessage(humanIpcErrorMessage(error));
+      setBusy(false);
+      return;
+    }
+    // A torn down — clear claim before attempting B.
+    setSessionClaimed(false);
+    setConnectedProfileId(null);
+    try {
       const result = await ipc.connectProfile(targetId);
       setSessionClaimed(true);
       setConnectedProfileId(result.profileId);

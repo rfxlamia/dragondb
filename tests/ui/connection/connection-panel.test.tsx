@@ -170,6 +170,46 @@ describe("ConnectionPanel Save-then-Connect", () => {
     expect(screen.queryByRole("button", { name: /disconnect/i })).toBeNull();
   });
 
+  it("keeps Connected claim when disconnect fails during switch and does not call onSwitchFailure", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    const a = await ipc.saveProfile({
+      profile: { ...baseProfileFields(), name: "A" },
+      secrets: { password: "pw" },
+    });
+    await ipc.saveProfile({
+      profile: { ...baseProfileFields(), name: "B", host: "db-b" },
+      secrets: { password: "pw" },
+    });
+    await ipc.connectProfile(a.id);
+
+    ipc.disconnect = async () => {
+      throw { kind: "unknown", message: "Disconnect failed" };
+    };
+
+    const onSwitchSuccess = vi.fn();
+    const onSwitchFailure = vi.fn();
+    render(
+      <ConnectionPanel
+        ipc={ipc}
+        isConnected={true}
+        activeProfileId={a.id}
+        onConnected={vi.fn()}
+        onDisconnected={vi.fn()}
+        onSwitchSuccess={onSwitchSuccess}
+        onSwitchFailure={onSwitchFailure}
+      />,
+    );
+
+    await user.click(await screen.findByRole("button", { name: /^B$/i }));
+    await user.click(screen.getByRole("button", { name: /confirm|switch/i }));
+    await waitFor(() => expect(screen.getByText(/disconnect failed/i)).toBeInTheDocument());
+    expect(onSwitchFailure).not.toHaveBeenCalled();
+    expect(onSwitchSuccess).not.toHaveBeenCalled();
+    // Connected claim remains — Disconnect UI still shown
+    expect(screen.getByRole("button", { name: /disconnect/i })).toBeInTheDocument();
+  });
+
   it("surfaces human IpcError on connectProfile failure and does not claim Connected", async () => {
     const user = userEvent.setup();
     const ipc = createMockDragonIpc("happy");
