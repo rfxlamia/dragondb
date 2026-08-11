@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { QueryDocument } from "../../../src/core";
@@ -374,5 +374,148 @@ describe("VisualQueryCanvas", () => {
     const sql = screen.getByTestId(VisualQueryAccessibility.generatedSQLText).textContent ?? "";
     expect(sql).toMatch(/WHERE/i);
     expect(sql).toContain("42");
+  });
+});
+
+describe("VisualQueryCanvas full lock + Run (SP-2)", () => {
+  it("disables mutate/statement/Run while disconnected but keeps SQL preview readable", async () => {
+    const user = userEvent.setup();
+    render(
+      <VisualQueryCanvas
+        tables={tables}
+        columnNames={[]}
+        metadataErrorMessage={null}
+        isConnected={false}
+        onRunQuery={undefined}
+      />,
+    );
+    expect(screen.getByTestId(VisualQueryAccessibility.initialAddBlock)).toBeDisabled();
+    const run = screen.queryByTestId(VisualQueryAccessibility.runQuery);
+    if (run) expect(run).toBeDisabled();
+    expect(screen.getByTestId(VisualQueryAccessibility.generatedSQLText)).toBeInTheDocument();
+    await user.click(screen.getByTestId(VisualQueryAccessibility.initialAddBlock));
+    expect(screen.queryByTestId(VisualQueryAccessibility.statementMenu)).toBeNull();
+  });
+
+  it("Run SELECT calls onRunQuery with exec SQL and shows OK / rows.length / durationMs", async () => {
+    const user = userEvent.setup();
+    const onRunQuery = vi.fn(async (_sql: { text: string; params: unknown[] }) => ({
+      columns: ["id"],
+      rows: [[1], [2]],
+      rowsAffected: null,
+      durationMs: 17,
+    }));
+    render(
+      <VisualQueryCanvas
+        tables={tables}
+        columnNames={["id"]}
+        metadataErrorMessage={null}
+        isConnected={true}
+        onRunQuery={onRunQuery}
+      />,
+    );
+    await user.click(screen.getByTestId(VisualQueryAccessibility.initialAddBlock));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("select")));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.clauseMenuItem("from")));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.fromTablePicker));
+    await user.click(screen.getByRole("button", { name: "users" }));
+
+    await user.click(screen.getByTestId(VisualQueryAccessibility.runQuery));
+    await waitFor(() => expect(onRunQuery).toHaveBeenCalledTimes(1));
+    expect(onRunQuery.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({
+        text: expect.stringMatching(/SELECT/i),
+        params: expect.any(Array),
+      }),
+    );
+    expect(document.querySelector(".vq-canvas__status")).toHaveTextContent(
+      /OK\s*\/\s*2 rows\s*\/\s*17 ms/i,
+    );
+    expect(document.querySelector(".vq-results-grid")).toBeNull();
+    expect(screen.queryByRole("table")).toBeNull();
+  });
+
+  it("Run SELECT with 0 rows shows OK / 0 rows / X ms", async () => {
+    const user = userEvent.setup();
+    const onRunQuery = vi.fn(async () => ({
+      columns: ["id"],
+      rows: [],
+      rowsAffected: 0,
+      durationMs: 4,
+    }));
+    render(
+      <VisualQueryCanvas
+        tables={tables}
+        columnNames={["id"]}
+        metadataErrorMessage={null}
+        isConnected={true}
+        onRunQuery={onRunQuery}
+      />,
+    );
+    await user.click(screen.getByTestId(VisualQueryAccessibility.initialAddBlock));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("select")));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.clauseMenuItem("from")));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.fromTablePicker));
+    await user.click(screen.getByRole("button", { name: "users" }));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.runQuery));
+    await waitFor(() =>
+      expect(document.querySelector(".vq-canvas__status")).toHaveTextContent(
+        /OK\s*\/\s*0 rows\s*\/\s*4 ms/i,
+      ),
+    );
+  });
+
+  it("Run CREATE is gated in UI — does not call onRunQuery and shows SELECT-only message", async () => {
+    const user = userEvent.setup();
+    const onRunQuery = vi.fn();
+    render(
+      <VisualQueryCanvas
+        tables={tables}
+        columnNames={[]}
+        metadataErrorMessage={null}
+        isConnected={true}
+        onRunQuery={onRunQuery}
+      />,
+    );
+    await user.click(screen.getByTestId(VisualQueryAccessibility.initialAddBlock));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("createTable")));
+    await user.type(screen.getByTestId(VisualQueryAccessibility.createTableNameField), "orders");
+    await user.type(screen.getByTestId(VisualQueryAccessibility.createColumnNameField(0)), "id");
+    await user.click(screen.getByTestId(VisualQueryAccessibility.runQuery));
+    expect(onRunQuery).not.toHaveBeenCalled();
+    expect(document.querySelector(".vq-canvas__status")).toHaveTextContent(
+      /select.?only|only select/i,
+    );
+  });
+
+  it("Run failure shows IpcError.message and keeps canvas unlocked", async () => {
+    const user = userEvent.setup();
+    const onRunQuery = vi.fn(async () => {
+      throw { kind: "syntax", message: "syntax error near SELECT", position: 0 };
+    });
+    render(
+      <VisualQueryCanvas
+        tables={tables}
+        columnNames={["id"]}
+        metadataErrorMessage={null}
+        isConnected={true}
+        onRunQuery={onRunQuery}
+      />,
+    );
+    await user.click(screen.getByTestId(VisualQueryAccessibility.initialAddBlock));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("select")));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.clauseMenuItem("from")));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.fromTablePicker));
+    await user.click(screen.getByRole("button", { name: "users" }));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.runQuery));
+    await waitFor(() =>
+      expect(document.querySelector(".vq-canvas__status")).toHaveTextContent(
+        /syntax error near SELECT/i,
+      ),
+    );
+    expect(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock)).not.toBeDisabled();
   });
 });

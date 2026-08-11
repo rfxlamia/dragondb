@@ -14,25 +14,6 @@
   padding: 1rem;
 }
 
-.app-canvas-lock {
-  border: none;
-  margin: 0;
-  min-width: 0;
-  padding: 0;
-}
-
-.app-canvas-lock__legend {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
-
 .app-shell .vq-canvas {
   min-width: 0;
 }

@@ -47,6 +47,7 @@ describe("App production default (no runtime mock)", () => {
     render(<App ipc={ipc} />);
     expect(screen.queryByTestId(VisualQueryAccessibility.initialAddBlock)).toBeDisabled();
     expect(screen.queryByTestId(VisualQueryAccessibility.runQuery)).toBeDisabled();
+    expect(screen.getAllByTestId(VisualQueryAccessibility.runQuery)).toHaveLength(1);
   });
 });
 
@@ -246,6 +247,44 @@ describe("App wiring regressions after connect (SP-4a)", () => {
     await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("createTable")));
     await user.type(screen.getByTestId(VisualQueryAccessibility.createTableNameField), "orders");
     expect(runQuery).not.toHaveBeenCalled();
+  });
+
+  it("wires onRunQuery to ipc.runQuery with live connectionId on SELECT Run", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    const runQuery = vi.spyOn(ipc, "runQuery").mockResolvedValue({
+      columns: ["id"],
+      rows: [[1]],
+      rowsAffected: null,
+      durationMs: 9,
+    });
+    const listTables = vi.spyOn(ipc, "listTables");
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
+    await waitFor(() => expect(listTables).toHaveBeenCalled());
+    const connectionId = listTables.mock.calls[0]?.[0];
+    expect(connectionId).toBeTruthy();
+
+    await user.click(await screen.findByTestId(VisualQueryAccessibility.initialAddBlock));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("select")));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.clauseMenuItem("from")));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.fromTablePicker));
+    await user.click(await screen.findByRole("button", { name: "users" }));
+
+    expect(screen.getAllByTestId(VisualQueryAccessibility.runQuery)).toHaveLength(1);
+    await user.click(screen.getByTestId(VisualQueryAccessibility.runQuery));
+    await waitFor(() => expect(runQuery).toHaveBeenCalledTimes(1));
+    expect(runQuery.mock.calls[0]?.[0]).toBe(connectionId);
+    expect(runQuery.mock.calls[0]?.[1]).toEqual(
+      expect.objectContaining({
+        text: expect.stringMatching(/SELECT/i),
+        params: expect.any(Array),
+      }),
+    );
+    expect(document.querySelector(".vq-canvas__status")).toHaveTextContent(
+      /OK\s*\/\s*1 rows\s*\/\s*9 ms/i,
+    );
   });
 
   it("ignores stale listColumns resolution", async () => {

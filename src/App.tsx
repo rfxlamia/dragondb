@@ -1,10 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import type { TableReference } from "./core";
+import type { ExecutableSQL, TableReference } from "./core";
 import type { ConnectionId, ConnectResult, DragonIpc, IpcError, ProfileId } from "./ipc/contract";
 import { coreToTableRef, tableRefToCore } from "./ipc/table-ref";
 import { createTauriDragonIpc } from "./ipc/tauri-client";
 import { ConnectionPanel } from "./ui/connection/connection-panel";
-import { VisualQueryAccessibility } from "./ui/visual-query/accessibility";
 import { VisualQueryCanvas } from "./ui/visual-query/canvas";
 import { VisualQueryCopy } from "./ui/visual-query/copy";
 import "./App.css";
@@ -120,6 +119,11 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
     );
   }
 
+  const onRunQuery =
+    isConnected && connectionId !== null
+      ? (sql: ExecutableSQL) => ipc.runQuery(connectionId, sql)
+      : undefined;
+
   return (
     <main className="app-shell">
       <ConnectionPanel
@@ -131,25 +135,15 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
         onSwitchSuccess={handleSwitchSuccess}
         onSwitchFailure={handleSwitchFailure}
       />
-      {/*
-        Full interaction lock until T11 owns canvas-native disabled attrs.
-        Disabled fieldset makes mutate controls + Run report as disabled to AT/tests
-        while preserving the mounted card snapshot (no remount on disconnect).
-      */}
-      <fieldset className="app-canvas-lock" disabled={!isConnected}>
-        <legend className="app-canvas-lock__legend">Visual query</legend>
-        <VisualQueryCanvas
-          key={canvasEpoch}
-          tables={tables}
-          columnNames={columnNames}
-          metadataErrorMessage={metadataErrorMessage}
-          isConnected={isConnected}
-          onCommittedFromChange={handleCommittedFromChange}
-        />
-        <button type="button" data-testid={VisualQueryAccessibility.runQuery}>
-          {VisualQueryCopy.runQueryTitle}
-        </button>
-      </fieldset>
+      <VisualQueryCanvas
+        key={canvasEpoch}
+        tables={tables}
+        columnNames={columnNames}
+        metadataErrorMessage={metadataErrorMessage}
+        isConnected={isConnected}
+        onRunQuery={onRunQuery}
+        onCommittedFromChange={handleCommittedFromChange}
+      />
     </main>
   );
 }

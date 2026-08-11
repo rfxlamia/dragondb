@@ -34,6 +34,49 @@
   text-decoration: none;
 }
 
+.vq-toolbar__run {
+  background: var(--primary-600);
+  border: none;
+  border-radius: var(--radius);
+  color: oklch(1 0 0);
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.4;
+  margin-left: auto;
+  padding: 4px 12px;
+}
+
+.vq-toolbar__run:hover:not(:disabled) {
+  background: var(--primary-700);
+}
+
+.vq-toolbar__run:disabled {
+  background: var(--neutral-300);
+  color: var(--neutral-600);
+  cursor: not-allowed;
+}
+
+.vq-canvas__interaction {
+  border: none;
+  margin: 0;
+  min-width: 0;
+  padding: 0;
+}
+
+.vq-canvas__interaction__legend {
+  border: 0;
+  clip: rect(0, 0, 0, 0);
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  padding: 0;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
 .vq-popover {
   background: oklch(1 0 0);
   border: 1px solid var(--neutral-300);
