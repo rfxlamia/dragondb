@@ -74,17 +74,22 @@ export function ConnectionPanel(props: ConnectionPanelProps): React.JSX.Element 
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const list = await ipc.listProfiles();
-      if (cancelled) return;
-      setProfiles(list);
-      const initialId = activeProfileId ?? null;
-      if (initialId) {
-        const found = list.find((p) => p.id === initialId);
-        if (found) {
-          setSelectedId(found.id);
-          setForm(formValueFromProfile(found));
-          setDirty(false);
+      try {
+        const list = await ipc.listProfiles();
+        if (cancelled) return;
+        setProfiles(list);
+        const initialId = activeProfileId ?? null;
+        if (initialId) {
+          const found = list.find((p) => p.id === initialId);
+          if (found) {
+            setSelectedId(found.id);
+            setForm(formValueFromProfile(found));
+            setDirty(false);
+          }
         }
+      } catch (error) {
+        if (cancelled) return;
+        setErrorMessage(humanIpcErrorMessage(error));
       }
     })();
     return () => {

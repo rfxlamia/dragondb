@@ -3,10 +3,11 @@
 use std::time::{Duration, Instant};
 
 use serde::Serialize;
-use tokio_postgres::types::Type;
+use serde_json::Value as JsonValue;
+use tokio_postgres::types::{ToSql, Type};
 use tokio_postgres::Client;
 
-use super::error::{map_tokio_postgres_error, MappedIpcError};
+use super::error::{map_tokio_postgres_error, IpcErrorKind, MappedIpcError};
 
 /// Locked Swift-parity catalog query for listing user tables.
 pub const LIST_TABLES_SQL: &str = "SELECT table_schema, table_name FROM information_schema.tables WHERE table_type = 'BASE TABLE' AND table_schema NOT IN ('pg_catalog', 'information_schema') ORDER BY table_schema, table_name";
@@ -115,9 +116,18 @@ pub async fn list_columns(
         .collect())
 }
 
-/// Run a simple SQL statement; SELECT returns rows, others set rowsAffected.
-pub async fn run_query(client: &Client, sql: &str) -> Result<QueryResultData, MappedIpcError> {
+/// Run a SQL statement with bound parameters; SELECT returns rows, others set rowsAffected.
+pub async fn run_query(
+    client: &Client,
+    sql: &str,
+    params: &[JsonValue],
+) -> Result<QueryResultData, MappedIpcError> {
     let started = Instant::now();
+    let owned = json_params_to_owned(params)?;
+    let binds: Vec<&(dyn ToSql + Sync)> = owned
+        .iter()
+        .map(|p| p.as_ref() as &(dyn ToSql + Sync))
+        .collect();
 
     if looks_like_select(sql) {
         // Prepare first so empty result sets still expose column metadata.
@@ -131,7 +141,7 @@ pub async fn run_query(client: &Client, sql: &str) -> Result<QueryResultData, Ma
             .map(|c| c.name().to_string())
             .collect();
         let rows = client
-            .query(&statement, &[])
+            .query(&statement, &binds)
             .await
             .map_err(|e| map_tokio_postgres_error(&e))?;
         let duration = started.elapsed();
@@ -152,7 +162,7 @@ pub async fn run_query(client: &Client, sql: &str) -> Result<QueryResultData, Ma
         ))
     } else {
         let result = client
-            .execute(sql, &[])
+            .execute(sql, &binds)
             .await
             .map_err(|e| map_tokio_postgres_error(&e))?;
         Ok(QueryResultData {
@@ -161,6 +171,39 @@ pub async fn run_query(client: &Client, sql: &str) -> Result<QueryResultData, Ma
             rows_affected: Some(result),
             duration_ms: started.elapsed().as_millis() as u64,
         })
+    }
+}
+
+/// Convert JSON IPC params into owned `ToSql` values for tokio-postgres.
+pub fn json_params_to_owned(
+    params: &[JsonValue],
+) -> Result<Vec<Box<dyn ToSql + Sync + Send>>, MappedIpcError> {
+    params.iter().map(json_to_sql).collect()
+}
+
+fn json_to_sql(value: &JsonValue) -> Result<Box<dyn ToSql + Sync + Send>, MappedIpcError> {
+    match value {
+        JsonValue::Null => Ok(Box::new(Option::<String>::None)),
+        JsonValue::Bool(b) => Ok(Box::new(*b)),
+        JsonValue::Number(n) => {
+            if let Some(i) = n.as_i64() {
+                Ok(Box::new(i))
+            } else if let Some(f) = n.as_f64() {
+                Ok(Box::new(f))
+            } else {
+                Err(MappedIpcError {
+                    kind: IpcErrorKind::Unknown,
+                    message: "Unsupported numeric query parameter.".into(),
+                    position: None,
+                })
+            }
+        }
+        JsonValue::String(s) => Ok(Box::new(s.clone())),
+        JsonValue::Array(_) | JsonValue::Object(_) => Err(MappedIpcError {
+            kind: IpcErrorKind::Unknown,
+            message: "Unsupported JSON query parameter type.".into(),
+            position: None,
+        }),
     }
 }
 
@@ -337,5 +380,23 @@ mod tests {
         assert!(LIST_COLUMNS_SQL.contains("table_name"));
         assert!(LIST_COLUMNS_SQL.contains("column_name"));
         assert!(LIST_COLUMNS_SQL.contains("data_type"));
+    }
+
+    #[test]
+    fn json_params_to_owned_accepts_string_bool_number_null() {
+        let owned = json_params_to_owned(&[
+            JsonValue::String("alice".into()),
+            JsonValue::Bool(true),
+            JsonValue::from(42),
+            JsonValue::Null,
+        ])
+        .expect("owned params");
+        assert_eq!(owned.len(), 4);
+    }
+
+    #[test]
+    fn json_params_to_owned_rejects_object_and_array() {
+        assert!(json_params_to_owned(&[JsonValue::Array(vec![])]).is_err());
+        assert!(json_params_to_owned(&[JsonValue::Object(Default::default())]).is_err());
     }
 }

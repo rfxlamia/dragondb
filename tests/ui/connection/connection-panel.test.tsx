@@ -315,4 +315,24 @@ describe("ConnectionPanel Save-then-Connect", () => {
     expect(onDisconnected).toHaveBeenCalled();
     expect(await ipc.getProfile(saved.id)).toBeNull();
   });
+
+  it("surfaces listProfiles failure on mount", async () => {
+    const ipc = createMockDragonIpc("happy");
+    ipc.listProfiles = async () => {
+      throw { kind: "unknown", message: "Storage boom" };
+    };
+    render(
+      <ConnectionPanel
+        ipc={ipc}
+        isConnected={false}
+        onConnected={vi.fn()}
+        onDisconnected={vi.fn()}
+        onSwitchSuccess={vi.fn()}
+        onSwitchFailure={vi.fn()}
+      />,
+    );
+    await waitFor(() => {
+      expect(screen.getByRole("status")).toHaveTextContent(/Storage boom/);
+    });
+  });
 });

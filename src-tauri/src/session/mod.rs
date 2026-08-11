@@ -193,6 +193,18 @@ impl AppSession {
         }
     }
 
+    #[cfg(test)]
+    pub fn active_cached_host_for_test(&self) -> Option<String> {
+        self.active.as_ref().map(|a| a.profile.host.clone())
+    }
+
+    #[cfg(test)]
+    pub fn active_cached_password_for_test(&self) -> Option<String> {
+        self.active
+            .as_ref()
+            .and_then(|a| a.secrets.password.clone())
+    }
+
     pub fn list_profiles(&self) -> Result<Vec<ProfileRow>, MappedIpcError> {
         match &self.backend {
             Backend::Production { db, .. } => {
@@ -259,7 +271,7 @@ impl AppSession {
                     upsert_profile(&guard, &row).map_err(sqlite_err)?;
                 }
                 match keyring.set_secrets(&id, &secrets) {
-                    Ok(()) => Ok(row),
+                    Ok(()) => {}
                     Err(e) => {
                         if is_create {
                             if let Ok(guard) = db.lock() {
@@ -277,7 +289,7 @@ impl AppSession {
                                 let _ = keyring.set_secrets(&id, &prior_secrets);
                             }
                         }
-                        Err(keyring_err(e))
+                        return Err(keyring_err(e));
                     }
                 }
             }
@@ -294,7 +306,7 @@ impl AppSession {
                 };
                 d.storage.upsert(&row);
                 match d.keyring.set_secrets(&id, &secrets) {
-                    Ok(()) => Ok(row),
+                    Ok(()) => {}
                     Err(e) => {
                         if is_create {
                             d.storage.delete(&id);
@@ -311,9 +323,34 @@ impl AppSession {
                                 let _ = d.keyring.set_secrets(&id, &prior_secrets);
                             }
                         }
-                        Err(e)
+                        return Err(e);
                     }
                 }
+            }
+        }
+
+        self.sync_active_after_profile_save(&row);
+        Ok(row)
+    }
+
+    /// Keep oneshot reconnect cache aligned with the last successful save of the live profile.
+    fn sync_active_after_profile_save(&mut self, row: &ProfileRow) {
+        let is_active = self
+            .active
+            .as_ref()
+            .is_some_and(|a| a.profile_id == row.id);
+        if !is_active {
+            return;
+        }
+        let loaded = match &self.backend {
+            Backend::Production { keyring, .. } => keyring.get_secrets(&row.id).ok(),
+            Backend::Fake(d) => d.keyring.get_secrets(&row.id).ok(),
+        };
+        if let Some(active) = self.active.as_mut() {
+            active.profile = row.clone();
+            active.ssh_enabled = row.ssh_enabled;
+            if let Some(secrets) = loaded {
+                active.secrets = secrets;
             }
         }
     }
@@ -505,7 +542,9 @@ impl AppSession {
             .ok_or_else(not_connected)?;
 
         let started = Instant::now();
-        let result = self.execute_query_with_oneshot_reconnect(&sql.text).await;
+        let result = self
+            .execute_query_with_oneshot_reconnect(&sql.text, &sql.params)
+            .await;
         let duration_ms = started.elapsed().as_millis() as i64;
 
         // History only after an execute attempt while Connected.
@@ -539,26 +578,34 @@ impl AppSession {
     async fn execute_query_with_oneshot_reconnect(
         &mut self,
         sql: &str,
+        params: &[serde_json::Value],
     ) -> Result<QueryResultData, MappedIpcError> {
-        let first = self.query_once(sql).await;
+        let first = self.query_once(sql, params).await;
         match first {
             Ok(r) => Ok(r),
             Err(e) if is_connection_kind(&e) => {
                 self.oneshot_reconnect().await?;
-                self.query_once(sql).await
+                self.query_once(sql, params).await
             }
             Err(e) => Err(e),
         }
     }
 
-    async fn query_once(&mut self, sql: &str) -> Result<QueryResultData, MappedIpcError> {
+    async fn query_once(
+        &mut self,
+        sql: &str,
+        params: &[serde_json::Value],
+    ) -> Result<QueryResultData, MappedIpcError> {
         if !self.has_live_handle() {
             return Err(not_connected());
         }
         let is_fake = matches!(self.backend, Backend::Fake(_));
         if is_fake {
             let force_db_err = match &self.backend {
-                Backend::Fake(d) => d.postgres.force_query_fail,
+                Backend::Fake(d) => {
+                    d.postgres.record_query(sql, params);
+                    d.postgres.force_query_fail
+                }
                 Backend::Production { .. } => false,
             };
             self.fake_query_probe(force_db_err)?;
@@ -569,7 +616,7 @@ impl AppSession {
             .as_ref()
             .and_then(|a| a.client.as_ref())
             .ok_or_else(not_connected)?;
-        pg_run_query(client, sql).await
+        pg_run_query(client, sql, params).await
     }
 
     fn has_live_handle(&self) -> bool {
@@ -787,11 +834,16 @@ fn profile_from_fields(id: &str, f: &ProfileFields) -> ProfileRow {
 
 fn secrets_from_input(s: &ProfileSecretsInput) -> ProfileSecrets {
     ProfileSecrets {
-        password: s.password.clone(),
-        ssh_password: s.ssh_password.clone(),
-        ssh_passphrase: s.ssh_passphrase.clone(),
-        ssh_private_key: s.ssh_private_key.clone(),
+        password: nonempty_secret(s.password.as_ref()),
+        ssh_password: nonempty_secret(s.ssh_password.as_ref()),
+        ssh_passphrase: nonempty_secret(s.ssh_passphrase.as_ref()),
+        ssh_private_key: nonempty_secret(s.ssh_private_key.as_ref()),
     }
+}
+
+/// Empty string means omit (do not update keyring slot), matching edit-form UX.
+fn nonempty_secret(value: Option<&String>) -> Option<String> {
+    value.filter(|v| !v.is_empty()).cloned()
 }
 
 fn not_connected() -> MappedIpcError {
@@ -1070,6 +1122,8 @@ pub struct FakePostgres {
     fail_connect_remaining: AtomicU32,
     /// After reconnect clears dead_socket, subsequent queries succeed.
     dead_cleared: StdMutex<bool>,
+    last_sql: StdMutex<Option<String>>,
+    last_params: StdMutex<Vec<serde_json::Value>>,
 }
 
 impl FakePostgres {
@@ -1079,6 +1133,26 @@ impl FakePostgres {
 
     pub fn query_attempts(&self) -> u32 {
         self.query_attempts.load(Ordering::SeqCst)
+    }
+
+    pub fn last_sql(&self) -> Option<String> {
+        self.last_sql.lock().ok().and_then(|g| g.clone())
+    }
+
+    pub fn last_params(&self) -> Vec<serde_json::Value> {
+        self.last_params
+            .lock()
+            .map(|g| g.clone())
+            .unwrap_or_default()
+    }
+
+    fn record_query(&self, sql: &str, params: &[serde_json::Value]) {
+        if let Ok(mut g) = self.last_sql.lock() {
+            *g = Some(sql.to_string());
+        }
+        if let Ok(mut g) = self.last_params.lock() {
+            *g = params.to_vec();
+        }
     }
 
     fn connect(&self) -> Result<(), MappedIpcError> {
@@ -1230,7 +1304,9 @@ impl FakeKeyring {
             if let Ok(mut g) = self.store.lock() {
                 let mut current = g.get(profile_id).cloned().unwrap_or_default();
                 if let Some(ref password) = secrets.password {
-                    current.password = Some(password.clone());
+                    if !password.is_empty() {
+                        current.password = Some(password.clone());
+                    }
                 }
                 g.insert(profile_id.to_string(), current);
             }
@@ -1241,7 +1317,29 @@ impl FakeKeyring {
             });
         }
         if let Ok(mut g) = self.store.lock() {
-            g.insert(profile_id.to_string(), secrets.clone());
+            let mut current = g.get(profile_id).cloned().unwrap_or_default();
+            // Merge slots like KeyringStore — omit empty strings and preserve unset slots.
+            if let Some(ref password) = secrets.password {
+                if !password.is_empty() {
+                    current.password = Some(password.clone());
+                }
+            }
+            if let Some(ref ssh_password) = secrets.ssh_password {
+                if !ssh_password.is_empty() {
+                    current.ssh_password = Some(ssh_password.clone());
+                }
+            }
+            if let Some(ref ssh_passphrase) = secrets.ssh_passphrase {
+                if !ssh_passphrase.is_empty() {
+                    current.ssh_passphrase = Some(ssh_passphrase.clone());
+                }
+            }
+            if let Some(ref ssh_private_key) = secrets.ssh_private_key {
+                if !ssh_private_key.is_empty() {
+                    current.ssh_private_key = Some(ssh_private_key.clone());
+                }
+            }
+            g.insert(profile_id.to_string(), current);
         }
         Ok(())
     }
@@ -1490,6 +1588,86 @@ mod tests {
             "partial write must not leave new password"
         );
         assert!(restored.ssh_password.is_none());
+    }
+
+    #[tokio::test]
+    async fn run_query_forwards_placeholder_params_to_executor() {
+        let mut session = AppSession::with_fakes(FakeDeps::connected_direct());
+        let cid = session.active_connection_id().unwrap().to_string();
+        session
+            .run_query(
+                &cid,
+                ExecutableSql {
+                    text: "SELECT * FROM t WHERE \"col\" = $1".into(),
+                    params: vec![serde_json::json!("alice")],
+                },
+            )
+            .await
+            .expect("run with params");
+        assert_eq!(
+            session.fake_postgres().last_sql().as_deref(),
+            Some("SELECT * FROM t WHERE \"col\" = $1")
+        );
+        assert_eq!(
+            session.fake_postgres().last_params(),
+            vec![serde_json::json!("alice")]
+        );
+    }
+
+    #[tokio::test]
+    async fn save_profile_while_connected_refreshes_active_cache() {
+        let mut session = AppSession::with_fakes(FakeDeps::connected_direct());
+        let profile_id = session.active_profile_id().unwrap().to_string();
+        assert_eq!(
+            session.active_cached_password_for_test().as_deref(),
+            Some("pw")
+        );
+
+        let mut fields = sample_profile_fields();
+        fields.host = "db.example".into();
+        session
+            .save_profile(SaveProfileInput {
+                id: Some(profile_id),
+                profile: fields,
+                secrets: ProfileSecretsInput {
+                    password: Some("new-pw".into()),
+                    ..Default::default()
+                },
+            })
+            .await
+            .expect("save while connected");
+
+        assert_eq!(
+            session.active_cached_host_for_test().as_deref(),
+            Some("db.example")
+        );
+        assert_eq!(
+            session.active_cached_password_for_test().as_deref(),
+            Some("new-pw")
+        );
+    }
+
+    #[tokio::test]
+    async fn save_profile_empty_secret_strings_do_not_wipe_keyring() {
+        let profile_id = "p-keep-secret";
+        let mut session = AppSession::with_fakes(FakeDeps::with_saved_profile(profile_id));
+        session
+            .save_profile(SaveProfileInput {
+                id: Some(profile_id.to_string()),
+                profile: sample_profile_fields(),
+                secrets: ProfileSecretsInput {
+                    password: Some(String::new()),
+                    ssh_password: Some(String::new()),
+                    ..Default::default()
+                },
+            })
+            .await
+            .expect("save with cleared fields");
+        let kept = session
+            .fake_keyring()
+            .get_secrets(profile_id)
+            .expect("prior password kept");
+        assert_eq!(kept.password.as_deref(), Some("pw"));
     }
 
     #[tokio::test]

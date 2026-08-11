@@ -92,17 +92,26 @@ impl KeyringStore {
         profile_id: &str,
         secrets: &ProfileSecrets,
     ) -> Result<(), KeyringStoreError> {
+        // Empty string means "omit / do not update" — never wipe a slot with "".
         if let Some(ref v) = secrets.password {
-            self.set_slot(profile_id, SLOT_PASSWORD, v)?;
+            if !v.is_empty() {
+                self.set_slot(profile_id, SLOT_PASSWORD, v)?;
+            }
         }
         if let Some(ref v) = secrets.ssh_password {
-            self.set_slot(profile_id, SLOT_SSH_PASSWORD, v)?;
+            if !v.is_empty() {
+                self.set_slot(profile_id, SLOT_SSH_PASSWORD, v)?;
+            }
         }
         if let Some(ref v) = secrets.ssh_passphrase {
-            self.set_slot(profile_id, SLOT_SSH_PASSPHRASE, v)?;
+            if !v.is_empty() {
+                self.set_slot(profile_id, SLOT_SSH_PASSPHRASE, v)?;
+            }
         }
         if let Some(ref v) = secrets.ssh_private_key {
-            self.set_slot(profile_id, SLOT_SSH_PRIVATE_KEY, v)?;
+            if !v.is_empty() {
+                self.set_slot(profile_id, SLOT_SSH_PRIVATE_KEY, v)?;
+            }
         }
         Ok(())
     }
@@ -268,6 +277,34 @@ mod tests {
             .as_deref()
             .unwrap_or("")
             .contains("/tmp/"));
+        store.delete_all_for_profile(&profile_id).expect("cleanup");
+    }
+
+    #[test]
+    fn empty_string_secrets_do_not_overwrite_existing_slots() {
+        let profile_id = test_profile_id();
+        let store = KeyringStore::memory();
+        store
+            .set_secrets(
+                &profile_id,
+                &ProfileSecrets {
+                    password: Some("keep-me".into()),
+                    ..Default::default()
+                },
+            )
+            .expect("set");
+        store
+            .set_secrets(
+                &profile_id,
+                &ProfileSecrets {
+                    password: Some(String::new()),
+                    ssh_password: Some(String::new()),
+                    ..Default::default()
+                },
+            )
+            .expect("omit empties");
+        let got = store.get_secrets(&profile_id).expect("get");
+        assert_eq!(got.password.as_deref(), Some("keep-me"));
         store.delete_all_for_profile(&profile_id).expect("cleanup");
     }
 }
