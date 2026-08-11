@@ -21,7 +21,7 @@ use crate::postgres::{
 };
 use crate::secrets::{KeyringStore, KeyringStoreError, ProfileSecrets};
 use crate::ssh::{
-    build_auth_method, PreparedAuth, SshAuthInput, TunnelHandle, TunnelRequest,
+    build_auth_method, PreparedAuth, SshAuthInput, TunnelError, TunnelHandle, TunnelRequest,
 };
 use crate::storage::{
     delete_profile as storage_delete_profile, get_profile as storage_get_profile,
@@ -703,11 +703,7 @@ async fn establish_live(
             remote_db_port: profile.port as u16,
         })
         .await
-        .map_err(|e| MappedIpcError {
-            kind: IpcErrorKind::Connection,
-            message: e.to_string(),
-            position: None,
-        })?;
+        .map_err(map_tunnel_error)?;
 
         let local = tunnel.local_addr().ok_or_else(|| MappedIpcError {
             kind: IpcErrorKind::Connection,
@@ -778,6 +774,21 @@ fn not_connected() -> MappedIpcError {
         kind: IpcErrorKind::Connection,
         message: "Not connected.".into(),
         position: None,
+    }
+}
+
+fn map_tunnel_error(err: TunnelError) -> MappedIpcError {
+    match err {
+        TunnelError::Auth(message) => MappedIpcError {
+            kind: IpcErrorKind::Auth,
+            message,
+            position: None,
+        },
+        TunnelError::Connection(message) | TunnelError::Io(message) => MappedIpcError {
+            kind: IpcErrorKind::Connection,
+            message,
+            position: None,
+        },
     }
 }
 
@@ -1272,6 +1283,23 @@ mod tests {
         assert_eq!(err.kind, IpcErrorKind::Connection);
         assert_ne!(live, "not-the-live-id");
         assert_eq!(session.fake_postgres().connect_calls(), 0);
+    }
+
+    #[test]
+    fn map_tunnel_error_maps_auth_to_auth_kind() {
+        let err = map_tunnel_error(TunnelError::Auth(
+            "SSH password authentication failed".into(),
+        ));
+        assert_eq!(err.kind, IpcErrorKind::Auth);
+        assert!(err.message.to_lowercase().contains("authentication"));
+    }
+
+    #[test]
+    fn map_tunnel_error_maps_connection_and_io_to_connection_kind() {
+        let conn = map_tunnel_error(TunnelError::Connection("SSH handshake failed".into()));
+        assert_eq!(conn.kind, IpcErrorKind::Connection);
+        let io = map_tunnel_error(TunnelError::Io("Failed to bind local tunnel listener".into()));
+        assert_eq!(io.kind, IpcErrorKind::Connection);
     }
 
     #[tokio::test]
