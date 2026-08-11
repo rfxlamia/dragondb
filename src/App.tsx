@@ -37,6 +37,8 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
   /** Live connection id for in-flight column loads (avoids stale closure). */
   const connectionIdRef = useRef<ConnectionId | null>(null);
   connectionIdRef.current = connectionId;
+  /** Profile id at last disconnect — used to remount when reconnecting a different profile. */
+  const snapshotProfileIdRef = useRef<ProfileId | null>(null);
 
   useEffect(() => {
     mounted.current = true;
@@ -76,15 +78,25 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
   }
 
   function handleConnected(result: ConnectResult): void {
+    const prior = snapshotProfileIdRef.current;
+    snapshotProfileIdRef.current = null;
+    if (prior !== null && prior !== result.profileId) {
+      setCanvasEpoch((epoch) => epoch + 1);
+      setTables([]);
+      setColumnNames([]);
+      setMetadataErrorMessage(null);
+    }
     applyConnected(result);
   }
 
   function handleDisconnected(): void {
     // Lock canvas; preserve cards by not remounting (no canvasEpoch bump).
+    snapshotProfileIdRef.current = profileId;
     clearSession();
   }
 
   function handleSwitchSuccess(result: ConnectResult): void {
+    snapshotProfileIdRef.current = null;
     setCanvasEpoch((epoch) => epoch + 1);
     setTables([]);
     setColumnNames([]);
@@ -94,6 +106,7 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
 
   function handleSwitchFailure(_error: IpcError): void {
     // Panel already shows errorMessage; lock snapshot without remounting.
+    snapshotProfileIdRef.current = null;
     clearSession();
   }
 

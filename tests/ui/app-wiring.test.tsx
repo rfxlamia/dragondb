@@ -99,6 +99,60 @@ describe("App session connect / disconnect / switch", () => {
     expect(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock)).toBeDisabled();
   });
 
+  it("disconnect then connect a different profile remounts canvas empty for B", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    await ipc.saveProfile({
+      profile: {
+        name: "B",
+        host: "db-b",
+        port: 5432,
+        username: "postgres",
+        database: "app",
+        isFavorite: false,
+        sslMode: "prefer",
+        sshEnabled: false,
+        sshHost: null,
+        sshPort: null,
+        sshUsername: null,
+        sshAuthMethod: null,
+        sshPrivateKeyPath: null,
+      },
+      secrets: { password: "pw" },
+    });
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
+    await user.click(await screen.findByTestId(VisualQueryAccessibility.initialAddBlock));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("select")));
+    expect(screen.getByTestId(VisualQueryAccessibility.clauseCard("select"))).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /disconnect/i }));
+    expect(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock)).toBeDisabled();
+
+    await user.click(screen.getByRole("button", { name: /^B$/i }));
+    await user.click(await screen.findByRole("button", { name: /connect/i }));
+    await waitFor(() =>
+      expect(screen.getByText(VisualQueryCopy.emptyCanvasTitle)).toBeInTheDocument(),
+    );
+  });
+
+  it("disconnect then reconnect the same profile keeps the card snapshot", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
+    await user.click(await screen.findByTestId(VisualQueryAccessibility.initialAddBlock));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("select")));
+    expect(screen.getByTestId(VisualQueryAccessibility.clauseCard("select"))).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /disconnect/i }));
+    await user.click(await screen.findByRole("button", { name: /connect/i }));
+    await waitFor(() =>
+      expect(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock)).not.toBeDisabled(),
+    );
+    expect(screen.getByTestId(VisualQueryAccessibility.clauseCard("select"))).toBeInTheDocument();
+  });
+
   it("locks canvas after switch A teardown while connect B is in flight", async () => {
     const user = userEvent.setup();
     const ipc = createMockDragonIpc("happy");
