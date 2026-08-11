@@ -118,29 +118,23 @@ pub async fn list_columns(
 /// Run a simple SQL statement; SELECT returns rows, others set rowsAffected.
 pub async fn run_query(client: &Client, sql: &str) -> Result<QueryResultData, MappedIpcError> {
     let started = Instant::now();
-    let trimmed = sql.trim_start();
-    let is_select = trimmed.len() >= 6 && trimmed[..6].eq_ignore_ascii_case("select");
 
-    if is_select {
-        let rows = client
-            .query(sql, &[])
+    if looks_like_select(sql) {
+        // Prepare first so empty result sets still expose column metadata.
+        let statement = client
+            .prepare(sql)
             .await
             .map_err(|e| map_tokio_postgres_error(&e))?;
-        let duration = started.elapsed();
-        if rows.is_empty() {
-            return Ok(map_query_rows(
-                MappedRowSet {
-                    columns: vec![],
-                    rows: vec![],
-                },
-                duration,
-            ));
-        }
-        let columns: Vec<String> = rows[0]
+        let columns: Vec<String> = statement
             .columns()
             .iter()
             .map(|c| c.name().to_string())
             .collect();
+        let rows = client
+            .query(&statement, &[])
+            .await
+            .map_err(|e| map_tokio_postgres_error(&e))?;
+        let duration = started.elapsed();
         let mapped_rows: Vec<Vec<Value>> = rows
             .iter()
             .map(|row| {
@@ -170,6 +164,49 @@ pub async fn run_query(client: &Client, sql: &str) -> Result<QueryResultData, Ma
     }
 }
 
+/// True when SQL is a row-returning query (SELECT / WITH …), after leading comments.
+fn looks_like_select(sql: &str) -> bool {
+    let stripped = strip_leading_sql_noise(sql);
+    keyword_at(&stripped, "select") || keyword_at(&stripped, "with")
+}
+
+fn strip_leading_sql_noise(sql: &str) -> String {
+    let mut s = sql.trim_start();
+    loop {
+        if s.starts_with("--") {
+            match s.find('\n') {
+                Some(pos) => {
+                    s = s[pos + 1..].trim_start();
+                    continue;
+                }
+                None => return String::new(),
+            }
+        }
+        if s.starts_with("/*") {
+            match s.find("*/") {
+                Some(pos) => {
+                    s = s[pos + 2..].trim_start();
+                    continue;
+                }
+                None => return String::new(),
+            }
+        }
+        break;
+    }
+    s.to_string()
+}
+
+fn keyword_at(s: &str, keyword: &str) -> bool {
+    let len = keyword.len();
+    if s.len() < len || !s[..len].eq_ignore_ascii_case(keyword) {
+        return false;
+    }
+    match s.as_bytes().get(len) {
+        None => true,
+        Some(b) => b.is_ascii_whitespace() || *b == b'(',
+    }
+}
+
 fn cell_value(row: &tokio_postgres::Row, idx: usize) -> Value {
     let col = &row.columns()[idx];
     match *col.type_() {
@@ -179,13 +216,32 @@ fn cell_value(row: &tokio_postgres::Row, idx: usize) -> Value {
             .flatten()
             .map(Value::Bool)
             .unwrap_or(Value::Null),
-        Type::INT2 | Type::INT4 | Type::INT8 => row
+        // FromSql accepts are type-exact — decode native widths then widen.
+        Type::INT2 => row
+            .try_get::<_, Option<i16>>(idx)
+            .ok()
+            .flatten()
+            .map(|v| Value::Int(i64::from(v)))
+            .unwrap_or(Value::Null),
+        Type::INT4 => row
+            .try_get::<_, Option<i32>>(idx)
+            .ok()
+            .flatten()
+            .map(|v| Value::Int(i64::from(v)))
+            .unwrap_or(Value::Null),
+        Type::INT8 => row
             .try_get::<_, Option<i64>>(idx)
             .ok()
             .flatten()
             .map(Value::Int)
             .unwrap_or(Value::Null),
-        Type::FLOAT4 | Type::FLOAT8 => row
+        Type::FLOAT4 => row
+            .try_get::<_, Option<f32>>(idx)
+            .ok()
+            .flatten()
+            .map(|v| Value::Float(f64::from(v)))
+            .unwrap_or(Value::Null),
+        Type::FLOAT8 => row
             .try_get::<_, Option<f64>>(idx)
             .ok()
             .flatten()
@@ -237,6 +293,31 @@ mod tests {
         );
         assert_eq!(mapped.rows.len(), 0);
         assert_eq!(mapped.duration_ms, 5);
+    }
+
+    #[test]
+    fn empty_select_row_set_keeps_column_names() {
+        let mapped = map_query_rows(
+            MappedRowSet {
+                columns: vec!["id".into(), "name".into()],
+                rows: vec![],
+            },
+            Duration::from_millis(1),
+        );
+        assert_eq!(mapped.columns, vec!["id", "name"]);
+        assert!(mapped.rows.is_empty());
+    }
+
+    #[test]
+    fn looks_like_select_handles_comments_and_with() {
+        assert!(looks_like_select("SELECT 1"));
+        assert!(looks_like_select("  select id from t"));
+        assert!(looks_like_select("-- comment\nSELECT 1"));
+        assert!(looks_like_select("/* block */\nSELECT 1"));
+        assert!(looks_like_select("WITH cte AS (SELECT 1) SELECT * FROM cte"));
+        assert!(!looks_like_select("INSERT INTO t VALUES (1)"));
+        assert!(!looks_like_select("UPDATE t SET x = 1"));
+        assert!(!looks_like_select("SELECTIVE_NAME"));
     }
 
     #[test]
