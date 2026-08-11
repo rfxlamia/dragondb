@@ -99,6 +99,60 @@ describe("App session connect / disconnect / switch", () => {
     expect(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock)).toBeDisabled();
   });
 
+  it("locks canvas after switch A teardown while connect B is in flight", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    await ipc.saveProfile({
+      profile: {
+        name: "B",
+        host: "db-b",
+        port: 5432,
+        username: "postgres",
+        database: "app",
+        isFavorite: false,
+        sslMode: "prefer",
+        sshEnabled: false,
+        sshHost: null,
+        sshPort: null,
+        sshUsername: null,
+        sshAuthMethod: null,
+        sshPrivateKeyPath: null,
+      },
+      secrets: { password: "pw" },
+    });
+    let releaseConnect!: () => void;
+    const connectGate = new Promise<void>((resolve) => {
+      releaseConnect = resolve;
+    });
+    const realConnect = ipc.connectProfile.bind(ipc);
+    let connectCalls = 0;
+    ipc.connectProfile = async (id) => {
+      connectCalls += 1;
+      if (connectCalls > 1) {
+        await connectGate;
+      }
+      return realConnect(id);
+    };
+
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
+    await user.click(await screen.findByTestId(VisualQueryAccessibility.initialAddBlock));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("select")));
+    expect(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock)).not.toBeDisabled();
+
+    await user.click(screen.getByRole("button", { name: /^B$/i }));
+    await user.click(screen.getByRole("button", { name: /confirm switch/i }));
+    await waitFor(() =>
+      expect(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock)).toBeDisabled(),
+    );
+    expect(screen.getByTestId(VisualQueryAccessibility.clauseCard("select"))).toBeInTheDocument();
+
+    releaseConnect();
+    await waitFor(() =>
+      expect(screen.getByText(VisualQueryCopy.emptyCanvasTitle)).toBeInTheDocument(),
+    );
+  });
+
   it("successful switch remounts canvas empty for B", async () => {
     const user = userEvent.setup();
     const ipc = createMockDragonIpc("happy");

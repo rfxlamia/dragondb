@@ -192,6 +192,7 @@ export function ConnectionPanel(props: ConnectionPanelProps): React.JSX.Element 
     // A torn down — clear claim before attempting B.
     setSessionClaimed(false);
     setConnectedProfileId(null);
+    onDisconnected();
     try {
       const result = await ipc.connectProfile(targetId);
       setSessionClaimed(true);

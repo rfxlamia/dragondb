@@ -110,6 +110,54 @@ describe("ConnectionPanel Save-then-Connect", () => {
     await waitFor(() => expect(onDisconnected).toHaveBeenCalled());
   });
 
+  it("calls onDisconnected after A teardown during switch before connect B settles", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    const a = await ipc.saveProfile({
+      profile: { ...baseProfileFields(), name: "A" },
+      secrets: { password: "pw" },
+    });
+    const b = await ipc.saveProfile({
+      profile: { ...baseProfileFields(), name: "B", host: "db-b" },
+      secrets: { password: "pw" },
+    });
+    await ipc.connectProfile(a.id);
+
+    let releaseConnect!: () => void;
+    const connectGate = new Promise<void>((resolve) => {
+      releaseConnect = resolve;
+    });
+    const realConnect = ipc.connectProfile.bind(ipc);
+    ipc.connectProfile = async (id) => {
+      await connectGate;
+      return realConnect(id);
+    };
+
+    const onDisconnected = vi.fn();
+    const onSwitchSuccess = vi.fn();
+    render(
+      <ConnectionPanel
+        ipc={ipc}
+        isConnected={true}
+        activeProfileId={a.id}
+        onConnected={vi.fn()}
+        onDisconnected={onDisconnected}
+        onSwitchSuccess={onSwitchSuccess}
+        onSwitchFailure={vi.fn()}
+      />,
+    );
+
+    await user.click(await screen.findByRole("button", { name: /^B$/i }));
+    await user.click(screen.getByRole("button", { name: /confirm|switch/i }));
+    await waitFor(() => expect(onDisconnected).toHaveBeenCalledTimes(1));
+    expect(onSwitchSuccess).not.toHaveBeenCalled();
+
+    releaseConnect();
+    await waitFor(() =>
+      expect(onSwitchSuccess).toHaveBeenCalledWith(expect.objectContaining({ profileId: b.id })),
+    );
+  });
+
   it("switch A→B success calls onSwitchSuccess; B failure after A teardown calls onSwitchFailure", async () => {
     const user = userEvent.setup();
     const ipc = createMockDragonIpc("happy");
