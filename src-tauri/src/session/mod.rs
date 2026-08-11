@@ -1357,6 +1357,69 @@ mod tests {
         assert_eq!(disconnected.fake_storage().history_count(), 0);
     }
 
+    // T12 finer history characterization (existing FakeDeps only; may PASS first run).
+    #[tokio::test]
+    async fn run_query_success_writes_history_with_sql_duration_and_row_count() {
+        let mut session = AppSession::with_fakes(FakeDeps::connected_direct());
+        let cid = session.active_connection_id().unwrap().to_string();
+        session
+            .run_query(
+                &cid,
+                ExecutableSql {
+                    text: "SELECT id FROM users".into(),
+                    params: vec![],
+                },
+            )
+            .await
+            .expect("ok");
+        let row = session.fake_storage().last_history().expect("history row");
+        assert!(row.success);
+        assert_eq!(row.sql, "SELECT id FROM users");
+        assert!(row.duration_ms >= 0);
+        // sample_query_result returns 1 row
+        assert_eq!(row.row_count, Some(1));
+    }
+
+    #[tokio::test]
+    async fn run_query_db_error_after_attempt_writes_failed_history_row() {
+        let mut session = AppSession::with_fakes(FakeDeps::connected_query_fails());
+        let cid = session.active_connection_id().unwrap().to_string();
+        let _ = session
+            .run_query(
+                &cid,
+                ExecutableSql {
+                    text: "SELECT * FROM secrets".into(),
+                    params: vec![],
+                },
+            )
+            .await;
+        let row = session.fake_storage().last_history().expect("failed history");
+        assert!(!row.success);
+        assert!(
+            row.error_message
+                .as_deref()
+                .unwrap_or("")
+                .to_lowercase()
+                .contains("syntax")
+        );
+        assert_eq!(row.sql, "SELECT * FROM secrets");
+    }
+
+    #[tokio::test]
+    async fn disconnected_run_query_does_not_insert_history() {
+        let mut session = AppSession::with_fakes(FakeDeps::disconnected());
+        let _ = session
+            .run_query(
+                "none",
+                ExecutableSql {
+                    text: "SELECT 1".into(),
+                    params: vec![],
+                },
+            )
+            .await;
+        assert_eq!(session.fake_storage().history_count(), 0);
+    }
+
     #[tokio::test]
     async fn connect_profile_returns_opaque_connection_id_distinct_from_profile_id() {
         let mut session = AppSession::with_fakes(FakeDeps::with_saved_profile("p-uuid"));
