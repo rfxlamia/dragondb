@@ -245,6 +245,11 @@ impl AppSession {
                 } else {
                     None
                 };
+                let prior_secrets = if !is_create {
+                    keyring.get_secrets(&id).ok()
+                } else {
+                    None
+                };
                 {
                     let guard = db.lock().map_err(|_| MappedIpcError {
                         kind: IpcErrorKind::Unknown,
@@ -261,9 +266,15 @@ impl AppSession {
                                 let _ = storage_delete_profile(&guard, &id);
                             }
                             let _ = keyring.delete_all_for_profile(&id);
-                        } else if let Some(prior) = prior {
-                            if let Ok(guard) = db.lock() {
-                                let _ = upsert_profile(&guard, &prior);
+                        } else {
+                            if let Some(prior) = prior {
+                                if let Ok(guard) = db.lock() {
+                                    let _ = upsert_profile(&guard, &prior);
+                                }
+                            }
+                            let _ = keyring.delete_all_for_profile(&id);
+                            if let Some(prior_secrets) = prior_secrets {
+                                let _ = keyring.set_secrets(&id, &prior_secrets);
                             }
                         }
                         Err(keyring_err(e))
@@ -276,6 +287,11 @@ impl AppSession {
                 } else {
                     None
                 };
+                let prior_secrets = if !is_create {
+                    d.keyring.get_secrets(&id).ok()
+                } else {
+                    None
+                };
                 d.storage.upsert(&row);
                 match d.keyring.set_secrets(&id, &secrets) {
                     Ok(()) => Ok(row),
@@ -283,8 +299,17 @@ impl AppSession {
                         if is_create {
                             d.storage.delete(&id);
                             d.keyring.delete_all(&id);
-                        } else if let Some(prior) = prior {
-                            d.storage.upsert(&prior);
+                        } else {
+                            if let Some(prior) = prior {
+                                d.storage.upsert(&prior);
+                            }
+                            d.keyring.delete_all(&id);
+                            if let Some(prior_secrets) = prior_secrets {
+                                // Clear fail flag so restore write can succeed.
+                                d.keyring.fail_after_password = false;
+                                d.keyring.fail_set = false;
+                                let _ = d.keyring.set_secrets(&id, &prior_secrets);
+                            }
                         }
                         Err(e)
                     }
@@ -922,6 +947,12 @@ impl FakeDeps {
         deps
     }
 
+    pub fn keyring_partial_set_fails(profile_id: &str) -> Self {
+        let mut deps = Self::with_saved_profile(profile_id);
+        deps.keyring.fail_after_password = true;
+        deps
+    }
+
     pub fn with_saved_profile(profile_id: &str) -> Self {
         let storage = FakeStorage::default();
         storage.upsert(&sample_row(profile_id, false));
@@ -1170,6 +1201,8 @@ impl FakeStorage {
 pub struct FakeKeyring {
     store: StdMutex<HashMap<String, ProfileSecrets>>,
     fail_set: bool,
+    /// Write password slot then fail — simulates partial OS keyring write.
+    fail_after_password: bool,
 }
 
 impl FakeKeyring {
@@ -1190,6 +1223,20 @@ impl FakeKeyring {
             return Err(MappedIpcError {
                 kind: IpcErrorKind::Unknown,
                 message: "Keyring error: injected set failure.".into(),
+                position: None,
+            });
+        }
+        if self.fail_after_password {
+            if let Ok(mut g) = self.store.lock() {
+                let mut current = g.get(profile_id).cloned().unwrap_or_default();
+                if let Some(ref password) = secrets.password {
+                    current.password = Some(password.clone());
+                }
+                g.insert(profile_id.to_string(), current);
+            }
+            return Err(MappedIpcError {
+                kind: IpcErrorKind::Unknown,
+                message: "Keyring error: injected partial set failure.".into(),
                 position: None,
             });
         }
@@ -1412,6 +1459,37 @@ mod tests {
             .expect_err("keyring fail");
         assert!(matches!(err.kind, IpcErrorKind::Unknown | IpcErrorKind::Auth));
         assert_eq!(session.fake_storage().profile_count(), 0);
+    }
+
+    #[tokio::test]
+    async fn save_profile_update_rolls_back_keyring_after_partial_write_failure() {
+        let profile_id = "p-update";
+        let mut session = AppSession::with_fakes(FakeDeps::keyring_partial_set_fails(profile_id));
+
+        let err = session
+            .save_profile(SaveProfileInput {
+                id: Some(profile_id.to_string()),
+                profile: sample_profile_fields(),
+                secrets: ProfileSecretsInput {
+                    password: Some("new-pw".into()),
+                    ssh_password: Some("ssh-new".into()),
+                    ..Default::default()
+                },
+            })
+            .await
+            .expect_err("partial keyring fail");
+        assert_eq!(err.kind, IpcErrorKind::Unknown);
+
+        let restored = session
+            .fake_keyring()
+            .get_secrets(profile_id)
+            .expect("prior secrets restored");
+        assert_eq!(
+            restored.password.as_deref(),
+            Some("pw"),
+            "partial write must not leave new password"
+        );
+        assert!(restored.ssh_password.is_none());
     }
 
     #[tokio::test]
