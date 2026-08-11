@@ -13,6 +13,7 @@ import {
   emptyConnectionFormValue,
   formValueFromProfile,
 } from "./connection-form";
+import "./connection.css";
 
 export interface ConnectionPanelProps {
   ipc: DragonIpc;
@@ -252,10 +253,12 @@ export function ConnectionPanel(props: ConnectionPanelProps): React.JSX.Element 
       <h2>{ConnectionCopy.panelTitle}</h2>
 
       <div className="connection-panel__profiles">
-        <h3>{ConnectionCopy.profilesHeading}</h3>
-        <button type="button" onClick={startNewProfile}>
-          {ConnectionCopy.newProfile}
-        </button>
+        <div className="connection-panel__profiles-header">
+          <h3>{ConnectionCopy.profilesHeading}</h3>
+          <button type="button" className="connection-panel__new" onClick={startNewProfile}>
+            {ConnectionCopy.newProfile}
+          </button>
+        </div>
         <ul>
           {profiles.map((profile) => (
             <li key={profile.id}>
@@ -279,7 +282,12 @@ export function ConnectionPanel(props: ConnectionPanelProps): React.JSX.Element 
             {ConnectionCopy.disconnect}
           </button>
         ) : (
-          <button type="button" onClick={() => void handleConnect()} disabled={!canConnect}>
+          <button
+            type="button"
+            className="connection-panel__primary"
+            onClick={() => void handleConnect()}
+            disabled={!canConnect}
+          >
             {ConnectionCopy.connect}
           </button>
         )}
@@ -301,30 +309,38 @@ export function ConnectionPanel(props: ConnectionPanelProps): React.JSX.Element 
       {pendingSwitchId !== null ? (
         <div className="connection-panel__confirm" role="dialog" aria-label="Switch connection">
           <p>{ConnectionCopy.switchPrompt}</p>
-          <button type="button" onClick={() => void confirmSwitch()} disabled={busy}>
-            {ConnectionCopy.confirmSwitch}
-          </button>
-          <button type="button" onClick={() => setPendingSwitchId(null)} disabled={busy}>
-            {ConnectionCopy.cancel}
-          </button>
+          <div className="connection-panel__confirm-actions">
+            <button type="button" onClick={() => void confirmSwitch()} disabled={busy}>
+              {ConnectionCopy.confirmSwitch}
+            </button>
+            <button type="button" onClick={() => setPendingSwitchId(null)} disabled={busy}>
+              {ConnectionCopy.cancel}
+            </button>
+          </div>
         </div>
       ) : null}
 
       {pendingDeleteId !== null ? (
         <div className="connection-panel__confirm" role="dialog" aria-label="Delete profile">
           <p>{ConnectionCopy.deletePrompt}</p>
-          <button type="button" onClick={() => void confirmDelete()} disabled={busy}>
-            {ConnectionCopy.confirmDelete}
-          </button>
-          <button type="button" onClick={() => setPendingDeleteId(null)} disabled={busy}>
-            {ConnectionCopy.cancel}
-          </button>
+          <div className="connection-panel__confirm-actions">
+            <button type="button" onClick={() => void confirmDelete()} disabled={busy}>
+              {ConnectionCopy.confirmDelete}
+            </button>
+            <button type="button" onClick={() => setPendingDeleteId(null)} disabled={busy}>
+              {ConnectionCopy.cancel}
+            </button>
+          </div>
         </div>
       ) : null}
 
-      {errorMessage ? <p role="status">{errorMessage}</p> : null}
+      {errorMessage ? (
+        <p className="connection-panel__status" role="status">
+          {errorMessage}
+        </p>
+      ) : null}
       {!canConnect && !sessionClaimed && selectedId === null ? (
-        <p>{ConnectionCopy.connectHint}</p>
+        <p className="connection-panel__hint">{ConnectionCopy.connectHint}</p>
       ) : null}
     </section>
   );

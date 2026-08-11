@@ -1,0 +1,247 @@
+/* Connection panel — tidy layout using creative-brief tokens (mirror visual-query field chrome). */
+
+.connection-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.connection-panel h2 {
+  color: var(--neutral-900);
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.connection-panel h3 {
+  color: var(--neutral-700);
+  font-family: var(--font-sans);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.connection-panel__profiles {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.connection-panel__profiles-header {
+  align-items: center;
+  display: flex;
+  gap: 0.5rem;
+  justify-content: space-between;
+}
+
+.connection-panel__profiles ul {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.connection-panel__profiles li button {
+  background: oklch(1 0 0);
+  border: 1px solid var(--neutral-300);
+  border-radius: var(--radius);
+  color: var(--neutral-900);
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  padding: 6px 8px;
+  text-align: left;
+  width: 100%;
+}
+
+.connection-panel__profiles li button:hover {
+  border-color: var(--neutral-400);
+}
+
+.connection-panel__new {
+  background: transparent;
+  border: 1px solid var(--neutral-300);
+  border-radius: var(--radius);
+  color: var(--primary-700);
+  cursor: pointer;
+  flex-shrink: 0;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  padding: 4px 8px;
+  white-space: nowrap;
+}
+
+.connection-panel__new:hover {
+  background: var(--primary-100);
+}
+
+.connection-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.connection-form__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.connection-form__field > span,
+.connection-form__check > span {
+  color: var(--neutral-700);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.connection-form__field input,
+.connection-form__field select {
+  appearance: none;
+  background: oklch(1 0 0);
+  border: 1px solid var(--neutral-300);
+  border-radius: var(--radius);
+  box-sizing: border-box;
+  color: var(--neutral-900);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.4;
+  padding: 6px 8px;
+  width: 100%;
+}
+
+.connection-form__field input:hover,
+.connection-form__field select:hover {
+  border-color: var(--neutral-400);
+}
+
+.connection-form__row {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: minmax(0, 1fr) 5.5rem;
+}
+
+.connection-form__check {
+  align-items: center;
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+}
+
+.connection-form__check input[type="checkbox"] {
+  accent-color: var(--primary-600);
+  height: 1rem;
+  margin: 0;
+  width: 1rem;
+}
+
+.connection-form__ssh {
+  border: 1px solid var(--neutral-300);
+  border-radius: var(--radius);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.75rem;
+}
+
+.connection-form__ssh-title {
+  color: var(--neutral-700);
+  font-family: var(--font-sans);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.connection-panel__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.connection-panel__actions button {
+  background: oklch(1 0 0);
+  border: 1px solid var(--neutral-300);
+  border-radius: var(--radius);
+  color: var(--neutral-900);
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  padding: 6px 10px;
+}
+
+.connection-panel__actions button:hover:not(:disabled) {
+  border-color: var(--neutral-400);
+}
+
+.connection-panel__actions button:disabled {
+  background: var(--neutral-200);
+  color: var(--neutral-600);
+  cursor: not-allowed;
+}
+
+.connection-panel__actions button.connection-panel__primary {
+  background: var(--primary-600);
+  border-color: var(--primary-600);
+  color: oklch(1 0 0);
+}
+
+.connection-panel__actions button.connection-panel__primary:hover:not(:disabled) {
+  background: var(--primary-700);
+  border-color: var(--primary-700);
+}
+
+.connection-panel__confirm {
+  background: var(--neutral-100);
+  border: 1px solid var(--neutral-300);
+  border-radius: var(--radius);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem;
+}
+
+.connection-panel__confirm p {
+  color: var(--neutral-800);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  margin: 0;
+}
+
+.connection-panel__confirm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.connection-panel__confirm-actions button {
+  background: oklch(1 0 0);
+  border: 1px solid var(--neutral-300);
+  border-radius: var(--radius);
+  color: var(--neutral-900);
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  padding: 6px 10px;
+}
+
+.connection-panel__status {
+  color: var(--error-text);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  margin: 0;
+}
+
+.connection-panel__hint {
+  color: var(--neutral-600);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  margin: 0;
+}
