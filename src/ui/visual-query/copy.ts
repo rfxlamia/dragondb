@@ -194,6 +194,10 @@ export const VisualQueryCopy = {
   allColumnsTitle: "All columns",
   addBlockTitle: "Add block",
   runQueryTitle: "Run query",
+  runSelectOnlyMessage: "Only SELECT queries can run for now.",
+  runSuccessStatus(rowCount: number, durationMs: number): string {
+    return `OK / ${rowCount} rows / ${durationMs} ms`;
+  },
   confirmCreateTitle: "Create this table?",
   confirmCreateContinueTitle: "Continue",
   confirmCreateCancelTitle: "Cancel",
