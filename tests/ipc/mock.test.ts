@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { createMockDragonIpc, FIXTURE_CONNECTION_ID } from "../../src/ipc/mock";
+import {
+  createMockDragonIpc,
+  FIXTURE_CONNECTION_ID,
+  fixtureProfileFields,
+} from "../../src/ipc/mock";
 import { coreToTableRef, formatTableDisplayName, tableRefToCore } from "../../src/ipc/table-ref";
 
 describe("mock DragonIpc", () => {
@@ -66,5 +70,50 @@ describe("table ref helpers", () => {
     expect(formatTableDisplayName({ schema: "analytics", name: "events" })).toBe(
       "analytics.events",
     );
+  });
+});
+
+describe("mock DragonIpc profile + connect surface", () => {
+  it("listProfiles / getProfile / saveProfile / deleteProfile round-trip", async () => {
+    const ipc = createMockDragonIpc("happy");
+    expect(await ipc.listProfiles()).toEqual([]);
+
+    const saved = await ipc.saveProfile({
+      profile: { ...fixtureProfileFields(), name: "dev" },
+      secrets: { password: "pw" },
+    });
+    expect(saved.id).toBeTruthy();
+    expect(saved).not.toHaveProperty("password");
+    expect(await ipc.listProfiles()).toHaveLength(1);
+    expect(await ipc.getProfile(saved.id)).toEqual(saved);
+
+    const updated = await ipc.saveProfile({
+      id: saved.id,
+      profile: { ...fixtureProfileFields(), name: "dev", host: "db.internal" },
+      secrets: { password: "pw" },
+    });
+    expect(updated.id).toBe(saved.id);
+    expect(updated.host).toBe("db.internal");
+
+    await ipc.deleteProfile(saved.id);
+    expect(await ipc.getProfile(saved.id)).toBeNull();
+    expect(await ipc.listProfiles()).toEqual([]);
+  });
+
+  it("connectProfile returns opaque connectionId distinct from profileId", async () => {
+    const ipc = createMockDragonIpc("happy");
+    const saved = await ipc.saveProfile({
+      profile: { ...fixtureProfileFields(), name: null, sslMode: "disable" },
+      secrets: { password: "pw" },
+    });
+    const result = await ipc.connectProfile(saved.id);
+    expect(result.profileId).toBe(saved.id);
+    expect(result.connectionId).toBeTruthy();
+    expect(result.connectionId).not.toBe(result.profileId);
+    await ipc.disconnect();
+  });
+
+  it("exports FIXTURE_CONNECTION_ID for tests only (still present)", () => {
+    expect(FIXTURE_CONNECTION_ID).toBe("fixture");
   });
 });
