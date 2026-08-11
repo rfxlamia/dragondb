@@ -33,6 +33,7 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
   const [metadataErrorMessage, setMetadataErrorMessage] = useState<string | null>(null);
 
   const columnGeneration = useRef(0);
+  const tableGeneration = useRef(0);
   const mounted = useRef(true);
   /** Live connection id for in-flight column loads (avoids stale closure). */
   const connectionIdRef = useRef<ConnectionId | null>(null);
@@ -45,17 +46,19 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
     return () => {
       mounted.current = false;
       columnGeneration.current += 1;
+      tableGeneration.current += 1;
     };
   }, []);
 
   function loadTables(cid: ConnectionId): void {
+    const generation = ++tableGeneration.current;
     void ipc.listTables(cid).then(
       (rows) => {
-        if (!mounted.current) return;
+        if (!mounted.current || generation !== tableGeneration.current) return;
         setTables(rows.map(tableRefToCore));
       },
       () => {
-        if (!mounted.current) return;
+        if (!mounted.current || generation !== tableGeneration.current) return;
         setTables([]);
         setMetadataErrorMessage(VisualQueryCopy.tablesLoadError);
       },

@@ -39,13 +39,33 @@ pub struct ExecutableSql {
 }
 
 /// Secrets accepted on save (never written to sqlite).
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProfileSecretsInput {
     pub password: Option<String>,
     pub ssh_password: Option<String>,
     pub ssh_passphrase: Option<String>,
     pub ssh_private_key: Option<String>,
+}
+
+impl std::fmt::Debug for ProfileSecretsInput {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ProfileSecretsInput")
+            .field("password", &self.password.as_ref().map(|_| "<redacted>"))
+            .field(
+                "ssh_password",
+                &self.ssh_password.as_ref().map(|_| "<redacted>"),
+            )
+            .field(
+                "ssh_passphrase",
+                &self.ssh_passphrase.as_ref().map(|_| "<redacted>"),
+            )
+            .field(
+                "ssh_private_key",
+                &self.ssh_private_key.as_ref().map(|_| "<redacted>"),
+            )
+            .finish()
+    }
 }
 
 /// Profile fields without id (create/update body).
@@ -258,7 +278,11 @@ impl AppSession {
                     None
                 };
                 let prior_secrets = if !is_create {
-                    keyring.get_secrets(&id).ok()
+                    match keyring.get_secrets(&id) {
+                        Ok(s) => Some(s),
+                        Err(KeyringStoreError::NotFound { .. }) => None,
+                        Err(e) => return Err(keyring_err(e)),
+                    }
                 } else {
                     None
                 };
@@ -361,6 +385,11 @@ impl AppSession {
         }
         match &mut self.backend {
             Backend::Production { db, keyring } => {
+                // Delete keyring first so a keyring failure cannot orphan secrets
+                // after the sqlite row is already gone.
+                keyring
+                    .delete_all_for_profile(id)
+                    .map_err(keyring_err)?;
                 {
                     let guard = db.lock().map_err(|_| MappedIpcError {
                         kind: IpcErrorKind::Unknown,
@@ -369,14 +398,11 @@ impl AppSession {
                     })?;
                     storage_delete_profile(&guard, id).map_err(sqlite_err)?;
                 }
-                keyring
-                    .delete_all_for_profile(id)
-                    .map_err(keyring_err)?;
                 Ok(())
             }
             Backend::Fake(d) => {
-                d.storage.delete(id);
                 d.keyring.delete_all(id);
+                d.storage.delete(id);
                 Ok(())
             }
         }
@@ -690,8 +716,16 @@ impl AppSession {
 
     fn load_secrets(&self, profile_id: &str) -> Result<ProfileSecrets, MappedIpcError> {
         match &self.backend {
-            Backend::Production { keyring, .. } => keyring.get_secrets(profile_id).map_err(keyring_err),
-            Backend::Fake(d) => d.keyring.get_secrets(profile_id),
+            Backend::Production { keyring, .. } => match keyring.get_secrets(profile_id) {
+                Ok(s) => Ok(s),
+                // Passwordless / empty keyring is a valid connect path (empty password).
+                Err(KeyringStoreError::NotFound { .. }) => Ok(ProfileSecrets::default()),
+                Err(e) => Err(keyring_err(e)),
+            },
+            Backend::Fake(d) => match d.keyring.get_secrets(profile_id) {
+                Ok(s) => Ok(s),
+                Err(_) => Ok(ProfileSecrets::default()),
+            },
         }
     }
 

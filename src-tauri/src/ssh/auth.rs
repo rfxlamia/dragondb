@@ -7,7 +7,7 @@
 use thiserror::Error;
 
 /// Raw auth inputs from the session / keyring layer.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub enum SshAuthInput {
     Password { password: String },
     PrivateKey {
@@ -16,14 +16,40 @@ pub enum SshAuthInput {
     },
 }
 
+impl std::fmt::Debug for SshAuthInput {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Password { .. } => f.write_str("Password { password: <redacted> }"),
+            Self::PrivateKey { passphrase, .. } => f
+                .debug_struct("PrivateKey")
+                .field("key_contents", &"<redacted>")
+                .field("passphrase", &passphrase.as_ref().map(|_| "<redacted>"))
+                .finish(),
+        }
+    }
+}
+
 /// Validated auth ready for tunnel connect (contents still unparsed for key path).
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub enum PreparedAuth {
     Password(String),
     PrivateKey {
         key_contents: String,
         passphrase: Option<String>,
     },
+}
+
+impl std::fmt::Debug for PreparedAuth {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Password(_) => f.write_str("Password(<redacted>)"),
+            Self::PrivateKey { passphrase, .. } => f
+                .debug_struct("PrivateKey")
+                .field("key_contents", &"<redacted>")
+                .field("passphrase", &passphrase.as_ref().map(|_| "<redacted>"))
+                .finish(),
+        }
+    }
 }
 
 /// Auth preparation / validation errors.

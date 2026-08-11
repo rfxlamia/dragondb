@@ -78,14 +78,18 @@ pub fn list_history(conn: &Connection, limit: i64) -> SqliteResult<Vec<HistoryRo
     Ok(rows)
 }
 
-/// RFC3339-ish UTC timestamp without pulling in chrono (sufficient for ordering).
+/// Epoch milliseconds (UTC) as a decimal string for `created_at` ordering.
+///
+/// Millisecond resolution keeps `ORDER BY created_at DESC` stable for rows
+/// written in the same second. Digit width grows monotonically with time, so
+/// lexicographic comparison on the TEXT column matches numeric order.
 fn chrono_like_utc_now() -> String {
     use std::time::{SystemTime, UNIX_EPOCH};
-    let secs = SystemTime::now()
+    let millis = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_secs())
+        .map(|d| d.as_millis())
         .unwrap_or(0);
-    format!("{secs}")
+    format!("{millis}")
 }
 
 #[cfg(test)]

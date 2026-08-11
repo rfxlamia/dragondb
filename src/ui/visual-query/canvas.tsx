@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ClauseKind, ExecutableSQL, StatementKind, TableReference } from "../../core";
 import { CanvasPresentation, canRun, generateSQL, QueryDocument } from "../../core";
 import type { QueryResult } from "../../ipc/contract";
@@ -62,10 +62,14 @@ export function VisualQueryCanvas(props: VisualQueryCanvasProps): React.JSX.Elem
   const [showStatementPicker, setShowStatementPicker] = useState(false);
   const [showClauseMenu, setShowClauseMenu] = useState(false);
   const [runOutcome, setRunOutcome] = useState<string | null>(null);
+  const [runInFlight, setRunInFlight] = useState(false);
+  const runGeneration = useRef(0);
 
   useEffect(() => {
     if (!isConnected) {
+      runGeneration.current += 1;
       setRunOutcome(null);
+      setRunInFlight(false);
     }
   }, [isConnected]);
 
@@ -124,7 +128,7 @@ export function VisualQueryCanvas(props: VisualQueryCanvasProps): React.JSX.Elem
   }
 
   async function handleRunQuery(): Promise<void> {
-    if (!isConnected || !eligibility.isRunnable) return;
+    if (!isConnected || !eligibility.isRunnable || runInFlight) return;
 
     if (doc.statementKind !== "select") {
       setRunOutcome(VisualQueryCopy.runSelectOnlyMessage);
@@ -134,11 +138,19 @@ export function VisualQueryCanvas(props: VisualQueryCanvasProps): React.JSX.Elem
     const generated = generateSQL(doc);
     if (generated === null || onRunQuery === undefined) return;
 
+    const generation = ++runGeneration.current;
+    setRunInFlight(true);
     try {
       const result = await onRunQuery(generated.exec);
+      if (generation !== runGeneration.current) return;
       setRunOutcome(VisualQueryCopy.runSuccessStatus(result.rows.length, result.durationMs));
     } catch (error) {
+      if (generation !== runGeneration.current) return;
       setRunOutcome(isIpcError(error) ? error.message : humanIpcErrorMessage(error));
+    } finally {
+      if (generation === runGeneration.current) {
+        setRunInFlight(false);
+      }
     }
   }
 
@@ -235,7 +247,7 @@ export function VisualQueryCanvas(props: VisualQueryCanvasProps): React.JSX.Elem
         canStartOver={doc.statementKind !== null}
         onStartOver={handleStartOver}
         isConnected={isConnected}
-        canRunQuery={eligibility.isRunnable}
+        canRunQuery={eligibility.isRunnable && !runInFlight}
         onRunQuery={() => {
           void handleRunQuery();
         }}

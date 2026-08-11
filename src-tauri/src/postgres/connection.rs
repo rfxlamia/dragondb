@@ -10,7 +10,7 @@ use super::error::{map_tokio_postgres_error, MappedIpcError};
 use super::ssl::{make_tls_connector, EffectiveTls};
 
 /// Input parameters for building a connect config / opening a client.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct ConnectParams<'a> {
     pub host: &'a str,
     pub port: u16,
@@ -20,8 +20,21 @@ pub struct ConnectParams<'a> {
     pub tls: EffectiveTls,
 }
 
+impl std::fmt::Debug for ConnectParams<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ConnectParams")
+            .field("host", &self.host)
+            .field("port", &self.port)
+            .field("user", &self.user)
+            .field("password", &"<redacted>")
+            .field("database", &self.database)
+            .field("tls", &self.tls)
+            .finish()
+    }
+}
+
 /// Pure connect config seam (unit-testable without a live database).
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct ConnectConfig {
     pub host: String,
     pub port: u16,
@@ -29,6 +42,19 @@ pub struct ConnectConfig {
     pub password: String,
     pub database: String,
     pub tls: EffectiveTls,
+}
+
+impl std::fmt::Debug for ConnectConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ConnectConfig")
+            .field("host", &self.host)
+            .field("port", &self.port)
+            .field("user", &self.user)
+            .field("password", &"<redacted>")
+            .field("database", &self.database)
+            .field("tls", &self.tls)
+            .finish()
+    }
 }
 
 /// Build connect config from params (no network I/O).
@@ -57,6 +83,7 @@ fn to_tokio_config(cfg: &ConnectConfig) -> Config {
     pg.user(&cfg.user);
     pg.password(&cfg.password);
     pg.dbname(&cfg.database);
+    pg.connect_timeout(std::time::Duration::from_secs(10));
     match cfg.tls {
         EffectiveTls::NoTls => {
             pg.ssl_mode(SslMode::Disable);

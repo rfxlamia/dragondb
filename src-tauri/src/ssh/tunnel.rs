@@ -28,7 +28,7 @@ use tokio::task::JoinHandle;
 use super::auth::{parse_private_key_for_russh, PreparedAuth, SshAuthError};
 
 /// Parameters to open a local forward to a remote DB via SSH.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct TunnelRequest {
     pub ssh_host: String,
     pub ssh_port: u16,
@@ -36,6 +36,19 @@ pub struct TunnelRequest {
     pub auth: PreparedAuth,
     pub remote_db_host: String,
     pub remote_db_port: u16,
+}
+
+impl std::fmt::Debug for TunnelRequest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TunnelRequest")
+            .field("ssh_host", &self.ssh_host)
+            .field("ssh_port", &self.ssh_port)
+            .field("ssh_username", &self.ssh_username)
+            .field("auth", &self.auth)
+            .field("remote_db_host", &self.remote_db_host)
+            .field("remote_db_port", &self.remote_db_port)
+            .finish()
+    }
 }
 
 /// Human-facing tunnel / SSH errors (no orphan listener on failure before bind).
@@ -200,12 +213,14 @@ impl TunnelHandle {
             let _ = tx.send(());
         }
         if let Some(session) = self.session.take() {
-            // Best-effort disconnect; ignore errors on teardown.
-            let _ = tokio::spawn(async move {
-                let _ = session
-                    .disconnect(Disconnect::ByApplication, "tunnel shutdown", "en")
-                    .await;
-            });
+            // Best-effort disconnect; `Drop` may run outside a Tokio runtime.
+            if let Ok(handle) = tokio::runtime::Handle::try_current() {
+                handle.spawn(async move {
+                    let _ = session
+                        .disconnect(Disconnect::ByApplication, "tunnel shutdown", "en")
+                        .await;
+                });
+            }
         }
         if let Some(task) = self.accept_task.take() {
             task.abort();
@@ -227,14 +242,23 @@ async fn connect_and_authenticate(
     let config = Arc::new(Config::default());
     let addr = (request.ssh_host.as_str(), request.ssh_port);
 
-    let mut handle = client::connect(config, addr, AcceptAnyHostKey)
-        .await
-        .map_err(|e| {
-            TunnelError::Connection(format!(
-                "Could not connect to SSH host {}:{} — {e}",
-                request.ssh_host, request.ssh_port
-            ))
-        })?;
+    let mut handle = tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        client::connect(config, addr, AcceptAnyHostKey),
+    )
+    .await
+    .map_err(|_| {
+        TunnelError::Connection(format!(
+            "Could not connect to SSH host {}:{} — connection timed out.",
+            request.ssh_host, request.ssh_port
+        ))
+    })?
+    .map_err(|e| {
+        TunnelError::Connection(format!(
+            "Could not connect to SSH host {}:{} — {e}",
+            request.ssh_host, request.ssh_port
+        ))
+    })?;
 
     let auth_ok = match &request.auth {
         PreparedAuth::Password(password) => {

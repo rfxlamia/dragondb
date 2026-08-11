@@ -16,13 +16,13 @@ pub enum EffectiveTls {
 
 /// Collapse UI sslMode into the three effective TLS paths from the SP-2 spec table.
 ///
-/// `allow` and `prefer` are treated as disable (NoTls).
+/// `allow` and `prefer` are treated as disable (NoTls). Unknown / mistyped values
+/// also map to NoTls (UI enums are the source of truth; do not invent TLS).
 pub fn collapse_ssl_mode(mode: &str) -> EffectiveTls {
-    match mode {
+    match mode.trim().to_ascii_lowercase().as_str() {
         "disable" | "allow" | "prefer" => EffectiveTls::NoTls,
         "require" => EffectiveTls::TlsNoVerify,
         "verify-ca" | "verify-full" => EffectiveTls::TlsVerify,
-        // Unknown modes fail closed to NoTls; callers should validate UI enums.
         _ => EffectiveTls::NoTls,
     }
 }
@@ -57,5 +57,7 @@ mod tests {
         assert_eq!(collapse_ssl_mode("require"), EffectiveTls::TlsNoVerify);
         assert_eq!(collapse_ssl_mode("verify-ca"), EffectiveTls::TlsVerify);
         assert_eq!(collapse_ssl_mode("verify-full"), EffectiveTls::TlsVerify);
+        assert_eq!(collapse_ssl_mode("Require"), EffectiveTls::TlsNoVerify);
+        assert_eq!(collapse_ssl_mode(" unknown "), EffectiveTls::NoTls);
     }
 }

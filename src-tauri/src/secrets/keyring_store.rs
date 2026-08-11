@@ -35,12 +35,32 @@ fn account_name(profile_id: &str, slot: &str) -> String {
 }
 
 /// Secret payload for a connection profile. Never persisted to sqlite.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Clone, Default, PartialEq, Eq)]
 pub struct ProfileSecrets {
     pub password: Option<String>,
     pub ssh_password: Option<String>,
     pub ssh_passphrase: Option<String>,
     pub ssh_private_key: Option<String>,
+}
+
+impl std::fmt::Debug for ProfileSecrets {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ProfileSecrets")
+            .field("password", &self.password.as_ref().map(|_| "<redacted>"))
+            .field(
+                "ssh_password",
+                &self.ssh_password.as_ref().map(|_| "<redacted>"),
+            )
+            .field(
+                "ssh_passphrase",
+                &self.ssh_passphrase.as_ref().map(|_| "<redacted>"),
+            )
+            .field(
+                "ssh_private_key",
+                &self.ssh_private_key.as_ref().map(|_| "<redacted>"),
+            )
+            .finish()
+    }
 }
 
 impl ProfileSecrets {

@@ -13,7 +13,7 @@ use super::error::{map_tokio_postgres_error, IpcErrorKind, MappedIpcError};
 pub const LIST_TABLES_SQL: &str = "SELECT table_schema, table_name FROM information_schema.tables WHERE table_type = 'BASE TABLE' AND table_schema NOT IN ('pg_catalog', 'information_schema') ORDER BY table_schema, table_name";
 
 /// Locked Swift-parity catalog query for listing columns of one table.
-pub const LIST_COLUMNS_SQL: &str = "SELECT column_name, data_type, is_nullable, column_default FROM information_schema.columns WHERE table_schema = $1 AND table_name = $2 ORDER BY ordinal_position";
+pub const LIST_COLUMNS_SQL: &str = "SELECT column_name, data_type, is_nullable::text, column_default::text FROM information_schema.columns WHERE table_schema = $1 AND table_name = $2 ORDER BY ordinal_position";
 
 /// Cell value used by the pure row mapper / QueryResult shaping.
 #[derive(Debug, Clone, PartialEq, Serialize)]
