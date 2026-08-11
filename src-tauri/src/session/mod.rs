@@ -102,6 +102,8 @@ struct ActiveSession {
     client: Option<Client>,
     tunnel: Option<TunnelHandle>,
     ssh_enabled: bool,
+    /// Usable live handle (DB client and/or fake live flag). Cleared during oneshot teardown.
+    live: bool,
 }
 
 /// Production or session-local fake backend.
@@ -179,6 +181,15 @@ impl AppSession {
         match &self.backend {
             Backend::Fake(d) => &d.keyring,
             Backend::Production { .. } => panic!("fake_keyring only in fake mode"),
+        }
+    }
+
+    /// Test seam: simulate production state after failed oneshot (`client=None` / `live=false`).
+    #[cfg(test)]
+    pub fn strip_live_handle_for_test(&mut self) {
+        if let Some(active) = self.active.as_mut() {
+            active.client = None;
+            active.live = false;
         }
     }
 
@@ -336,6 +347,7 @@ impl AppSession {
                     client: Some(client),
                     tunnel,
                     ssh_enabled,
+                    live: true,
                 });
             }
             Backend::Fake(d) => {
@@ -352,6 +364,7 @@ impl AppSession {
                     client: None,
                     tunnel: None,
                     ssh_enabled,
+                    live: true,
                 });
             }
         }
@@ -379,46 +392,34 @@ impl AppSession {
     ) -> Result<Vec<TableRefRow>, MappedIpcError> {
         self.require_live(connection_id)?;
         let is_fake = matches!(self.backend, Backend::Fake(_));
-        if is_fake {
-            let first = self.fake_query_probe(false);
-            return match first {
-                Ok(()) => Ok(vec![TableRefRow {
-                    schema: "public".into(),
-                    name: "users".into(),
-                }]),
-                Err(e) if is_connection_kind(&e) => {
-                    self.oneshot_reconnect().await?;
-                    self.fake_query_probe(false)?;
-                    Ok(vec![TableRefRow {
-                        schema: "public".into(),
-                        name: "users".into(),
-                    }])
-                }
-                Err(e) => Err(e),
-            };
-        }
-
-        let first = {
-            let client = self
-                .active
-                .as_ref()
-                .and_then(|a| a.client.as_ref())
-                .ok_or_else(not_connected)?;
-            pg_list_tables(client).await
-        };
+        let first = self.list_tables_once(is_fake).await;
         match first {
             Ok(rows) => Ok(rows),
             Err(e) if is_connection_kind(&e) => {
                 self.oneshot_reconnect().await?;
-                let client = self
-                    .active
-                    .as_ref()
-                    .and_then(|a| a.client.as_ref())
-                    .ok_or_else(not_connected)?;
-                pg_list_tables(client).await
+                self.list_tables_once(is_fake).await
             }
             Err(e) => Err(e),
         }
+    }
+
+    async fn list_tables_once(&mut self, is_fake: bool) -> Result<Vec<TableRefRow>, MappedIpcError> {
+        if !self.has_live_handle() {
+            return Err(not_connected());
+        }
+        if is_fake {
+            self.fake_query_probe(false)?;
+            return Ok(vec![TableRefRow {
+                schema: "public".into(),
+                name: "users".into(),
+            }]);
+        }
+        let client = self
+            .active
+            .as_ref()
+            .and_then(|a| a.client.as_ref())
+            .ok_or_else(not_connected)?;
+        pg_list_tables(client).await
     }
 
     pub async fn list_columns(
@@ -430,40 +431,36 @@ impl AppSession {
         let schema = table.schema.as_deref().unwrap_or("public");
         let table_name = table.name.clone();
         let is_fake = matches!(self.backend, Backend::Fake(_));
-        if is_fake {
-            let first = self.fake_query_probe(false);
-            return match first {
-                Ok(()) => Ok(sample_columns()),
-                Err(e) if is_connection_kind(&e) => {
-                    self.oneshot_reconnect().await?;
-                    self.fake_query_probe(false)?;
-                    Ok(sample_columns())
-                }
-                Err(e) => Err(e),
-            };
-        }
-
-        let first = {
-            let client = self
-                .active
-                .as_ref()
-                .and_then(|a| a.client.as_ref())
-                .ok_or_else(not_connected)?;
-            pg_list_columns(client, schema, &table_name).await
-        };
+        let first = self.list_columns_once(is_fake, schema, &table_name).await;
         match first {
             Ok(rows) => Ok(rows),
             Err(e) if is_connection_kind(&e) => {
                 self.oneshot_reconnect().await?;
-                let client = self
-                    .active
-                    .as_ref()
-                    .and_then(|a| a.client.as_ref())
-                    .ok_or_else(not_connected)?;
-                pg_list_columns(client, schema, &table_name).await
+                self.list_columns_once(is_fake, schema, &table_name).await
             }
             Err(e) => Err(e),
         }
+    }
+
+    async fn list_columns_once(
+        &mut self,
+        is_fake: bool,
+        schema: &str,
+        table_name: &str,
+    ) -> Result<Vec<ColumnInfoRow>, MappedIpcError> {
+        if !self.has_live_handle() {
+            return Err(not_connected());
+        }
+        if is_fake {
+            self.fake_query_probe(false)?;
+            return Ok(sample_columns());
+        }
+        let client = self
+            .active
+            .as_ref()
+            .and_then(|a| a.client.as_ref())
+            .ok_or_else(not_connected)?;
+        pg_list_columns(client, schema, table_name).await
     }
 
     pub async fn run_query(
@@ -518,44 +515,45 @@ impl AppSession {
         &mut self,
         sql: &str,
     ) -> Result<QueryResultData, MappedIpcError> {
+        let first = self.query_once(sql).await;
+        match first {
+            Ok(r) => Ok(r),
+            Err(e) if is_connection_kind(&e) => {
+                self.oneshot_reconnect().await?;
+                self.query_once(sql).await
+            }
+            Err(e) => Err(e),
+        }
+    }
+
+    async fn query_once(&mut self, sql: &str) -> Result<QueryResultData, MappedIpcError> {
+        if !self.has_live_handle() {
+            return Err(not_connected());
+        }
         let is_fake = matches!(self.backend, Backend::Fake(_));
         if is_fake {
             let force_db_err = match &self.backend {
                 Backend::Fake(d) => d.postgres.force_query_fail,
                 Backend::Production { .. } => false,
             };
-            let first = self.fake_query_probe(force_db_err);
-            return match first {
-                Ok(()) => Ok(sample_query_result()),
-                Err(e) if is_connection_kind(&e) => {
-                    self.oneshot_reconnect().await?;
-                    self.fake_query_probe(force_db_err)?;
-                    Ok(sample_query_result())
-                }
-                Err(e) => Err(e),
-            };
+            self.fake_query_probe(force_db_err)?;
+            return Ok(sample_query_result());
         }
+        let client = self
+            .active
+            .as_ref()
+            .and_then(|a| a.client.as_ref())
+            .ok_or_else(not_connected)?;
+        pg_run_query(client, sql).await
+    }
 
-        let first = {
-            let client = self
+    fn has_live_handle(&self) -> bool {
+        match &self.backend {
+            Backend::Fake(_) => self.active.as_ref().is_some_and(|a| a.live),
+            Backend::Production { .. } => self
                 .active
                 .as_ref()
-                .and_then(|a| a.client.as_ref())
-                .ok_or_else(not_connected)?;
-            pg_run_query(client, sql).await
-        };
-        match first {
-            Ok(r) => Ok(r),
-            Err(e) if is_connection_kind(&e) => {
-                self.oneshot_reconnect().await?;
-                let client = self
-                    .active
-                    .as_ref()
-                    .and_then(|a| a.client.as_ref())
-                    .ok_or_else(not_connected)?;
-                pg_run_query(client, sql).await
-            }
-            Err(e) => Err(e),
+                .is_some_and(|a| a.client.is_some() && a.live),
         }
     }
 
@@ -575,6 +573,7 @@ impl AppSession {
             let _ = tunnel.shutdown();
         }
         active.client = None;
+        active.live = false;
 
         let profile = active.profile.clone();
         let secrets = active.secrets.clone();
@@ -586,6 +585,7 @@ impl AppSession {
                 if let Some(a) = self.active.as_mut() {
                     a.client = Some(client);
                     a.tunnel = tunnel;
+                    a.live = true;
                 }
                 Ok(())
             }
@@ -596,6 +596,9 @@ impl AppSession {
                 d.postgres.connect()?;
                 // Clear dead-socket flag after successful rebuild.
                 d.postgres.clear_dead_socket();
+                if let Some(a) = self.active.as_mut() {
+                    a.live = true;
+                }
                 Ok(())
             }
         }
@@ -958,6 +961,7 @@ impl FakeDeps {
                     client: None,
                     tunnel: None,
                     ssh_enabled,
+                    live: true,
                 })
             }
         }
@@ -1020,6 +1024,8 @@ pub struct FakePostgres {
     query_attempts: AtomicU32,
     dead_socket: bool,
     force_query_fail: bool,
+    /// Fail the next N `connect` calls (oneshot rebuild), then succeed.
+    fail_connect_remaining: AtomicU32,
     /// After reconnect clears dead_socket, subsequent queries succeed.
     dead_cleared: StdMutex<bool>,
 }
@@ -1035,6 +1041,15 @@ impl FakePostgres {
 
     fn connect(&self) -> Result<(), MappedIpcError> {
         self.connect_calls.fetch_add(1, Ordering::SeqCst);
+        let prev = self.fail_connect_remaining.load(Ordering::SeqCst);
+        if prev > 0 {
+            self.fail_connect_remaining.store(prev - 1, Ordering::SeqCst);
+            return Err(MappedIpcError {
+                kind: IpcErrorKind::Connection,
+                message: "Connection error: injected connect failure.".into(),
+                position: None,
+            });
+        }
         Ok(())
     }
 
@@ -1293,6 +1308,64 @@ mod tests {
         assert_eq!(session.fake_ssh().open_calls(), 0);
         assert_eq!(session.fake_postgres().connect_calls(), 1);
         assert_eq!(session.fake_postgres().query_attempts(), 2);
+    }
+
+    #[tokio::test]
+    async fn missing_live_handle_while_connected_triggers_oneshot_on_run_query() {
+        let mut session = AppSession::with_fakes(FakeDeps::connected_direct());
+        session.strip_live_handle_for_test();
+        let cid = session.active_connection_id().expect("still connected").to_string();
+        session
+            .run_query(
+                &cid,
+                ExecutableSql {
+                    text: "SELECT 1".into(),
+                    params: vec![],
+                },
+            )
+            .await
+            .expect("oneshot rebuild while Connected");
+        assert_eq!(
+            session.fake_postgres().connect_calls(),
+            1,
+            "missing live handle must attempt oneshot rebuild, not bare not_connected"
+        );
+    }
+
+    #[tokio::test]
+    async fn after_failed_oneshot_subsequent_run_retries_rebuild() {
+        let mut deps = FakeDeps::connected_direct_with_dead_socket();
+        deps.postgres.fail_connect_remaining = AtomicU32::new(1);
+        let mut session = AppSession::with_fakes(deps);
+        let cid = session.active_connection_id().unwrap().to_string();
+        let err = session
+            .run_query(
+                &cid,
+                ExecutableSql {
+                    text: "SELECT 1".into(),
+                    params: vec![],
+                },
+            )
+            .await
+            .expect_err("first oneshot connect fails");
+        assert_eq!(err.kind, IpcErrorKind::Connection);
+        assert!(
+            session.active_connection_id().is_some(),
+            "failed oneshot must keep Connected claim"
+        );
+        assert_eq!(session.fake_postgres().connect_calls(), 1);
+
+        session
+            .run_query(
+                &cid,
+                ExecutableSql {
+                    text: "SELECT 1".into(),
+                    params: vec![],
+                },
+            )
+            .await
+            .expect("second call retries oneshot");
+        assert_eq!(session.fake_postgres().connect_calls(), 2);
     }
 
     #[tokio::test]
