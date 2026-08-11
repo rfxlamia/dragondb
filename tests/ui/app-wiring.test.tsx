@@ -1,57 +1,186 @@
 /** @vitest-environment jsdom */
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-const mockFactories = vi.hoisted(() => ({ createMockDragonIpc: vi.fn() }));
+vi.mock("../../src/ipc/tauri-client", () => ({
+  createTauriDragonIpc: vi.fn(() => {
+    throw new Error("production default must not invoke Tauri in unit tests without inject");
+  }),
+}));
 
-vi.mock("../../src/ipc/mock", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../../src/ipc/mock")>();
-  mockFactories.createMockDragonIpc.mockImplementation(actual.createMockDragonIpc);
-  return { ...actual, createMockDragonIpc: mockFactories.createMockDragonIpc };
-});
-
+import type { UserEvent } from "@testing-library/user-event";
 import App from "../../src/App";
-import { createMockDragonIpc } from "../../src/ipc/mock";
+import type { DragonIpc } from "../../src/ipc/contract";
+import { createMockDragonIpc, FIXTURE_CONNECTION_ID } from "../../src/ipc/mock";
 import { VisualQueryAccessibility } from "../../src/ui/visual-query/accessibility";
 import { VisualQueryCopy } from "../../src/ui/visual-query/copy";
 
-afterEach(() => {
-  cleanup();
-});
+afterEach(() => cleanup());
 
-describe("App wiring", () => {
-  beforeEach(() => {
-    // The module-level default was created during import; calls after this point
-    // would prove the factory leaked back into render.
-    mockFactories.createMockDragonIpc.mockClear();
+async function connectFirst(user: UserEvent, _ipc: DragonIpc): Promise<void> {
+  await user.type(screen.getByLabelText(/host/i), "127.0.0.1");
+  await user.type(screen.getByLabelText(/username/i), "postgres");
+  await user.type(screen.getByLabelText(/database/i), "app");
+  await user.type(screen.getByLabelText(/^password$/i), "pw");
+  await user.click(screen.getByRole("button", { name: /save/i }));
+  await user.click(await screen.findByRole("button", { name: /connect/i }));
+  await waitFor(() =>
+    expect(screen.getByTestId(VisualQueryAccessibility.initialAddBlock)).not.toBeDisabled(),
+  );
+}
+
+describe("App production default (no runtime mock)", () => {
+  it("App.tsx default path uses createTauriDragonIpc, not createMockDragonIpc", () => {
+    const src = readFileSync(join(process.cwd(), "src/App.tsx"), "utf8");
+    expect(src).toMatch(/createTauriDragonIpc/);
+    expect(src).not.toMatch(/const DEFAULT_IPC\s*=\s*createMockDragonIpc/);
+    expect(src).not.toMatch(/FIXTURE_CONNECTION_ID/);
+    // Lazy: factory must not be invoked at module scope
+    expect(src).not.toMatch(/const DEFAULT_IPC\s*=\s*createTauriDragonIpc\s*\(/);
   });
 
-  it("keeps the default IPC instance stable across rerenders", async () => {
-    const { rerender } = render(<App />);
-    await screen.findByTestId(VisualQueryAccessibility.initialAddBlock);
-    rerender(<App />);
-    expect(mockFactories.createMockDragonIpc).not.toHaveBeenCalled();
-  });
-
-  it("loads tables on mount into FROM picker", async () => {
-    const user = userEvent.setup();
+  it("starts disconnected — canvas mutate controls locked until connect", async () => {
     const ipc = createMockDragonIpc("happy");
     render(<App ipc={ipc} />);
+    expect(screen.queryByTestId(VisualQueryAccessibility.initialAddBlock)).toBeDisabled();
+    expect(screen.queryByTestId(VisualQueryAccessibility.runQuery)).toBeDisabled();
+  });
+});
+
+describe("App session connect / disconnect / switch", () => {
+  it("on connect success unlocks canvas and listTables uses returned connectionId", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    const listTables = vi.spyOn(ipc, "listTables");
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
+
+    await waitFor(() => expect(listTables).toHaveBeenCalled());
+    const connectionId = listTables.mock.calls[0]?.[0];
+    expect(connectionId).toBeTruthy();
+    expect(connectionId).not.toBe(FIXTURE_CONNECTION_ID);
+    expect(screen.getByTestId(VisualQueryAccessibility.initialAddBlock)).not.toBeDisabled();
+  });
+
+  it("listColumns on FROM commit uses live connectionId, not FIXTURE", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    const listColumns = vi.spyOn(ipc, "listColumns");
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
+
     await user.click(await screen.findByTestId(VisualQueryAccessibility.initialAddBlock));
     await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("select")));
     await user.click(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock));
     await user.click(screen.getByTestId(VisualQueryAccessibility.clauseMenuItem("from")));
     await user.click(screen.getByTestId(VisualQueryAccessibility.fromTablePicker));
-    expect(await screen.findByRole("button", { name: "users" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "analytics.events" })).toBeInTheDocument();
+    await user.click(await screen.findByRole("button", { name: "users" }));
+
+    await waitFor(() => expect(listColumns).toHaveBeenCalled());
+    expect(listColumns.mock.calls[0]?.[0]).not.toBe(FIXTURE_CONNECTION_ID);
   });
 
+  it("disconnect locks canvas while preserving SQL preview readability", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
+
+    await user.click(await screen.findByTestId(VisualQueryAccessibility.initialAddBlock));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("select")));
+    await user.click(screen.getByRole("button", { name: /disconnect/i }));
+
+    expect(screen.getByTestId(VisualQueryAccessibility.clauseCard("select"))).toBeInTheDocument();
+    expect(screen.getByTestId(VisualQueryAccessibility.generatedSQLText)).toBeInTheDocument();
+    expect(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock)).toBeDisabled();
+  });
+
+  it("successful switch remounts canvas empty for B", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    // Save B before render so ConnectionPanel listProfiles on mount includes it
+    await ipc.saveProfile({
+      profile: {
+        name: "B",
+        host: "db-b",
+        port: 5432,
+        username: "postgres",
+        database: "app",
+        isFavorite: false,
+        sslMode: "prefer",
+        sshEnabled: false,
+        sshHost: null,
+        sshPort: null,
+        sshUsername: null,
+        sshAuthMethod: null,
+        sshPrivateKeyPath: null,
+      },
+      secrets: { password: "pw" },
+    });
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
+    await user.click(await screen.findByTestId(VisualQueryAccessibility.initialAddBlock));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("select")));
+    expect(screen.getByTestId(VisualQueryAccessibility.clauseCard("select"))).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /^B$/i }));
+    await user.click(screen.getByRole("button", { name: /confirm switch/i }));
+    await waitFor(() =>
+      expect(screen.getByText(VisualQueryCopy.emptyCanvasTitle)).toBeInTheDocument(),
+    );
+  });
+
+  it("failed switch after A teardown keeps locked snapshot and shows human error", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    const b = await ipc.saveProfile({
+      profile: {
+        name: "B",
+        host: "db-b",
+        port: 5432,
+        username: "postgres",
+        database: "app",
+        isFavorite: false,
+        sslMode: "prefer",
+        sshEnabled: false,
+        sshHost: null,
+        sshPort: null,
+        sshUsername: null,
+        sshAuthMethod: null,
+        sshPrivateKeyPath: null,
+      },
+      secrets: { password: "pw" },
+    });
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
+    await user.click(await screen.findByTestId(VisualQueryAccessibility.initialAddBlock));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("select")));
+
+    const realConnect = ipc.connectProfile.bind(ipc);
+    ipc.connectProfile = async (id) => {
+      if (id === b.id) throw { kind: "auth", message: "Authentication failed" };
+      return realConnect(id);
+    };
+
+    await user.click(screen.getByRole("button", { name: /^B$/i }));
+    await user.click(screen.getByRole("button", { name: /confirm switch/i }));
+    // ConnectionPanel already surfaces errorMessage; App locks canvas via onSwitchFailure
+    await waitFor(() => expect(screen.getByText(/Authentication failed/i)).toBeInTheDocument());
+    expect(screen.getByTestId(VisualQueryAccessibility.clauseCard("select"))).toBeInTheDocument();
+    expect(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock)).toBeDisabled();
+  });
+});
+
+describe("App wiring regressions after connect (SP-4a)", () => {
   it("reloads columns after FROM commit and clears on start over", async () => {
     const user = userEvent.setup();
     const ipc = createMockDragonIpc("happy");
     const listColumns = vi.spyOn(ipc, "listColumns");
     render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
     await user.click(await screen.findByTestId(VisualQueryAccessibility.initialAddBlock));
     await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("select")));
     await user.click(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock));
@@ -72,10 +201,14 @@ describe("App wiring", () => {
   it("maps columnsError to metadata copy", async () => {
     const user = userEvent.setup();
     const ipc = createMockDragonIpc("columnsError");
-    // still need tables: override listTables from happy tables
     const happy = createMockDragonIpc("happy");
     ipc.listTables = happy.listTables.bind(happy);
+    ipc.listProfiles = happy.listProfiles.bind(happy);
+    ipc.saveProfile = happy.saveProfile.bind(happy);
+    ipc.connectProfile = happy.connectProfile.bind(happy);
+    ipc.disconnect = happy.disconnect.bind(happy);
     render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
     await user.click(await screen.findByTestId(VisualQueryAccessibility.initialAddBlock));
     await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("select")));
     await user.click(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock));
@@ -86,11 +219,13 @@ describe("App wiring", () => {
   });
 
   it("maps listTables rejection to metadata copy", async () => {
+    const user = userEvent.setup();
     const ipc = createMockDragonIpc("happy");
     ipc.listTables = async () => {
       throw new Error("tables unavailable");
     };
     render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
     expect(await screen.findByText(VisualQueryCopy.tablesLoadError)).toBeInTheDocument();
   });
 
@@ -99,13 +234,13 @@ describe("App wiring", () => {
     const ipc = createMockDragonIpc("happy");
     const runQuery = vi.spyOn(ipc, "runQuery");
     render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
     await user.click(await screen.findByTestId(VisualQueryAccessibility.initialAddBlock));
     await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("select")));
     await user.click(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock));
     await user.click(screen.getByTestId(VisualQueryAccessibility.clauseMenuItem("from")));
     await user.click(screen.getByTestId(VisualQueryAccessibility.fromTablePicker));
     await user.click(await screen.findByRole("button", { name: "users" }));
-
     await user.click(screen.getByTestId(VisualQueryAccessibility.startOver));
     await user.click(screen.getByTestId(VisualQueryAccessibility.initialAddBlock));
     await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("createTable")));
@@ -143,6 +278,7 @@ describe("App wiring", () => {
       return realColumns(c, table);
     };
     render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
     await user.click(await screen.findByTestId(VisualQueryAccessibility.initialAddBlock));
     await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("select")));
     await user.click(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock));
@@ -186,6 +322,7 @@ describe("App wiring", () => {
       ];
     });
     render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
     await user.click(await screen.findByTestId(VisualQueryAccessibility.initialAddBlock));
     await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("select")));
     await user.click(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock));
@@ -232,6 +369,7 @@ describe("App wiring", () => {
       return realColumns(c, table);
     };
     render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
     await user.click(await screen.findByTestId(VisualQueryAccessibility.initialAddBlock));
     await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("select")));
     await user.click(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock));
@@ -282,6 +420,7 @@ describe("App wiring", () => {
     window.addEventListener("unhandledrejection", onUnhandled);
 
     const { unmount } = render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
     await user.click(await screen.findByTestId(VisualQueryAccessibility.initialAddBlock));
     await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("select")));
     await user.click(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock));
