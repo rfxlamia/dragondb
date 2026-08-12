@@ -14,6 +14,7 @@ use crate::session::AppSession;
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let app_data = app
                 .path()
@@ -50,6 +51,9 @@ pub fn run() {
             commands::list_tab_states,
             commands::save_tab_state,
             commands::delete_tab_state,
+            commands::update_row,
+            commands::delete_rows,
+            commands::save_csv_file,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

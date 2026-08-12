@@ -13,6 +13,8 @@ import type {
   ProfileId,
   QueryFolderDto,
   QueryResult,
+  RowOperationError,
+  RowOperationErrorKind,
   SaveCsvFileResult,
   SavedQueryDto,
   SaveProfileInput,
@@ -21,12 +23,16 @@ import type {
   UpdateRowInput,
 } from "./contract";
 
-/** Phase A stub — real invoke maps land in Phase B. */
-function phaseBStub(method: string): Promise<never> {
-  return Promise.reject(new Error(`SP-3 Phase B: ${method} not wired`));
-}
-
 const KNOWN_KINDS = new Set(["connection", "auth", "syntax", "permission", "unknown"]);
+
+const ROW_OP_KINDS = new Set<RowOperationErrorKind>([
+  "noPrimaryKey",
+  "noTableSelected",
+  "noRowsSelected",
+  "metadataFetchFailed",
+  "updateFailed",
+  "deleteFailed",
+]);
 
 function normalizeIpcError(payload: unknown): IpcError {
   if (payload !== null && typeof payload === "object") {
@@ -53,10 +59,33 @@ function normalizeIpcError(payload: unknown): IpcError {
   return { kind: "unknown", message: String(payload ?? "Unknown error") };
 }
 
+function isRowOperationError(payload: unknown): payload is RowOperationError {
+  if (payload === null || typeof payload !== "object") {
+    return false;
+  }
+  const obj = payload as Record<string, unknown>;
+  return typeof obj.kind === "string" && ROW_OP_KINDS.has(obj.kind as RowOperationErrorKind);
+}
+
 async function invokeCommand<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
   try {
     return args === undefined ? await invoke<T>(cmd) : await invoke<T>(cmd, args);
   } catch (err) {
+    throw normalizeIpcError(err);
+  }
+}
+
+/**
+ * Row-ops invoke path — preserves `RowOperationError` kinds.
+ * Do NOT route through `normalizeIpcError` (which collapses unknown kinds to `"unknown"`).
+ */
+async function invokeRowOp(cmd: string, args: Record<string, unknown>): Promise<void> {
+  try {
+    await invoke(cmd, args);
+  } catch (err) {
+    if (isRowOperationError(err)) {
+      throw err;
+    }
     throw normalizeIpcError(err);
   }
 }
@@ -158,16 +187,25 @@ export function createTauriDragonIpc(): DragonIpc {
     clearHistory(profileId: ProfileId): Promise<void> {
       return invokeCommand("clear_history", { profileId });
     },
-    // SP-3 Phase A stubs — csv/row-ops until T6.
-    // Do NOT call invoke for these yet.
-    saveCsvFile(_csvText: string, _defaultPath?: string): Promise<SaveCsvFileResult> {
-      return Promise.resolve({ canceled: true });
+    // SP-3 CSV save-file — real invoke (cancel returns `{ canceled: true }`).
+    saveCsvFile(csvText: string, defaultPath?: string): Promise<SaveCsvFileResult> {
+      return invokeCommand("save_csv_file", { csvText, defaultPath });
     },
-    updateRow(_input: UpdateRowInput): Promise<void> {
-      return phaseBStub("updateRow");
+    // SP-3 row ops — invokeRowOp preserves RowOperationError kinds (not IpcError).
+    updateRow(input: UpdateRowInput): Promise<void> {
+      return invokeRowOp("update_row", {
+        connectionId: input.connectionId,
+        table: input.table,
+        primaryKey: input.primaryKey,
+        patch: input.patch,
+      });
     },
-    deleteRows(_input: DeleteRowsInput): Promise<void> {
-      return phaseBStub("deleteRows");
+    deleteRows(input: DeleteRowsInput): Promise<void> {
+      return invokeRowOp("delete_rows", {
+        connectionId: input.connectionId,
+        table: input.table,
+        primaryKeys: input.primaryKeys,
+      });
     },
   };
 }

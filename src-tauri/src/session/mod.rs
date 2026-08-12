@@ -15,9 +15,10 @@ use tokio_postgres::Client;
 use uuid::Uuid;
 
 use crate::postgres::{
-    collapse_ssl_mode, connect as pg_connect, list_columns as pg_list_columns,
-    list_tables as pg_list_tables, run_query as pg_run_query, ColumnInfoRow, ConnectParams,
-    IpcErrorKind, MappedIpcError, QueryResultData, TableRefRow,
+    collapse_ssl_mode, connect as pg_connect, delete_rows as pg_delete_rows,
+    list_columns as pg_list_columns, list_tables as pg_list_tables, run_query as pg_run_query,
+    update_row as pg_update_row, ColumnInfoRow, ConnectParams, IpcErrorKind, MappedIpcError,
+    QueryResultData, RowOperationError, RowOperationErrorKind, TableRefRow,
 };
 use crate::secrets::{KeyringStore, KeyringStoreError, ProfileSecrets};
 use crate::ssh::{
@@ -656,6 +657,94 @@ impl AppSession {
             .and_then(|a| a.client.as_ref())
             .ok_or_else(not_connected)?;
         pg_run_query(client, sql, params).await
+    }
+
+    /// UPDATE one row — returns `RowOperationError` (not `MappedIpcError`).
+    pub async fn update_row(
+        &mut self,
+        connection_id: &str,
+        table: &TableRefArg,
+        primary_key: &serde_json::Map<String, serde_json::Value>,
+        patch: &serde_json::Map<String, serde_json::Value>,
+    ) -> Result<(), RowOperationError> {
+        self.require_live_row_op(connection_id, RowOperationErrorKind::UpdateFailed)?;
+        let schema = table.schema.as_deref().unwrap_or("public");
+        let table_name = table.name.as_str();
+
+        if matches!(self.backend, Backend::Fake(_)) {
+            let pk_cols: Vec<&str> = primary_key.keys().map(|s| s.as_str()).collect();
+            crate::postgres::validate_update_preconditions(
+                Some((schema, table_name)),
+                &pk_cols,
+                !primary_key.is_empty(),
+            )?;
+            self.fake_query_probe(false).map_err(|e| {
+                RowOperationError::new(RowOperationErrorKind::UpdateFailed, e.message)
+            })?;
+            return Ok(());
+        }
+
+        let client = self
+            .active
+            .as_ref()
+            .and_then(|a| a.client.as_ref())
+            .ok_or_else(|| {
+                RowOperationError::new(
+                    RowOperationErrorKind::UpdateFailed,
+                    "Not connected to a database.",
+                )
+            })?;
+        pg_update_row(client, schema, table_name, primary_key, patch).await
+    }
+
+    /// DELETE rows — returns `RowOperationError` (not `MappedIpcError`).
+    pub async fn delete_rows(
+        &mut self,
+        connection_id: &str,
+        table: &TableRefArg,
+        primary_keys: &[serde_json::Map<String, serde_json::Value>],
+    ) -> Result<(), RowOperationError> {
+        self.require_live_row_op(connection_id, RowOperationErrorKind::DeleteFailed)?;
+        let schema = table.schema.as_deref().unwrap_or("public");
+        let table_name = table.name.as_str();
+
+        if matches!(self.backend, Backend::Fake(_)) {
+            let pk_cols: Vec<&str> = primary_keys
+                .first()
+                .map(|m| m.keys().map(|s| s.as_str()).collect())
+                .unwrap_or_default();
+            crate::postgres::validate_delete_preconditions(
+                Some((schema, table_name)),
+                &pk_cols,
+                primary_keys,
+            )?;
+            self.fake_query_probe(false).map_err(|e| {
+                RowOperationError::new(RowOperationErrorKind::DeleteFailed, e.message)
+            })?;
+            return Ok(());
+        }
+
+        let client = self
+            .active
+            .as_ref()
+            .and_then(|a| a.client.as_ref())
+            .ok_or_else(|| {
+                RowOperationError::new(
+                    RowOperationErrorKind::DeleteFailed,
+                    "Not connected to a database.",
+                )
+            })?;
+        pg_delete_rows(client, schema, table_name, primary_keys).await
+    }
+
+    fn require_live_row_op(
+        &self,
+        connection_id: &str,
+        fail_kind: RowOperationErrorKind,
+    ) -> Result<(), RowOperationError> {
+        self.require_live(connection_id).map_err(|e| {
+            RowOperationError::new(fail_kind, e.message)
+        })
     }
 
     fn has_live_handle(&self) -> bool {

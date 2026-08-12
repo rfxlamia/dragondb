@@ -356,30 +356,77 @@ describe("createTauriDragonIpc", () => {
     ).rejects.toMatchObject({ kind: "unknown", message: expect.stringMatching(/no rows/i) });
   });
 
-  it("SP-3 stubs: csv/row-ops remain stubbed until T6", async () => {
+  it("maps updateRow/deleteRows/saveCsvFile to locked Tauri command names", async () => {
     const ipc = createTauriDragonIpc();
-    const before = invoke.mock.calls.length;
 
-    expect(await ipc.saveCsvFile("a,b\n1,2")).toEqual({ canceled: true });
+    invoke.mockResolvedValueOnce(undefined);
+    await ipc.updateRow({
+      connectionId: "c1",
+      table: { name: "users", schema: "public" },
+      primaryKey: { id: 1 },
+      patch: { name: "Ada", note: null },
+    });
+    expect(invoke).toHaveBeenCalledWith("update_row", {
+      connectionId: "c1",
+      table: { name: "users", schema: "public" },
+      primaryKey: { id: 1 },
+      patch: { name: "Ada", note: null },
+    });
 
-    expect(invoke.mock.calls.length).toBe(before);
+    invoke.mockResolvedValueOnce(undefined);
+    await ipc.deleteRows({
+      connectionId: "c1",
+      table: { name: "users", schema: "public" },
+      primaryKeys: [{ id: 1 }, { id: 2 }],
+    });
+    expect(invoke).toHaveBeenCalledWith("delete_rows", {
+      connectionId: "c1",
+      table: { name: "users", schema: "public" },
+      primaryKeys: [{ id: 1 }, { id: 2 }],
+    });
 
+    invoke.mockResolvedValueOnce({ canceled: false, path: "/tmp/out.csv" });
+    expect(await ipc.saveCsvFile("a,b\n1,2", "out.csv")).toEqual({
+      canceled: false,
+      path: "/tmp/out.csv",
+    });
+    expect(invoke).toHaveBeenCalledWith("save_csv_file", {
+      csvText: "a,b\n1,2",
+      defaultPath: "out.csv",
+    });
+  });
+
+  it("saveCsvFile cancel returns { canceled: true } without throwing", async () => {
+    const ipc = createTauriDragonIpc();
+    invoke.mockResolvedValueOnce({ canceled: true });
+    await expect(ipc.saveCsvFile("a,b\n1,2")).resolves.toEqual({ canceled: true });
+    expect(invoke).toHaveBeenCalledWith("save_csv_file", {
+      csvText: "a,b\n1,2",
+      defaultPath: undefined,
+    });
+  });
+
+  it("updateRow rejects with RowOperationError kind noPrimaryKey (not IpcError expansion)", async () => {
+    const ipc = createTauriDragonIpc();
+    invoke.mockRejectedValueOnce({ kind: "noPrimaryKey", message: "table has no PK" });
     await expect(
       ipc.updateRow({
         connectionId: "c1",
         table: { name: "users" },
-        primaryKey: { id: 1 },
-        patch: { name: "Ada" },
+        primaryKey: {},
+        patch: { name: "x" },
       }),
-    ).rejects.toThrow(/SP-3 Phase B: updateRow/);
-    await expect(
-      ipc.deleteRows({
-        connectionId: "c1",
-        table: { name: "users" },
-        primaryKeys: [{ id: 1 }],
-      }),
-    ).rejects.toThrow(/SP-3 Phase B: deleteRows/);
+    ).rejects.toEqual({ kind: "noPrimaryKey", message: "table has no PK" });
+  });
 
-    expect(invoke.mock.calls.length).toBe(before);
+  it("tauri-client has zero phaseBStub and zero empty SP-3 stub resolves", async () => {
+    const src = await import("node:fs").then((fs) =>
+      fs.readFileSync(new URL("../../src/ipc/tauri-client.ts", import.meta.url), "utf8"),
+    );
+    // Guard live code only — avoid false positives on comments that mention stub names.
+    const withoutBlockComments = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+    expect(withoutBlockComments).not.toMatch(/phaseBStub/);
+    expect(withoutBlockComments).not.toMatch(/Promise\.resolve\(\[\]\)/);
+    expect(withoutBlockComments).not.toMatch(/Promise\.resolve\(\{ canceled: true \}\)/);
   });
 });

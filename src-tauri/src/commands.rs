@@ -9,7 +9,7 @@ use tauri::State;
 use tokio::sync::Mutex;
 
 use crate::postgres::{
-    ColumnInfoRow, MappedIpcError, QueryResultData, TableRefRow,
+    ColumnInfoRow, IpcErrorKind, MappedIpcError, QueryResultData, RowOperationError, TableRefRow,
 };
 use crate::session::{
     AppSession, ConnectResult, ExecutableSql, ProfileFields, ProfileSecretsInput,
@@ -452,6 +452,82 @@ pub async fn delete_tab_state(
 ) -> Result<(), MappedIpcError> {
     let session = state.lock().await;
     session.delete_tab_state(&id)
+}
+
+// --- Row ops + CSV save -----------------------------------------------------
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SaveCsvFileResult {
+    pub canceled: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn update_row(
+    state: State<'_, Mutex<AppSession>>,
+    connection_id: String,
+    table: TableRefArg,
+    primary_key: serde_json::Map<String, serde_json::Value>,
+    patch: serde_json::Map<String, serde_json::Value>,
+) -> Result<(), RowOperationError> {
+    let mut session = state.lock().await;
+    session
+        .update_row(&connection_id, &table, &primary_key, &patch)
+        .await
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn delete_rows(
+    state: State<'_, Mutex<AppSession>>,
+    connection_id: String,
+    table: TableRefArg,
+    primary_keys: Vec<serde_json::Map<String, serde_json::Value>>,
+) -> Result<(), RowOperationError> {
+    let mut session = state.lock().await;
+    session
+        .delete_rows(&connection_id, &table, &primary_keys)
+        .await
+}
+
+/// Save CSV via native save dialog. Cancel → `{ canceled: true }` (no write, no throw).
+#[tauri::command(rename_all = "camelCase")]
+pub async fn save_csv_file(
+    app: tauri::AppHandle,
+    csv_text: String,
+    default_path: Option<String>,
+) -> Result<SaveCsvFileResult, MappedIpcError> {
+    use tauri_plugin_dialog::DialogExt;
+
+    let mut builder = app.dialog().file().add_filter("CSV", &["csv"]);
+    if let Some(name) = default_path.as_deref() {
+        builder = builder.set_file_name(name);
+    }
+
+    let Some(file_path) = builder.blocking_save_file() else {
+        return Ok(SaveCsvFileResult {
+            canceled: true,
+            path: None,
+        });
+    };
+
+    let path_buf = file_path.into_path().map_err(|e| MappedIpcError {
+        kind: IpcErrorKind::Unknown,
+        message: format!("Invalid save path: {e}"),
+        position: None,
+    })?;
+
+    std::fs::write(&path_buf, csv_text.as_bytes()).map_err(|e| MappedIpcError {
+        kind: IpcErrorKind::Unknown,
+        message: format!("Failed to write CSV file: {e}"),
+        position: None,
+    })?;
+
+    Ok(SaveCsvFileResult {
+        canceled: false,
+        path: Some(path_buf.to_string_lossy().into_owned()),
+    })
 }
 
 #[cfg(test)]
