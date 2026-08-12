@@ -1,11 +1,11 @@
-//! SQLite schema migration for SP-2 storage.
+//! SQLite schema migration for SP-2/SP-3 storage.
 //!
 //! Profile rows store path hints only — no password/ssh secret columns.
-//! `saved_queries` / `query_folders` / `tab_states` are DDL-only stubs for SP-3/SP-4b.
+//! Library/tab tables migrate additively from id-only stubs to Swift-parity columns.
 
 use rusqlite::{Connection, Result as SqliteResult};
 
-/// Create the five Swift-parity model tables (idempotent).
+/// Create the five Swift-parity model tables and ensure checklist columns exist.
 pub fn migrate(conn: &Connection) -> SqliteResult<()> {
     conn.execute_batch(
         r#"
@@ -53,6 +53,55 @@ pub fn migrate(conn: &Connection) -> SqliteResult<()> {
         );
         "#,
     )?;
+
+    // Additive ensure: CREATE IF NOT EXISTS alone leaves id-only stubs on legacy DBs.
+    ensure_column(conn, "query_folders", "name", "TEXT")?;
+    ensure_column(conn, "query_folders", "created_at", "TEXT")?;
+    ensure_column(conn, "query_folders", "updated_at", "TEXT")?;
+
+    ensure_column(conn, "saved_queries", "name", "TEXT")?;
+    ensure_column(conn, "saved_queries", "query_text", "TEXT")?;
+    ensure_column(conn, "saved_queries", "connection_id", "TEXT")?;
+    ensure_column(conn, "saved_queries", "database_name", "TEXT")?;
+    ensure_column(conn, "saved_queries", "created_at", "TEXT")?;
+    ensure_column(conn, "saved_queries", "updated_at", "TEXT")?;
+    ensure_column(conn, "saved_queries", "folder_id", "TEXT")?;
+
+    ensure_column(conn, "tab_states", "connection_id", "TEXT")?;
+    ensure_column(conn, "tab_states", "database_name", "TEXT")?;
+    ensure_column(conn, "tab_states", "query_text", "TEXT")?;
+    ensure_column(conn, "tab_states", "saved_query_id", "TEXT")?;
+    ensure_column(conn, "tab_states", "is_active", "INTEGER")?;
+    ensure_column(conn, "tab_states", "order_index", "INTEGER")?;
+    ensure_column(conn, "tab_states", "created_at", "TEXT")?;
+    ensure_column(conn, "tab_states", "last_accessed_at", "TEXT")?;
+    ensure_column(conn, "tab_states", "selected_table_schema", "TEXT")?;
+    ensure_column(conn, "tab_states", "selected_table_name", "TEXT")?;
+    ensure_column(conn, "tab_states", "selected_schema_filter", "TEXT")?;
+    ensure_column(conn, "tab_states", "cached_results_data", "BLOB")?;
+    ensure_column(conn, "tab_states", "cached_column_names", "TEXT")?;
+
+    Ok(())
+}
+
+/// Add a column if missing (`PRAGMA table_info` + `ALTER TABLE … ADD COLUMN`).
+fn ensure_column(
+    conn: &Connection,
+    table: &str,
+    name: &str,
+    type_sql: &str,
+) -> SqliteResult<()> {
+    let mut stmt = conn.prepare(&format!("PRAGMA table_info({table})"))?;
+    let cols: Vec<String> = stmt
+        .query_map([], |row| row.get::<_, String>(1))?
+        .collect::<SqliteResult<Vec<_>>>()?;
+    if cols.iter().any(|c| c == name) {
+        return Ok(());
+    }
+    conn.execute(
+        &format!("ALTER TABLE {table} ADD COLUMN {name} {type_sql}"),
+        [],
+    )?;
     Ok(())
 }
 
@@ -60,6 +109,26 @@ pub fn migrate(conn: &Connection) -> SqliteResult<()> {
 mod tests {
     use super::*;
     use rusqlite::Connection;
+
+    fn column_names(conn: &Connection, table: &str) -> Vec<String> {
+        let mut stmt = conn
+            .prepare(&format!("PRAGMA table_info({table})"))
+            .unwrap();
+        stmt.query_map([], |row| row.get::<_, String>(1))
+            .unwrap()
+            .map(|r| r.unwrap())
+            .collect()
+    }
+
+    fn assert_has_columns(conn: &Connection, table: &str, required: &[&str]) {
+        let cols = column_names(conn, table);
+        for name in required {
+            assert!(
+                cols.iter().any(|c| c == name),
+                "{table} missing column: {name}; have {cols:?}"
+            );
+        }
+    }
 
     #[test]
     fn migrate_creates_five_model_tables() {
@@ -138,23 +207,76 @@ mod tests {
     }
 
     #[test]
-    fn unused_model_tables_exist_as_ddl_only() {
+    fn library_and_tab_tables_have_swift_parity_columns() {
         let conn = Connection::open_in_memory().unwrap();
         migrate(&conn).expect("migrate");
-        // Minimal identity columns so tables exist for later SP-3/SP-4b — no CRUD helpers in SP-2.
-        for table in ["saved_queries", "query_folders", "tab_states"] {
-            let mut stmt = conn
-                .prepare(&format!("PRAGMA table_info({table})"))
-                .unwrap();
-            let cols: Vec<String> = stmt
-                .query_map([], |row| row.get::<_, String>(1))
-                .unwrap()
-                .map(|r| r.unwrap())
-                .collect();
-            assert!(
-                cols.iter().any(|c| c == "id"),
-                "{table} must at least have id"
-            );
-        }
+        assert_has_columns(
+            &conn,
+            "query_folders",
+            &["id", "name", "created_at", "updated_at"],
+        );
+        assert_has_columns(
+            &conn,
+            "saved_queries",
+            &[
+                "id",
+                "name",
+                "query_text",
+                "connection_id",
+                "database_name",
+                "created_at",
+                "updated_at",
+                "folder_id",
+            ],
+        );
+        assert_has_columns(
+            &conn,
+            "tab_states",
+            &[
+                "id",
+                "connection_id",
+                "database_name",
+                "query_text",
+                "saved_query_id",
+                "is_active",
+                "order_index",
+                "created_at",
+                "last_accessed_at",
+                "selected_table_schema",
+                "selected_table_name",
+                "selected_schema_filter",
+                "cached_results_data",
+                "cached_column_names",
+            ],
+        );
+    }
+
+    #[test]
+    fn migrate_is_additive_on_id_only_stub_tables() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            r#"
+            CREATE TABLE saved_queries (id TEXT PRIMARY KEY NOT NULL);
+            CREATE TABLE query_folders (id TEXT PRIMARY KEY NOT NULL);
+            CREATE TABLE tab_states (id TEXT PRIMARY KEY NOT NULL);
+            "#,
+        )
+        .unwrap();
+        conn.execute("INSERT INTO saved_queries (id) VALUES ('legacy')", [])
+            .unwrap();
+        migrate(&conn).expect("additive migrate");
+        assert_has_columns(
+            &conn,
+            "saved_queries",
+            &["id", "name", "query_text", "folder_id"],
+        );
+        let id: String = conn
+            .query_row(
+                "SELECT id FROM saved_queries WHERE id='legacy'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(id, "legacy");
     }
 }
