@@ -165,4 +165,74 @@ describe("createTauriDragonIpc", () => {
     expect(src).not.toMatch(/createMockDragonIpc/);
     expect(src).not.toMatch(/FIXTURE_CONNECTION_ID/);
   });
+
+  it("SP-3 stubs: list methods return empty without invoke; mutators throw Phase B", async () => {
+    const ipc = createTauriDragonIpc();
+    const before = invoke.mock.calls.length;
+
+    expect(await ipc.listSavedQueries()).toEqual([]);
+    expect(await ipc.getSavedQuery("q1")).toBeNull();
+    expect(await ipc.listQueryFolders()).toEqual([]);
+    expect(await ipc.listTabStates()).toEqual([]);
+    expect(await ipc.listHistory({ limit: 10 })).toEqual([]);
+    expect(await ipc.saveCsvFile("a,b\n1,2")).toEqual({ canceled: true });
+
+    expect(invoke.mock.calls.length).toBe(before);
+
+    await expect(ipc.saveSavedQuery({
+      id: "q1",
+      name: "n",
+      queryText: "SELECT 1",
+      connectionId: null,
+      databaseName: null,
+      createdAt: "1",
+      updatedAt: "1",
+      folderId: null,
+    })).rejects.toThrow(/SP-3 Phase B: saveSavedQuery/);
+
+    await expect(ipc.deleteSavedQueries(["q1"])).rejects.toThrow(/SP-3 Phase B: deleteSavedQueries/);
+    await expect(ipc.duplicateSavedQuery("q1")).rejects.toThrow(/SP-3 Phase B: duplicateSavedQuery/);
+    await expect(ipc.moveSavedQuery("q1", null)).rejects.toThrow(/SP-3 Phase B: moveSavedQuery/);
+    await expect(ipc.createQueryFolder("f")).rejects.toThrow(/SP-3 Phase B: createQueryFolder/);
+    await expect(ipc.renameQueryFolder("f1", "x")).rejects.toThrow(/SP-3 Phase B: renameQueryFolder/);
+    await expect(ipc.deleteFolder("f1", false)).rejects.toThrow(/SP-3 Phase B: deleteFolder/);
+    await expect(
+      ipc.saveTabState({
+        id: "t1",
+        connectionId: null,
+        databaseName: null,
+        queryText: "",
+        savedQueryId: null,
+        isActive: true,
+        order: 0,
+        createdAt: "1",
+        lastAccessedAt: "1",
+        selectedTableSchema: null,
+        selectedTableName: null,
+        selectedSchemaFilter: null,
+        cachedResultsData: null,
+        cachedColumnNames: null,
+      }),
+    ).rejects.toThrow(/SP-3 Phase B: saveTabState/);
+    await expect(ipc.deleteTabState("t1")).rejects.toThrow(/SP-3 Phase B: deleteTabState/);
+    await expect(ipc.deleteHistory("h1")).rejects.toThrow(/SP-3 Phase B: deleteHistory/);
+    await expect(ipc.clearHistory("p1")).rejects.toThrow(/SP-3 Phase B: clearHistory/);
+    await expect(
+      ipc.updateRow({
+        connectionId: "c1",
+        table: { name: "users" },
+        primaryKey: { id: 1 },
+        patch: { name: "Ada" },
+      }),
+    ).rejects.toThrow(/SP-3 Phase B: updateRow/);
+    await expect(
+      ipc.deleteRows({
+        connectionId: "c1",
+        table: { name: "users" },
+        primaryKeys: [{ id: 1 }],
+      }),
+    ).rejects.toThrow(/SP-3 Phase B: deleteRows/);
+
+    expect(invoke.mock.calls.length).toBe(before);
+  });
 });
