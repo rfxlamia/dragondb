@@ -4,24 +4,24 @@ import { describe, expect, expectTypeOf, it } from "vitest";
 import type {
   ConnectionProfileDto,
   ConnectResult,
+  DeleteRowsInput,
   DragonIpc,
+  HistoryDto,
+  HistoryListOptions,
   ProfileId,
   ProfileSecretsInput,
+  QueryFolderDto,
+  RowOperationError,
+  RowOperationErrorKind,
+  SaveCsvFileResult,
+  // SP-3 — these imports FAIL until contract exports them
+  SavedQueryDto,
   SaveProfileInput,
   SshAuthMethod,
   SslMode,
   TableRef,
-  // SP-3 — these imports FAIL until contract exports them
-  SavedQueryDto,
-  QueryFolderDto,
   TabStateDto,
-  HistoryDto,
-  HistoryListOptions,
   UpdateRowInput,
-  DeleteRowsInput,
-  RowOperationErrorKind,
-  RowOperationError,
-  SaveCsvFileResult,
 } from "../../src/ipc/contract";
 import * as contract from "../../src/ipc/contract";
 

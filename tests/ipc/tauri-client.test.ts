@@ -179,22 +179,30 @@ describe("createTauriDragonIpc", () => {
 
     expect(invoke.mock.calls.length).toBe(before);
 
-    await expect(ipc.saveSavedQuery({
-      id: "q1",
-      name: "n",
-      queryText: "SELECT 1",
-      connectionId: null,
-      databaseName: null,
-      createdAt: "1",
-      updatedAt: "1",
-      folderId: null,
-    })).rejects.toThrow(/SP-3 Phase B: saveSavedQuery/);
+    await expect(
+      ipc.saveSavedQuery({
+        id: "q1",
+        name: "n",
+        queryText: "SELECT 1",
+        connectionId: null,
+        databaseName: null,
+        createdAt: "1",
+        updatedAt: "1",
+        folderId: null,
+      }),
+    ).rejects.toThrow(/SP-3 Phase B: saveSavedQuery/);
 
-    await expect(ipc.deleteSavedQueries(["q1"])).rejects.toThrow(/SP-3 Phase B: deleteSavedQueries/);
-    await expect(ipc.duplicateSavedQuery("q1")).rejects.toThrow(/SP-3 Phase B: duplicateSavedQuery/);
+    await expect(ipc.deleteSavedQueries(["q1"])).rejects.toThrow(
+      /SP-3 Phase B: deleteSavedQueries/,
+    );
+    await expect(ipc.duplicateSavedQuery("q1")).rejects.toThrow(
+      /SP-3 Phase B: duplicateSavedQuery/,
+    );
     await expect(ipc.moveSavedQuery("q1", null)).rejects.toThrow(/SP-3 Phase B: moveSavedQuery/);
     await expect(ipc.createQueryFolder("f")).rejects.toThrow(/SP-3 Phase B: createQueryFolder/);
-    await expect(ipc.renameQueryFolder("f1", "x")).rejects.toThrow(/SP-3 Phase B: renameQueryFolder/);
+    await expect(ipc.renameQueryFolder("f1", "x")).rejects.toThrow(
+      /SP-3 Phase B: renameQueryFolder/,
+    );
     await expect(ipc.deleteFolder("f1", false)).rejects.toThrow(/SP-3 Phase B: deleteFolder/);
     await expect(
       ipc.saveTabState({

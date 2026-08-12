@@ -139,10 +139,7 @@ export function createTauriDragonIpc(): DragonIpc {
     listTabStates(): Promise<TabStateDto[]> {
       return Promise.resolve([]);
     },
-    saveTabState(
-      _input: TabStateDto,
-      _opts?: { includeCachedResults?: boolean },
-    ): Promise<void> {
+    saveTabState(_input: TabStateDto, _opts?: { includeCachedResults?: boolean }): Promise<void> {
       return phaseBStub("saveTabState");
     },
     deleteTabState(_id: string): Promise<void> {
