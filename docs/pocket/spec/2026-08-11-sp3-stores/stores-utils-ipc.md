@@ -50,7 +50,7 @@ SP-4b is UI-heavy (ten clusters). Without stores, tab/result/library/history/CSV
   - `SQLStatementSplitter` — including `;` inside quotes / dollar-quotes / `--` / `/* */`
   - `QueryTypeDetector` — type classify + `extractTableName` + mutation classification (`isMutation`)
   - Compaction (2048 + `... [truncated]`, length includes suffix)
-  - CSV from **raw** (escape rules incl. empty→`""`)
+  - CSV from **raw** (Swift/RFC4180 escape: quote only when needed; empty/nil → bare empty field, **not** `""`)
   - Full `QueryEditability` rule table (not JOIN-only)
 - IPC/commands:
   - **Library matrix:** create/list/rename/update/delete SavedQuery; duplicate; move/unfolder; create/rename/delete Folder; `deleteFolder(id, deleteQueries: boolean)`
@@ -426,7 +426,7 @@ Scenario: Delete one
 Scenario: CSV from raw with escaping
   Given raw result with comma, quote, and empty cell
   When toCsv
-  Then properly escaped CSV text (empty → "")
+  Then properly escaped CSV text (empty/nil → bare empty field; quote only comma/newline/quote)
 
 Scenario: Save file
   Given CSV text and user confirms save dialog path
@@ -507,7 +507,7 @@ Rule: History
   ✓ Field mapping table honored (SP-2 superset)
 
 Rule: CSV
-  ✓ Given raw rows, When toCsv + saveCsvFile, Then escaped CSV (empty→"") and native save; cancel safe
+  ✓ Given raw rows, When toCsv + saveCsvFile, Then Swift-parity escaped CSV and native save; cancel safe
   ✓ CSV uses raw not compact
 
 Rule: Editability + row ops
