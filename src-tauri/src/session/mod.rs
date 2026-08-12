@@ -24,9 +24,15 @@ use crate::ssh::{
     build_auth_method, PreparedAuth, SshAuthInput, TunnelError, TunnelHandle, TunnelRequest,
 };
 use crate::storage::{
-    delete_profile as storage_delete_profile, get_profile as storage_get_profile,
-    insert_history, list_profiles as storage_list_profiles, open_db, upsert_profile,
-    HistoryInsert, ProfileRow,
+    create_folder as storage_create_folder, delete_folder as storage_delete_folder,
+    delete_profile as storage_delete_profile, delete_saved_queries as storage_delete_saved_queries,
+    duplicate_saved_query as storage_duplicate_saved_query, get_profile as storage_get_profile,
+    get_saved_query as storage_get_saved_query, insert_history,
+    insert_saved_query_with_id as storage_insert_saved_query_with_id,
+    list_folders as storage_list_folders, list_profiles as storage_list_profiles,
+    list_saved_queries as storage_list_saved_queries, move_saved_query as storage_move_saved_query,
+    open_db, rename_folder as storage_rename_folder, save_saved_query as storage_save_saved_query,
+    upsert_profile, FolderRow, HistoryInsert, ProfileRow, SavedQueryRow, SavedQueryWrite,
 };
 
 /// Executable SQL payload (mirrors TS `ExecutableSQL`).
@@ -741,6 +747,169 @@ impl AppSession {
             }
         }
     }
+
+    /// Run a closure against the Production sqlite connection.
+    ///
+    /// Library IPC is Production-only — FakeStorage is not extended for library
+    /// ops (Phase A helper unit tests remain the SQL oracle). Prefer
+    /// `AppSession::open` with a temp app-data dir for command/session tests.
+    fn with_production_db<T>(
+        &self,
+        f: impl FnOnce(&SqliteConnection) -> Result<T, MappedIpcError>,
+    ) -> Result<T, MappedIpcError> {
+        match &self.backend {
+            Backend::Production { db, .. } => {
+                let guard = db.lock().map_err(|_| MappedIpcError {
+                    kind: IpcErrorKind::Unknown,
+                    message: "Storage lock poisoned.".into(),
+                    position: None,
+                })?;
+                f(&guard)
+            }
+            Backend::Fake(_) => Err(MappedIpcError {
+                kind: IpcErrorKind::Unknown,
+                message: "Library IPC requires production storage (temp AppSession::open in tests)."
+                    .into(),
+                position: None,
+            }),
+        }
+    }
+
+    // --- Library (SavedQuery / QueryFolder) thin wrappers --------------------
+
+    pub fn list_saved_queries(&self) -> Result<Vec<SavedQueryRow>, MappedIpcError> {
+        self.with_production_db(|db| storage_list_saved_queries(db).map_err(sqlite_err))
+    }
+
+    pub fn get_saved_query(&self, id: &str) -> Result<Option<SavedQueryRow>, MappedIpcError> {
+        self.with_production_db(|db| storage_get_saved_query(db, id).map_err(sqlite_err))
+    }
+
+    /// Create (id absent in DB) or update (id present). UPDATE matching 0 rows → error.
+    pub fn save_saved_query(&self, query: SavedQueryWriteInput) -> Result<SavedQueryRow, MappedIpcError> {
+        self.with_production_db(|db| {
+            let exists = storage_get_saved_query(db, &query.id)
+                .map_err(sqlite_err)?
+                .is_some();
+            let write = SavedQueryWrite {
+                id: if exists {
+                    Some(query.id.clone())
+                } else {
+                    None
+                },
+                name: query.name.clone(),
+                query_text: query.query_text.clone(),
+                connection_id: query.connection_id.clone(),
+                database_name: query.database_name.clone(),
+                folder_id: query.folder_id.clone(),
+            };
+            if exists {
+                match storage_save_saved_query(db, write) {
+                    Ok(_) => {}
+                    Err(rusqlite::Error::QueryReturnedNoRows) => {
+                        return Err(MappedIpcError {
+                            kind: IpcErrorKind::Unknown,
+                            message: "save_saved_query: no rows updated".into(),
+                            position: None,
+                        });
+                    }
+                    Err(e) => return Err(sqlite_err(e)),
+                }
+            } else {
+                storage_insert_saved_query_with_id(db, &query.id, write).map_err(sqlite_err)?;
+            }
+            storage_get_saved_query(db, &query.id)
+                .map_err(sqlite_err)?
+                .ok_or_else(|| MappedIpcError {
+                    kind: IpcErrorKind::Unknown,
+                    message: "save_saved_query: row missing after write".into(),
+                    position: None,
+                })
+        })
+    }
+
+    pub fn delete_saved_queries(&self, ids: &[String]) -> Result<(), MappedIpcError> {
+        self.with_production_db(|db| {
+            let refs: Vec<&str> = ids.iter().map(|s| s.as_str()).collect();
+            storage_delete_saved_queries(db, &refs).map_err(sqlite_err)
+        })
+    }
+
+    pub fn duplicate_saved_query(&self, id: &str) -> Result<SavedQueryRow, MappedIpcError> {
+        self.with_production_db(|db| {
+            let new_id = match storage_duplicate_saved_query(db, id) {
+                Ok(id) => id,
+                Err(rusqlite::Error::QueryReturnedNoRows) => {
+                    return Err(MappedIpcError {
+                        kind: IpcErrorKind::Unknown,
+                        message: "Saved query not found".into(),
+                        position: None,
+                    });
+                }
+                Err(e) => return Err(sqlite_err(e)),
+            };
+            storage_get_saved_query(db, &new_id)
+                .map_err(sqlite_err)?
+                .ok_or_else(|| MappedIpcError {
+                    kind: IpcErrorKind::Unknown,
+                    message: "duplicate_saved_query: row missing after insert".into(),
+                    position: None,
+                })
+        })
+    }
+
+    pub fn move_saved_query(&self, id: &str, folder_id: Option<&str>) -> Result<(), MappedIpcError> {
+        self.with_production_db(|db| {
+            storage_move_saved_query(db, id, folder_id).map_err(sqlite_err)
+        })
+    }
+
+    pub fn list_folders(&self) -> Result<Vec<FolderRow>, MappedIpcError> {
+        self.with_production_db(|db| storage_list_folders(db).map_err(sqlite_err))
+    }
+
+    pub fn create_folder(&self, name: &str) -> Result<FolderRow, MappedIpcError> {
+        self.with_production_db(|db| {
+            let id = storage_create_folder(db, name).map_err(sqlite_err)?;
+            storage_list_folders(db)
+                .map_err(sqlite_err)?
+                .into_iter()
+                .find(|f| f.id == id)
+                .ok_or_else(|| MappedIpcError {
+                    kind: IpcErrorKind::Unknown,
+                    message: "create_folder: row missing after insert".into(),
+                    position: None,
+                })
+        })
+    }
+
+    pub fn rename_folder(&self, id: &str, name: &str) -> Result<(), MappedIpcError> {
+        self.with_production_db(|db| storage_rename_folder(db, id, name).map_err(sqlite_err))
+    }
+
+    /// `delete_queries=false` nullifies `folder_id` on queries; `true` cascades deletes.
+    pub fn delete_folder(&self, id: &str, delete_queries: bool) -> Result<(), MappedIpcError> {
+        self.with_production_db(|db| {
+            storage_delete_folder(db, id, delete_queries).map_err(sqlite_err)
+        })
+    }
+}
+
+/// IPC write body for save_saved_query (mirrors TS SavedQueryDto fields used on write).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SavedQueryWriteInput {
+    pub id: String,
+    pub name: String,
+    pub query_text: String,
+    pub connection_id: Option<String>,
+    pub database_name: Option<String>,
+    pub folder_id: Option<String>,
+    /// Accepted from TS DTO; ignored on write (storage owns timestamps).
+    #[serde(default)]
+    pub created_at: Option<String>,
+    #[serde(default)]
+    pub updated_at: Option<String>,
 }
 
 async fn establish_live(

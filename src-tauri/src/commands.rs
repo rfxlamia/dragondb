@@ -13,9 +13,9 @@ use crate::postgres::{
 };
 use crate::session::{
     AppSession, ConnectResult, ExecutableSql, ProfileFields, ProfileSecretsInput,
-    SaveProfileInput, TableRefArg,
+    SaveProfileInput, SavedQueryWriteInput, TableRefArg,
 };
-use crate::storage::ProfileRow;
+use crate::storage::{FolderRow, ProfileRow, SavedQueryRow};
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -53,6 +53,54 @@ impl From<ProfileRow> for ConnectionProfileDto {
             ssh_username: row.ssh_username,
             ssh_auth_method: row.ssh_auth_method,
             ssh_private_key_path: row.ssh_private_key_path,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SavedQueryDto {
+    pub id: String,
+    pub name: String,
+    pub query_text: String,
+    pub connection_id: Option<String>,
+    pub database_name: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+    pub folder_id: Option<String>,
+}
+
+impl From<SavedQueryRow> for SavedQueryDto {
+    fn from(row: SavedQueryRow) -> Self {
+        Self {
+            id: row.id,
+            name: row.name,
+            query_text: row.query_text,
+            connection_id: row.connection_id,
+            database_name: row.database_name,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+            folder_id: row.folder_id,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QueryFolderDto {
+    pub id: String,
+    pub name: String,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+impl From<FolderRow> for QueryFolderDto {
+    fn from(row: FolderRow) -> Self {
+        Self {
+            id: row.id,
+            name: row.name,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
         }
     }
 }
@@ -146,9 +194,115 @@ pub async fn run_query(
     session.run_query(&connection_id, sql).await
 }
 
+// --- Library commands (no &Connection; AppSession thin wrappers) ------------
+
+#[tauri::command]
+pub async fn list_saved_queries(
+    state: State<'_, Mutex<AppSession>>,
+) -> Result<Vec<SavedQueryDto>, MappedIpcError> {
+    let session = state.lock().await;
+    let rows = session.list_saved_queries()?;
+    Ok(rows.into_iter().map(SavedQueryDto::from).collect())
+}
+
+#[tauri::command]
+pub async fn get_saved_query(
+    state: State<'_, Mutex<AppSession>>,
+    id: String,
+) -> Result<Option<SavedQueryDto>, MappedIpcError> {
+    let session = state.lock().await;
+    Ok(session.get_saved_query(&id)?.map(SavedQueryDto::from))
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn save_saved_query(
+    state: State<'_, Mutex<AppSession>>,
+    query: SavedQueryWriteInput,
+) -> Result<SavedQueryDto, MappedIpcError> {
+    let session = state.lock().await;
+    Ok(SavedQueryDto::from(session.save_saved_query(query)?))
+}
+
+#[tauri::command]
+pub async fn delete_saved_queries(
+    state: State<'_, Mutex<AppSession>>,
+    ids: Vec<String>,
+) -> Result<(), MappedIpcError> {
+    let session = state.lock().await;
+    session.delete_saved_queries(&ids)
+}
+
+#[tauri::command]
+pub async fn duplicate_saved_query(
+    state: State<'_, Mutex<AppSession>>,
+    id: String,
+) -> Result<SavedQueryDto, MappedIpcError> {
+    let session = state.lock().await;
+    Ok(SavedQueryDto::from(session.duplicate_saved_query(&id)?))
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn move_saved_query(
+    state: State<'_, Mutex<AppSession>>,
+    id: String,
+    folder_id: Option<String>,
+) -> Result<(), MappedIpcError> {
+    let session = state.lock().await;
+    session.move_saved_query(&id, folder_id.as_deref())
+}
+
+#[tauri::command]
+pub async fn list_folders(
+    state: State<'_, Mutex<AppSession>>,
+) -> Result<Vec<QueryFolderDto>, MappedIpcError> {
+    let session = state.lock().await;
+    let rows = session.list_folders()?;
+    Ok(rows.into_iter().map(QueryFolderDto::from).collect())
+}
+
+#[tauri::command]
+pub async fn create_folder(
+    state: State<'_, Mutex<AppSession>>,
+    name: String,
+) -> Result<QueryFolderDto, MappedIpcError> {
+    let session = state.lock().await;
+    Ok(QueryFolderDto::from(session.create_folder(&name)?))
+}
+
+#[tauri::command]
+pub async fn rename_folder(
+    state: State<'_, Mutex<AppSession>>,
+    id: String,
+    name: String,
+) -> Result<(), MappedIpcError> {
+    let session = state.lock().await;
+    session.rename_folder(&id, &name)
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn delete_folder(
+    state: State<'_, Mutex<AppSession>>,
+    id: String,
+    delete_queries: bool,
+) -> Result<(), MappedIpcError> {
+    let session = state.lock().await;
+    session.delete_folder(&id, delete_queries)
+}
+
 #[cfg(test)]
 mod tests {
+    use super::SavedQueryDto;
     use crate::postgres::{IpcErrorKind, MappedIpcError};
+    use crate::session::{AppSession, SavedQueryWriteInput};
+    use crate::storage::{save_saved_query, SavedQueryWrite};
+    use std::path::PathBuf;
+
+    fn temp_session() -> (AppSession, PathBuf) {
+        let dir = std::env::temp_dir().join(format!("dragondb-lib-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let session = AppSession::open(&dir).expect("open temp session");
+        (session, dir)
+    }
 
     #[test]
     fn mapped_ipc_error_serializes_lowercase_kind_object() {
@@ -178,5 +332,106 @@ mod tests {
         .unwrap();
         assert_eq!(v["connectionId"], "c1");
         assert_eq!(v["profileId"], "p1");
+    }
+
+    #[test]
+    fn saved_query_dto_serializes_camel_case() {
+        let v = serde_json::to_value(SavedQueryDto {
+            id: "q1".into(),
+            name: "n".into(),
+            query_text: "SELECT 1".into(),
+            connection_id: None,
+            database_name: None,
+            created_at: "1".into(),
+            updated_at: "2".into(),
+            folder_id: None,
+        })
+        .unwrap();
+        assert_eq!(v["queryText"], "SELECT 1");
+        assert_eq!(v["folderId"], serde_json::Value::Null);
+        assert_eq!(v["createdAt"], "1");
+    }
+
+    #[test]
+    fn library_nullify_vs_cascade_via_temp_production_session() {
+        let (session, _dir) = temp_session();
+        let folder = session.create_folder("F").unwrap();
+        let q = session
+            .save_saved_query(SavedQueryWriteInput {
+                id: "q1".into(),
+                name: "a".into(),
+                query_text: "SELECT 1".into(),
+                connection_id: None,
+                database_name: None,
+                folder_id: Some(folder.id.clone()),
+                created_at: None,
+                updated_at: None,
+            })
+            .unwrap();
+        assert_eq!(q.folder_id.as_deref(), Some(folder.id.as_str()));
+
+        // nullify
+        session.delete_folder(&folder.id, false).unwrap();
+        let after = session.get_saved_query("q1").unwrap().unwrap();
+        assert!(after.folder_id.is_none());
+
+        // cascade
+        let folder2 = session.create_folder("F2").unwrap();
+        session
+            .move_saved_query("q1", Some(folder2.id.as_str()))
+            .unwrap();
+        session.delete_folder(&folder2.id, true).unwrap();
+        assert!(session.get_saved_query("q1").unwrap().is_none());
+    }
+
+    #[test]
+    fn save_saved_query_zero_row_update_errors() {
+        // Storage-level oracle: UPDATE with missing id → QueryReturnedNoRows
+        // (session maps this to MappedIpcError { kind: unknown, message: "save_saved_query: no rows updated" }).
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        crate::storage::migrate(&conn).unwrap();
+        let err = save_saved_query(
+            &conn,
+            SavedQueryWrite {
+                id: Some("no-such".into()),
+                name: "x".into(),
+                query_text: "SELECT 1".into(),
+                connection_id: None,
+                database_name: None,
+                folder_id: None,
+            },
+        )
+        .expect_err("0-row update");
+        assert!(matches!(err, rusqlite::Error::QueryReturnedNoRows));
+
+        let (session, _dir) = temp_session();
+        session
+            .save_saved_query(SavedQueryWriteInput {
+                id: "q1".into(),
+                name: "a".into(),
+                query_text: "SELECT 1".into(),
+                connection_id: None,
+                database_name: None,
+                folder_id: None,
+                created_at: None,
+                updated_at: None,
+            })
+            .unwrap();
+        let updated = session
+            .save_saved_query(SavedQueryWriteInput {
+                id: "q1".into(),
+                name: "b".into(),
+                query_text: "SELECT 2".into(),
+                connection_id: None,
+                database_name: None,
+                folder_id: None,
+                created_at: None,
+                updated_at: None,
+            })
+            .unwrap();
+        assert_eq!(updated.name, "b");
+        let dup = session.duplicate_saved_query("q1").unwrap();
+        assert_ne!(dup.id, "q1");
+        assert_eq!(session.list_saved_queries().unwrap().len(), 2);
     }
 }

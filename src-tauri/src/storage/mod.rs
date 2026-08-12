@@ -17,8 +17,8 @@ pub use history::{
 };
 pub use library::{
     create_folder, delete_folder, delete_saved_queries, duplicate_saved_query, get_saved_query,
-    list_folders, list_saved_queries, move_saved_query, rename_folder, save_saved_query, FolderRow,
-    SavedQueryRow, SavedQueryWrite,
+    insert_saved_query_with_id, list_folders, list_saved_queries, move_saved_query, rename_folder,
+    save_saved_query, FolderRow, SavedQueryRow, SavedQueryWrite,
 };
 pub use profiles::{
     delete_profile, get_profile, list_profiles, upsert_profile, ProfileRow,

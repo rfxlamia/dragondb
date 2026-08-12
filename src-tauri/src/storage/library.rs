@@ -123,10 +123,15 @@ pub fn delete_folder(conn: &Connection, id: &str, delete_queries: bool) -> Sqlit
 }
 
 /// Insert or update a saved query; bumps `updated_at` on update. Returns id.
+///
+/// When `write.id` is `Some`, this is UPDATE-only: **0 matching rows** yields
+/// `Error::QueryReturnedNoRows` so the IPC layer can map a clear error.
+/// When `write.id` is `None`, inserts a new row (generated uuid).
+/// For IPC create with a client-generated id, use [`insert_saved_query_with_id`].
 pub fn save_saved_query(conn: &Connection, write: SavedQueryWrite) -> SqliteResult<String> {
     let now = utc_now_millis();
     if let Some(ref id) = write.id {
-        conn.execute(
+        let n = conn.execute(
             r#"
             UPDATE saved_queries SET
                 name = ?1,
@@ -147,6 +152,9 @@ pub fn save_saved_query(conn: &Connection, write: SavedQueryWrite) -> SqliteResu
                 id,
             ],
         )?;
+        if n == 0 {
+            return Err(rusqlite::Error::QueryReturnedNoRows);
+        }
         Ok(id.clone())
     } else {
         let id = Uuid::new_v4().to_string();
@@ -170,6 +178,34 @@ pub fn save_saved_query(conn: &Connection, write: SavedQueryWrite) -> SqliteResu
         )?;
         Ok(id)
     }
+}
+
+/// Insert a saved query with an explicit id (IPC create with client-generated uuid).
+pub fn insert_saved_query_with_id(
+    conn: &Connection,
+    id: &str,
+    write: SavedQueryWrite,
+) -> SqliteResult<()> {
+    let now = utc_now_millis();
+    conn.execute(
+        r#"
+        INSERT INTO saved_queries (
+            id, name, query_text, connection_id, database_name,
+            created_at, updated_at, folder_id
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+        "#,
+        params![
+            id,
+            write.name,
+            write.query_text,
+            write.connection_id,
+            write.database_name,
+            now,
+            now,
+            write.folder_id,
+        ],
+    )?;
+    Ok(())
 }
 
 /// Fetch one saved query by id.
@@ -372,5 +408,23 @@ mod tests {
         .unwrap();
         delete_saved_queries(&conn, &[&q1, &q2]).unwrap();
         assert!(list_saved_queries(&conn).unwrap().is_empty());
+    }
+
+    #[test]
+    fn save_update_zero_rows_errors() {
+        let conn = open();
+        let err = save_saved_query(
+            &conn,
+            SavedQueryWrite {
+                id: Some("missing".into()),
+                name: "x".into(),
+                query_text: "SELECT 1".into(),
+                connection_id: None,
+                database_name: None,
+                folder_id: None,
+            },
+        )
+        .expect_err("0-row update");
+        assert!(matches!(err, rusqlite::Error::QueryReturnedNoRows));
     }
 }

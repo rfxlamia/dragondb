@@ -166,22 +166,87 @@ describe("createTauriDragonIpc", () => {
     expect(src).not.toMatch(/FIXTURE_CONNECTION_ID/);
   });
 
-  it("SP-3 stubs: list methods return empty without invoke; mutators throw Phase B", async () => {
+  it("maps library methods to locked Tauri command names", async () => {
     const ipc = createTauriDragonIpc();
-    const before = invoke.mock.calls.length;
+    const dto = {
+      id: "q1",
+      name: "n",
+      queryText: "SELECT 1",
+      connectionId: null,
+      databaseName: null,
+      createdAt: "1",
+      updatedAt: "1",
+      folderId: null,
+    };
 
+    invoke.mockResolvedValueOnce([]);
     expect(await ipc.listSavedQueries()).toEqual([]);
-    expect(await ipc.getSavedQuery("q1")).toBeNull();
-    expect(await ipc.listQueryFolders()).toEqual([]);
-    expect(await ipc.listTabStates()).toEqual([]);
-    expect(await ipc.listHistory({ limit: 10 })).toEqual([]);
-    expect(await ipc.saveCsvFile("a,b\n1,2")).toEqual({ canceled: true });
+    expect(invoke).toHaveBeenCalledWith("list_saved_queries");
 
-    expect(invoke.mock.calls.length).toBe(before);
+    invoke.mockResolvedValueOnce(dto);
+    expect(await ipc.getSavedQuery("q1")).toEqual(dto);
+    expect(invoke).toHaveBeenCalledWith("get_saved_query", { id: "q1" });
 
+    invoke.mockResolvedValueOnce(dto);
+    await ipc.saveSavedQuery(dto);
+    expect(invoke).toHaveBeenCalledWith("save_saved_query", { query: dto });
+
+    invoke.mockResolvedValueOnce(undefined);
+    await ipc.deleteSavedQueries(["q1", "q2"]);
+    expect(invoke).toHaveBeenCalledWith("delete_saved_queries", { ids: ["q1", "q2"] });
+
+    invoke.mockResolvedValueOnce({ ...dto, id: "q1-copy" });
+    await ipc.duplicateSavedQuery("q1");
+    expect(invoke).toHaveBeenCalledWith("duplicate_saved_query", { id: "q1" });
+
+    invoke.mockResolvedValueOnce(undefined);
+    await ipc.moveSavedQuery("q1", null);
+    expect(invoke).toHaveBeenCalledWith("move_saved_query", { id: "q1", folderId: null });
+
+    invoke.mockResolvedValueOnce([]);
+    await ipc.listQueryFolders();
+    expect(invoke).toHaveBeenCalledWith("list_folders");
+
+    invoke.mockResolvedValueOnce({
+      id: "f1",
+      name: "Analytics",
+      createdAt: "1",
+      updatedAt: "1",
+    });
+    await ipc.createQueryFolder("Analytics");
+    expect(invoke).toHaveBeenCalledWith("create_folder", { name: "Analytics" });
+
+    invoke.mockResolvedValueOnce(undefined);
+    await ipc.renameQueryFolder("f1", "Reports");
+    expect(invoke).toHaveBeenCalledWith("rename_folder", { id: "f1", name: "Reports" });
+
+    invoke.mockResolvedValueOnce(undefined);
+    await ipc.deleteFolder("f1", false);
+    expect(invoke).toHaveBeenCalledWith("delete_folder", { id: "f1", deleteQueries: false });
+
+    invoke.mockResolvedValueOnce(undefined);
+    await ipc.deleteFolder("f1", true);
+    expect(invoke).toHaveBeenCalledWith("delete_folder", { id: "f1", deleteQueries: true });
+  });
+
+  it("maps duplicateSavedQuery reject to structured IpcError (not Error throw)", async () => {
+    const ipc = createTauriDragonIpc();
+    invoke.mockRejectedValueOnce({ kind: "unknown", message: "not found" });
+    await expect(ipc.duplicateSavedQuery("missing")).rejects.toEqual({
+      kind: "unknown",
+      message: "not found",
+    });
+  });
+
+  it("saveSavedQuery surfaces 0-row UPDATE as IpcError", async () => {
+    const ipc = createTauriDragonIpc();
+    invoke.mockRejectedValueOnce({
+      kind: "unknown",
+      message: "save_saved_query: no rows updated",
+    });
     await expect(
       ipc.saveSavedQuery({
-        id: "q1",
+        id: "missing",
         name: "n",
         queryText: "SELECT 1",
         connectionId: null,
@@ -190,20 +255,19 @@ describe("createTauriDragonIpc", () => {
         updatedAt: "1",
         folderId: null,
       }),
-    ).rejects.toThrow(/SP-3 Phase B: saveSavedQuery/);
+    ).rejects.toMatchObject({ kind: "unknown", message: expect.stringMatching(/no rows/i) });
+  });
 
-    await expect(ipc.deleteSavedQueries(["q1"])).rejects.toThrow(
-      /SP-3 Phase B: deleteSavedQueries/,
-    );
-    await expect(ipc.duplicateSavedQuery("q1")).rejects.toThrow(
-      /SP-3 Phase B: duplicateSavedQuery/,
-    );
-    await expect(ipc.moveSavedQuery("q1", null)).rejects.toThrow(/SP-3 Phase B: moveSavedQuery/);
-    await expect(ipc.createQueryFolder("f")).rejects.toThrow(/SP-3 Phase B: createQueryFolder/);
-    await expect(ipc.renameQueryFolder("f1", "x")).rejects.toThrow(
-      /SP-3 Phase B: renameQueryFolder/,
-    );
-    await expect(ipc.deleteFolder("f1", false)).rejects.toThrow(/SP-3 Phase B: deleteFolder/);
+  it("SP-3 stubs: non-library list methods return empty; remaining mutators throw Phase B", async () => {
+    const ipc = createTauriDragonIpc();
+    const before = invoke.mock.calls.length;
+
+    expect(await ipc.listTabStates()).toEqual([]);
+    expect(await ipc.listHistory({ limit: 10 })).toEqual([]);
+    expect(await ipc.saveCsvFile("a,b\n1,2")).toEqual({ canceled: true });
+
+    expect(invoke.mock.calls.length).toBe(before);
+
     await expect(
       ipc.saveTabState({
         id: "t1",
