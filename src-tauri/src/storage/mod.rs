@@ -25,8 +25,8 @@ pub use profiles::{
 };
 pub use schema::migrate;
 pub use tabs::{
-    delete_tab_state, get_tab_state, list_tab_states, update_tab_cached_results, upsert_tab_state,
-    TabStateRow, TabStateWrite,
+    delete_tab_state, get_tab_state, insert_tab_state_with_id, list_tab_states,
+    update_tab_cached_results, upsert_tab_state, TabStateRow, TabStateWrite,
 };
 
 /// Open (or create) the app DB at `path`, then run migrations.

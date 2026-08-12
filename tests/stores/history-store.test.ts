@@ -51,15 +51,14 @@ describe("history-store", () => {
 
   it("clearHistory(P) keeps Q rows after refresh", async () => {
     listHistory
-      .mockResolvedValueOnce([
-        row({ id: "hp", profileId: "P" }),
-        row({ id: "hq", profileId: "Q" }),
-      ])
+      .mockResolvedValueOnce([row({ id: "hp", profileId: "P" }), row({ id: "hq", profileId: "Q" })])
       .mockResolvedValueOnce([row({ id: "hq", profileId: "Q" })]);
     const store = createHistoryStore(ipc);
     await store.getState().refresh({ limit: 50 });
     await store.getState().clearHistory("P");
     expect(clearHistory).toHaveBeenCalledWith("P");
-    expect(store.getState().entries).toEqual([expect.objectContaining({ id: "hq", profileId: "Q" })]);
+    expect(store.getState().entries).toEqual([
+      expect.objectContaining({ id: "hq", profileId: "Q" }),
+    ]);
   });
 });

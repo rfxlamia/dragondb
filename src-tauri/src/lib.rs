@@ -47,6 +47,9 @@ pub fn run() {
             commands::list_history,
             commands::delete_history,
             commands::clear_history,
+            commands::list_tab_states,
+            commands::save_tab_state,
+            commands::delete_tab_state,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -2,7 +2,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { DragonIpc, QueryFolderDto, SavedQueryDto } from "../../src/ipc/contract";
 import { createLibraryStore } from "../../src/stores/library-store";
 
-function query(partial: Partial<SavedQueryDto> & Pick<SavedQueryDto, "id" | "name">): SavedQueryDto {
+function query(
+  partial: Partial<SavedQueryDto> & Pick<SavedQueryDto, "id" | "name">,
+): SavedQueryDto {
   return {
     queryText: "SELECT 1",
     connectionId: null,

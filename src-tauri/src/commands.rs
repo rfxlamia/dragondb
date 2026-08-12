@@ -4,7 +4,7 @@
 //! Errors reject as `MappedIpcError` objects (`{ kind, message, position? }`).
 //! No createDatabase / deleteDatabase commands.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tauri::State;
 use tokio::sync::Mutex;
 
@@ -13,9 +13,9 @@ use crate::postgres::{
 };
 use crate::session::{
     AppSession, ConnectResult, ExecutableSql, ProfileFields, ProfileSecretsInput,
-    SaveProfileInput, SavedQueryWriteInput, TableRefArg,
+    SaveProfileInput, SavedQueryWriteInput, TabStateWriteInput, TableRefArg,
 };
-use crate::storage::{FolderRow, HistoryRow, ProfileRow, SavedQueryRow};
+use crate::storage::{FolderRow, HistoryRow, ProfileRow, SavedQueryRow, TabStateRow};
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -349,11 +349,116 @@ pub async fn clear_history(
     session.clear_history_for_profile(&profile_id)
 }
 
+// --- Tabs commands (no &Connection; AppSession thin wrappers) ---------------
+
+/// Tab IPC DTO — TS `order` ↔ Rust `order_index`; `cachedResultsData` is UTF-8 JSON text.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TabStateDto {
+    pub id: String,
+    pub connection_id: Option<String>,
+    pub database_name: Option<String>,
+    pub query_text: String,
+    pub saved_query_id: Option<String>,
+    pub is_active: bool,
+    pub order: i64,
+    pub created_at: String,
+    pub last_accessed_at: String,
+    pub selected_table_schema: Option<String>,
+    pub selected_table_name: Option<String>,
+    pub selected_schema_filter: Option<String>,
+    /// Opaque JSON string (UTF-8 bytes on the wire to sqlite BLOB — not base64).
+    pub cached_results_data: Option<String>,
+    pub cached_column_names: Option<Vec<String>>,
+}
+
+impl From<TabStateRow> for TabStateDto {
+    fn from(row: TabStateRow) -> Self {
+        let cached_results_data = row.cached_results_data.and_then(|bytes| {
+            String::from_utf8(bytes).ok()
+        });
+        let cached_column_names = row.cached_column_names.and_then(|s| {
+            serde_json::from_str(&s).ok()
+        });
+        Self {
+            id: row.id,
+            connection_id: row.connection_id,
+            database_name: row.database_name,
+            query_text: row.query_text,
+            saved_query_id: row.saved_query_id,
+            is_active: row.is_active,
+            order: row.order_index,
+            created_at: row.created_at,
+            last_accessed_at: row.last_accessed_at,
+            selected_table_schema: row.selected_table_schema,
+            selected_table_name: row.selected_table_name,
+            selected_schema_filter: row.selected_schema_filter,
+            cached_results_data,
+            cached_column_names,
+        }
+    }
+}
+
+fn tab_write_input_from_dto(dto: TabStateDto) -> TabStateWriteInput {
+    TabStateWriteInput {
+        id: dto.id,
+        connection_id: dto.connection_id,
+        database_name: dto.database_name,
+        query_text: dto.query_text,
+        saved_query_id: dto.saved_query_id,
+        is_active: dto.is_active,
+        order: dto.order,
+        created_at: Some(dto.created_at),
+        last_accessed_at: Some(dto.last_accessed_at),
+        selected_table_schema: dto.selected_table_schema,
+        selected_table_name: dto.selected_table_name,
+        selected_schema_filter: dto.selected_schema_filter,
+        cached_results_data: dto.cached_results_data,
+        cached_column_names: dto.cached_column_names,
+    }
+}
+
+#[tauri::command]
+pub async fn list_tab_states(
+    state: State<'_, Mutex<AppSession>>,
+) -> Result<Vec<TabStateDto>, MappedIpcError> {
+    let session = state.lock().await;
+    let rows = session.list_tab_states()?;
+    Ok(rows.into_iter().map(TabStateDto::from).collect())
+}
+
+/// Create-or-update: inserts when id is absent; UPDATE with 0 rows → error.
+#[tauri::command(rename_all = "camelCase")]
+pub async fn save_tab_state(
+    state: State<'_, Mutex<AppSession>>,
+    input: TabStateDto,
+    include_cached_results: bool,
+) -> Result<(), MappedIpcError> {
+    let session = state.lock().await;
+    let id = input.id.clone();
+    let write = tab_write_input_from_dto(input);
+    let exists = session.get_tab_state(&id)?.is_some();
+    if exists {
+        session.save_tab_state(write, include_cached_results)
+    } else {
+        session.insert_tab_state(write, include_cached_results)
+    }
+}
+
+#[tauri::command]
+pub async fn delete_tab_state(
+    state: State<'_, Mutex<AppSession>>,
+    id: String,
+) -> Result<(), MappedIpcError> {
+    let session = state.lock().await;
+    session.delete_tab_state(&id)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{history_dto_from_row, HistoryDto, SavedQueryDto};
+    use super::{history_dto_from_row, HistoryDto, SavedQueryDto, TabStateDto};
     use crate::postgres::{IpcErrorKind, MappedIpcError};
-    use crate::session::{AppSession, SavedQueryWriteInput};
+    use crate::session::{AppSession, SavedQueryWriteInput, TabStateWriteInput};
     use crate::storage::{save_saved_query, SavedQueryWrite};
     use std::path::PathBuf;
 
@@ -362,6 +467,25 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let session = AppSession::open(&dir).expect("open temp session");
         (session, dir)
+    }
+
+    fn sample_tab(id: &str) -> TabStateWriteInput {
+        TabStateWriteInput {
+            id: id.into(),
+            connection_id: Some("c1".into()),
+            database_name: Some("app".into()),
+            query_text: "SELECT 1".into(),
+            saved_query_id: None,
+            is_active: true,
+            order: 0,
+            created_at: Some("1".into()),
+            last_accessed_at: Some("1".into()),
+            selected_table_schema: None,
+            selected_table_name: None,
+            selected_schema_filter: None,
+            cached_results_data: None,
+            cached_column_names: None,
+        }
     }
 
     #[test]
@@ -595,5 +719,48 @@ mod tests {
         assert!(dtos.iter().all(|d| d.profile_id != ""));
         assert!(dtos.iter().any(|d| d.profile_id == "Q"));
         assert!(!dtos.iter().any(|d| d.sql.contains("null-profile")));
+    }
+
+    #[test]
+    fn save_tab_state_errors_when_update_matches_zero_rows() {
+        // Real AppSession wrapper + temp Production sqlite — do NOT assert on a
+        // hand-built MappedIpcError.
+        let (session, _dir) = temp_session();
+        let input = sample_tab("missing-id-never-inserted");
+        let err = session
+            .save_tab_state(input, false)
+            .expect_err("unknown id UPDATE must fail");
+        assert_eq!(err.kind, IpcErrorKind::Unknown);
+        assert!(
+            err.message.to_lowercase().contains("no rows"),
+            "message={}",
+            err.message
+        );
+    }
+
+    #[test]
+    fn cached_results_data_roundtrips_as_utf8_json_bytes() {
+        let (session, _dir) = temp_session();
+        let json = r#"{"columns":["c"],"rows":[["x"]]}"#;
+        let bytes = json.as_bytes().to_vec();
+        assert_eq!(String::from_utf8(bytes.clone()).unwrap(), json);
+
+        let mut input = sample_tab("t-utf8");
+        input.cached_results_data = Some(json.to_string());
+        input.cached_column_names = Some(vec!["c".into()]);
+        session
+            .insert_tab_state(input, true)
+            .expect("insert with cached results");
+
+        let row = session.get_tab_state("t-utf8").unwrap().unwrap();
+        assert_eq!(
+            row.cached_results_data.as_deref(),
+            Some(json.as_bytes()),
+            "BLOB must be UTF-8 JSON bytes, not base64"
+        );
+        let dto = TabStateDto::from(row);
+        assert_eq!(dto.cached_results_data.as_deref(), Some(json));
+        assert_eq!(dto.order, 0); // order ↔ order_index
+        assert_eq!(dto.cached_column_names.as_deref(), Some(&["c".to_string()][..]));
     }
 }

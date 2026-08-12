@@ -288,18 +288,57 @@ describe("createTauriDragonIpc", () => {
     expect(invoke).toHaveBeenCalledWith("clear_history", { profileId: "P" });
   });
 
-  it("SP-3 stubs: tabs/csv/row-ops remain stubbed until T4/T6", async () => {
+  it("maps tab methods to locked Tauri command names", async () => {
     const ipc = createTauriDragonIpc();
-    const before = invoke.mock.calls.length;
+    const tab = {
+      id: "t1",
+      connectionId: "c1",
+      databaseName: "app",
+      queryText: "SELECT 1",
+      savedQueryId: null,
+      isActive: true,
+      order: 0,
+      createdAt: "1",
+      lastAccessedAt: "1",
+      selectedTableSchema: null,
+      selectedTableName: null,
+      selectedSchemaFilter: null,
+      cachedResultsData: null,
+      cachedColumnNames: null,
+    };
 
-    expect(await ipc.listTabStates()).toEqual([]);
-    expect(await ipc.saveCsvFile("a,b\n1,2")).toEqual({ canceled: true });
+    invoke.mockResolvedValueOnce([tab]);
+    expect(await ipc.listTabStates()).toEqual([tab]);
+    expect(invoke).toHaveBeenCalledWith("list_tab_states");
 
-    expect(invoke.mock.calls.length).toBe(before);
+    invoke.mockResolvedValueOnce(undefined);
+    await ipc.saveTabState(tab, { includeCachedResults: false });
+    expect(invoke).toHaveBeenCalledWith("save_tab_state", {
+      input: tab,
+      includeCachedResults: false,
+    });
 
+    invoke.mockResolvedValueOnce(undefined);
+    await ipc.saveTabState(tab, { includeCachedResults: true });
+    expect(invoke).toHaveBeenCalledWith("save_tab_state", {
+      input: tab,
+      includeCachedResults: true,
+    });
+
+    invoke.mockResolvedValueOnce(undefined);
+    await ipc.deleteTabState("t1");
+    expect(invoke).toHaveBeenCalledWith("delete_tab_state", { id: "t1" });
+  });
+
+  it("saveTabState rejects when UPDATE matches 0 rows", async () => {
+    const ipc = createTauriDragonIpc();
+    invoke.mockRejectedValueOnce({
+      kind: "unknown",
+      message: "save_tab_state: no rows updated",
+    });
     await expect(
       ipc.saveTabState({
-        id: "t1",
+        id: "missing",
         connectionId: null,
         databaseName: null,
         queryText: "",
@@ -314,8 +353,17 @@ describe("createTauriDragonIpc", () => {
         cachedResultsData: null,
         cachedColumnNames: null,
       }),
-    ).rejects.toThrow(/SP-3 Phase B: saveTabState/);
-    await expect(ipc.deleteTabState("t1")).rejects.toThrow(/SP-3 Phase B: deleteTabState/);
+    ).rejects.toMatchObject({ kind: "unknown", message: expect.stringMatching(/no rows/i) });
+  });
+
+  it("SP-3 stubs: csv/row-ops remain stubbed until T6", async () => {
+    const ipc = createTauriDragonIpc();
+    const before = invoke.mock.calls.length;
+
+    expect(await ipc.saveCsvFile("a,b\n1,2")).toEqual({ canceled: true });
+
+    expect(invoke.mock.calls.length).toBe(before);
+
     await expect(
       ipc.updateRow({
         connectionId: "c1",

@@ -28,15 +28,18 @@ use crate::storage::{
     create_folder as storage_create_folder, delete_folder as storage_delete_folder,
     delete_history as storage_delete_history, delete_profile as storage_delete_profile,
     delete_saved_queries as storage_delete_saved_queries,
+    delete_tab_state as storage_delete_tab_state,
     duplicate_saved_query as storage_duplicate_saved_query, get_profile as storage_get_profile,
-    get_saved_query as storage_get_saved_query, insert_history,
-    insert_saved_query_with_id as storage_insert_saved_query_with_id,
+    get_saved_query as storage_get_saved_query, get_tab_state as storage_get_tab_state,
+    insert_history, insert_saved_query_with_id as storage_insert_saved_query_with_id,
+    insert_tab_state_with_id as storage_insert_tab_state_with_id,
     list_folders as storage_list_folders, list_history as storage_list_history,
     list_profiles as storage_list_profiles, list_saved_queries as storage_list_saved_queries,
+    list_tab_states as storage_list_tab_states,
     move_saved_query as storage_move_saved_query, open_db,
     rename_folder as storage_rename_folder, save_saved_query as storage_save_saved_query,
-    upsert_profile, FolderRow, HistoryInsert, HistoryRow, ProfileRow, SavedQueryRow,
-    SavedQueryWrite,
+    upsert_profile, upsert_tab_state as storage_upsert_tab_state, FolderRow, HistoryInsert,
+    HistoryRow, ProfileRow, SavedQueryRow, SavedQueryWrite, TabStateRow, TabStateWrite,
 };
 
 /// Executable SQL payload (mirrors TS `ExecutableSQL`).
@@ -921,6 +924,119 @@ impl AppSession {
             storage_clear_history_for_profile(db, profile_id).map_err(sqlite_err)
         })
     }
+
+    // --- Tabs thin wrappers -------------------------------------------------
+
+    pub fn list_tab_states(&self) -> Result<Vec<TabStateRow>, MappedIpcError> {
+        self.with_production_db(|db| storage_list_tab_states(db).map_err(sqlite_err))
+    }
+
+    pub fn get_tab_state(&self, id: &str) -> Result<Option<TabStateRow>, MappedIpcError> {
+        self.with_production_db(|db| storage_get_tab_state(db, id).map_err(sqlite_err))
+    }
+
+    /// UPDATE-only save. Unknown id (0 matching rows) → `MappedIpcError` with `/no rows/i`.
+    ///
+    /// `cached_results_data` is UTF-8 bytes of the opaque JSON string (not base64).
+    /// TS `order` ↔ storage `order_index`.
+    ///
+    /// New tabs: use [`Self::insert_tab_state`] (client id) before update saves.
+    pub fn save_tab_state(
+        &self,
+        input: TabStateWriteInput,
+        include_cached_results: bool,
+    ) -> Result<(), MappedIpcError> {
+        self.with_production_db(|db| {
+            let write = tab_write_from_input(&input, include_cached_results, /* for_update */ true)?;
+            match storage_upsert_tab_state(db, write) {
+                Ok(_) => Ok(()),
+                Err(rusqlite::Error::QueryReturnedNoRows) => Err(MappedIpcError {
+                    kind: IpcErrorKind::Unknown,
+                    message: "save_tab_state: no rows updated".into(),
+                    position: None,
+                }),
+                Err(e) => Err(sqlite_err(e)),
+            }
+        })
+    }
+
+    pub fn delete_tab_state(&self, id: &str) -> Result<(), MappedIpcError> {
+        self.with_production_db(|db| storage_delete_tab_state(db, id).map_err(sqlite_err))
+    }
+
+    /// Insert a new tab with a client-provided id (create path).
+    pub fn insert_tab_state(
+        &self,
+        input: TabStateWriteInput,
+        include_cached_results: bool,
+    ) -> Result<(), MappedIpcError> {
+        self.with_production_db(|db| {
+            let write = tab_write_from_input(&input, include_cached_results, /* for_update */ false)?;
+            storage_insert_tab_state_with_id(db, &input.id, write).map_err(sqlite_err)
+        })
+    }
+}
+
+fn tab_write_from_input(
+    input: &TabStateWriteInput,
+    include_cached_results: bool,
+    for_update: bool,
+) -> Result<TabStateWrite, MappedIpcError> {
+    let cached_bytes = input
+        .cached_results_data
+        .as_ref()
+        .map(|s| s.as_bytes().to_vec());
+    let cached_cols = match &input.cached_column_names {
+        Some(cols) => Some(serde_json::to_string(cols).map_err(|e| MappedIpcError {
+            kind: IpcErrorKind::Unknown,
+            message: format!("cached_column_names serialize: {e}"),
+            position: None,
+        })?),
+        None => None,
+    };
+    Ok(TabStateWrite {
+        id: if for_update {
+            Some(input.id.clone())
+        } else {
+            None
+        },
+        connection_id: input.connection_id.clone(),
+        database_name: input.database_name.clone(),
+        query_text: input.query_text.clone(),
+        saved_query_id: input.saved_query_id.clone(),
+        is_active: input.is_active,
+        order_index: input.order,
+        selected_table_schema: input.selected_table_schema.clone(),
+        selected_table_name: input.selected_table_name.clone(),
+        selected_schema_filter: input.selected_schema_filter.clone(),
+        include_cached_results,
+        cached_results_data: cached_bytes,
+        cached_column_names: cached_cols,
+    })
+}
+
+/// IPC write body for save_tab_state (mirrors TS TabStateDto; `order` ↔ `order_index`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TabStateWriteInput {
+    pub id: String,
+    pub connection_id: Option<String>,
+    pub database_name: Option<String>,
+    pub query_text: String,
+    pub saved_query_id: Option<String>,
+    pub is_active: bool,
+    /// TS `order` ↔ Rust storage `order_index`.
+    pub order: i64,
+    #[serde(default)]
+    pub created_at: Option<String>,
+    #[serde(default)]
+    pub last_accessed_at: Option<String>,
+    pub selected_table_schema: Option<String>,
+    pub selected_table_name: Option<String>,
+    pub selected_schema_filter: Option<String>,
+    /// Opaque JSON string; stored as UTF-8 bytes (not base64).
+    pub cached_results_data: Option<String>,
+    pub cached_column_names: Option<Vec<String>>,
 }
 
 /// IPC write body for save_saved_query (mirrors TS SavedQueryDto fields used on write).

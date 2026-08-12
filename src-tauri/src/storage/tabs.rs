@@ -78,10 +78,15 @@ const TAB_SELECT: &str = "id, connection_id, database_name, query_text, saved_qu
 
 /// Insert or update tab metadata. When `include_cached_results` is false, blob columns
 /// are left unchanged on update.
+///
+/// When `write.id` is `Some`, this is UPDATE-only: **0 matching rows** yields
+/// `Error::QueryReturnedNoRows` so the IPC layer can map a clear error.
+/// When `write.id` is `None`, inserts a new row (generated uuid).
+/// For IPC create with a client-generated id, use [`insert_tab_state_with_id`].
 pub fn upsert_tab_state(conn: &Connection, write: TabStateWrite) -> SqliteResult<String> {
     let now = utc_now_millis();
     if let Some(ref id) = write.id {
-        if write.include_cached_results {
+        let n = if write.include_cached_results {
             conn.execute(
                 r#"
                 UPDATE tab_states SET
@@ -114,7 +119,7 @@ pub fn upsert_tab_state(conn: &Connection, write: TabStateWrite) -> SqliteResult
                     write.cached_column_names,
                     id,
                 ],
-            )?;
+            )?
         } else {
             conn.execute(
                 r#"
@@ -144,7 +149,10 @@ pub fn upsert_tab_state(conn: &Connection, write: TabStateWrite) -> SqliteResult
                     write.selected_schema_filter,
                     id,
                 ],
-            )?;
+            )?
+        };
+        if n == 0 {
+            return Err(rusqlite::Error::QueryReturnedNoRows);
         }
         Ok(id.clone())
     } else {
@@ -182,6 +190,47 @@ pub fn upsert_tab_state(conn: &Connection, write: TabStateWrite) -> SqliteResult
         )?;
         Ok(id)
     }
+}
+
+/// Insert a new tab with a client-provided id (IPC create path).
+pub fn insert_tab_state_with_id(
+    conn: &Connection,
+    id: &str,
+    write: TabStateWrite,
+) -> SqliteResult<()> {
+    let now = utc_now_millis();
+    let (blob, cols) = if write.include_cached_results {
+        (write.cached_results_data, write.cached_column_names)
+    } else {
+        (None, None)
+    };
+    conn.execute(
+        r#"
+        INSERT INTO tab_states (
+            id, connection_id, database_name, query_text, saved_query_id,
+            is_active, order_index, created_at, last_accessed_at,
+            selected_table_schema, selected_table_name, selected_schema_filter,
+            cached_results_data, cached_column_names
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
+        "#,
+        params![
+            id,
+            write.connection_id,
+            write.database_name,
+            write.query_text,
+            write.saved_query_id,
+            write.is_active as i64,
+            write.order_index,
+            now,
+            now,
+            write.selected_table_schema,
+            write.selected_table_name,
+            write.selected_schema_filter,
+            blob,
+            cols,
+        ],
+    )?;
+    Ok(())
 }
 
 /// Write cached results blob + column names JSON (results sync path).
