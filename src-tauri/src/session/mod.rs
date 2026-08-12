@@ -24,15 +24,19 @@ use crate::ssh::{
     build_auth_method, PreparedAuth, SshAuthInput, TunnelError, TunnelHandle, TunnelRequest,
 };
 use crate::storage::{
+    clear_history_for_profile as storage_clear_history_for_profile,
     create_folder as storage_create_folder, delete_folder as storage_delete_folder,
-    delete_profile as storage_delete_profile, delete_saved_queries as storage_delete_saved_queries,
+    delete_history as storage_delete_history, delete_profile as storage_delete_profile,
+    delete_saved_queries as storage_delete_saved_queries,
     duplicate_saved_query as storage_duplicate_saved_query, get_profile as storage_get_profile,
     get_saved_query as storage_get_saved_query, insert_history,
     insert_saved_query_with_id as storage_insert_saved_query_with_id,
-    list_folders as storage_list_folders, list_profiles as storage_list_profiles,
-    list_saved_queries as storage_list_saved_queries, move_saved_query as storage_move_saved_query,
-    open_db, rename_folder as storage_rename_folder, save_saved_query as storage_save_saved_query,
-    upsert_profile, FolderRow, HistoryInsert, ProfileRow, SavedQueryRow, SavedQueryWrite,
+    list_folders as storage_list_folders, list_history as storage_list_history,
+    list_profiles as storage_list_profiles, list_saved_queries as storage_list_saved_queries,
+    move_saved_query as storage_move_saved_query, open_db,
+    rename_folder as storage_rename_folder, save_saved_query as storage_save_saved_query,
+    upsert_profile, FolderRow, HistoryInsert, HistoryRow, ProfileRow, SavedQueryRow,
+    SavedQueryWrite,
 };
 
 /// Executable SQL payload (mirrors TS `ExecutableSQL`).
@@ -891,6 +895,30 @@ impl AppSession {
     pub fn delete_folder(&self, id: &str, delete_queries: bool) -> Result<(), MappedIpcError> {
         self.with_production_db(|db| {
             storage_delete_folder(db, id, delete_queries).map_err(sqlite_err)
+        })
+    }
+
+    // --- History thin wrappers ----------------------------------------------
+
+    /// Newest-first. `profile_id: None` ⇒ global list; `Some` ⇒ that profile only.
+    pub fn list_history(
+        &self,
+        limit: i64,
+        profile_id: Option<&str>,
+    ) -> Result<Vec<HistoryRow>, MappedIpcError> {
+        self.with_production_db(|db| {
+            storage_list_history(db, limit, profile_id).map_err(sqlite_err)
+        })
+    }
+
+    pub fn delete_history(&self, id: &str) -> Result<(), MappedIpcError> {
+        self.with_production_db(|db| storage_delete_history(db, id).map_err(sqlite_err))
+    }
+
+    /// Clears history for one profile only (never a global wipe).
+    pub fn clear_history_for_profile(&self, profile_id: &str) -> Result<(), MappedIpcError> {
+        self.with_production_db(|db| {
+            storage_clear_history_for_profile(db, profile_id).map_err(sqlite_err)
         })
     }
 }

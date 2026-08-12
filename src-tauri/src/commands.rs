@@ -15,7 +15,7 @@ use crate::session::{
     AppSession, ConnectResult, ExecutableSql, ProfileFields, ProfileSecretsInput,
     SaveProfileInput, SavedQueryWriteInput, TableRefArg,
 };
-use crate::storage::{FolderRow, ProfileRow, SavedQueryRow};
+use crate::storage::{FolderRow, HistoryRow, ProfileRow, SavedQueryRow};
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -289,9 +289,69 @@ pub async fn delete_folder(
     session.delete_folder(&id, delete_queries)
 }
 
+// --- History commands (no &Connection; AppSession thin wrappers) ------------
+
+/// History IPC DTO — `profileId` is required; NULL DB rows are skipped at map time.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HistoryDto {
+    pub id: String,
+    pub profile_id: String,
+    pub sql: String,
+    pub success: bool,
+    pub error_message: Option<String>,
+    pub duration_ms: i64,
+    pub row_count: Option<i64>,
+    pub created_at: String,
+}
+
+/// Map a storage row → DTO. Returns `None` when `profile_id` is NULL (do not coerce to `""`).
+fn history_dto_from_row(row: HistoryRow) -> Option<HistoryDto> {
+    let profile_id = row.profile_id?;
+    Some(HistoryDto {
+        id: row.id,
+        profile_id,
+        sql: row.sql,
+        success: row.success,
+        error_message: row.error_message,
+        duration_ms: row.duration_ms,
+        row_count: row.row_count,
+        created_at: row.created_at,
+    })
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn list_history(
+    state: State<'_, Mutex<AppSession>>,
+    limit: i64,
+    profile_id: Option<String>,
+) -> Result<Vec<HistoryDto>, MappedIpcError> {
+    let session = state.lock().await;
+    let rows = session.list_history(limit, profile_id.as_deref())?;
+    Ok(rows.into_iter().filter_map(history_dto_from_row).collect())
+}
+
+#[tauri::command]
+pub async fn delete_history(
+    state: State<'_, Mutex<AppSession>>,
+    id: String,
+) -> Result<(), MappedIpcError> {
+    let session = state.lock().await;
+    session.delete_history(&id)
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn clear_history(
+    state: State<'_, Mutex<AppSession>>,
+    profile_id: String,
+) -> Result<(), MappedIpcError> {
+    let session = state.lock().await;
+    session.clear_history_for_profile(&profile_id)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::SavedQueryDto;
+    use super::{history_dto_from_row, HistoryDto, SavedQueryDto};
     use crate::postgres::{IpcErrorKind, MappedIpcError};
     use crate::session::{AppSession, SavedQueryWriteInput};
     use crate::storage::{save_saved_query, SavedQueryWrite};
@@ -433,5 +493,107 @@ mod tests {
         let dup = session.duplicate_saved_query("q1").unwrap();
         assert_ne!(dup.id, "q1");
         assert_eq!(session.list_saved_queries().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn history_dto_skips_null_profile_id_does_not_coerce_empty() {
+        use crate::storage::HistoryRow;
+
+        let skipped = history_dto_from_row(HistoryRow {
+            id: "h-null".into(),
+            profile_id: None,
+            sql: "SELECT 1".into(),
+            success: true,
+            error_message: None,
+            duration_ms: 1,
+            row_count: Some(1),
+            created_at: "1".into(),
+        });
+        assert!(skipped.is_none(), "NULL profile_id must be skipped, not coerced to \"\"");
+
+        let kept = history_dto_from_row(HistoryRow {
+            id: "h1".into(),
+            profile_id: Some("P".into()),
+            sql: "SELECT 1".into(),
+            success: true,
+            error_message: None,
+            duration_ms: 3,
+            row_count: Some(1),
+            created_at: "1".into(),
+        })
+        .expect("Some(profile_id) maps");
+        assert_eq!(kept.profile_id, "P");
+
+        let v = serde_json::to_value(HistoryDto {
+            id: "h1".into(),
+            profile_id: "P".into(),
+            sql: "SELECT 1".into(),
+            success: true,
+            error_message: None,
+            duration_ms: 3,
+            row_count: Some(1),
+            created_at: "1".into(),
+        })
+        .unwrap();
+        assert_eq!(v["profileId"], "P");
+        assert_eq!(v["durationMs"], 3);
+        assert_eq!(v["errorMessage"], serde_json::Value::Null);
+    }
+
+    #[test]
+    fn clear_history_for_profile_keeps_other_profiles() {
+        use crate::storage::HistoryInsert;
+
+        let (session, app_data) = temp_session();
+        let db_path = app_data.join("dragondb.sqlite");
+        {
+            let conn = rusqlite::Connection::open(&db_path).unwrap();
+            crate::storage::insert_history(
+                &conn,
+                HistoryInsert {
+                    profile_id: Some("P".into()),
+                    sql: "SELECT p".into(),
+                    success: true,
+                    error_message: None,
+                    duration_ms: 1,
+                    row_count: Some(1),
+                },
+            )
+            .unwrap();
+            crate::storage::insert_history(
+                &conn,
+                HistoryInsert {
+                    profile_id: Some("Q".into()),
+                    sql: "SELECT q".into(),
+                    success: true,
+                    error_message: None,
+                    duration_ms: 1,
+                    row_count: Some(1),
+                },
+            )
+            .unwrap();
+            crate::storage::insert_history(
+                &conn,
+                HistoryInsert {
+                    profile_id: None,
+                    sql: "SELECT null-profile".into(),
+                    success: true,
+                    error_message: None,
+                    duration_ms: 1,
+                    row_count: Some(1),
+                },
+            )
+            .unwrap();
+        }
+
+        session.clear_history_for_profile("P").unwrap();
+        let rows = session.list_history(50, None).unwrap();
+        assert!(rows.iter().all(|r| r.profile_id.as_deref() != Some("P")));
+        assert!(rows.iter().any(|r| r.profile_id.as_deref() == Some("Q")));
+
+        let dtos: Vec<_> = rows.into_iter().filter_map(history_dto_from_row).collect();
+        assert!(dtos.iter().all(|d| d.profile_id != ""));
+        assert!(dtos.iter().any(|d| d.profile_id == "Q"));
+        assert!(!dtos.iter().any(|d| d.sql.contains("null-profile")));
     }
 }

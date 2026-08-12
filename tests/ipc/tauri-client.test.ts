@@ -258,12 +258,41 @@ describe("createTauriDragonIpc", () => {
     ).rejects.toMatchObject({ kind: "unknown", message: expect.stringMatching(/no rows/i) });
   });
 
-  it("SP-3 stubs: non-library list methods return empty; remaining mutators throw Phase B", async () => {
+  it("maps history methods to locked Tauri command names", async () => {
+    const ipc = createTauriDragonIpc();
+    const dto = {
+      id: "h1",
+      profileId: "P",
+      sql: "SELECT 1",
+      success: true,
+      errorMessage: null,
+      durationMs: 3,
+      rowCount: 1,
+      createdAt: "1",
+    };
+
+    invoke.mockResolvedValueOnce([dto]);
+    expect(await ipc.listHistory({ profileId: "P", limit: 10 })).toEqual([dto]);
+    expect(invoke).toHaveBeenCalledWith("list_history", { profileId: "P", limit: 10 });
+
+    invoke.mockResolvedValueOnce([dto]);
+    await ipc.listHistory({ limit: 5 });
+    expect(invoke).toHaveBeenCalledWith("list_history", { limit: 5 });
+
+    invoke.mockResolvedValueOnce(undefined);
+    await ipc.deleteHistory("h1");
+    expect(invoke).toHaveBeenCalledWith("delete_history", { id: "h1" });
+
+    invoke.mockResolvedValueOnce(undefined);
+    await ipc.clearHistory("P");
+    expect(invoke).toHaveBeenCalledWith("clear_history", { profileId: "P" });
+  });
+
+  it("SP-3 stubs: tabs/csv/row-ops remain stubbed until T4/T6", async () => {
     const ipc = createTauriDragonIpc();
     const before = invoke.mock.calls.length;
 
     expect(await ipc.listTabStates()).toEqual([]);
-    expect(await ipc.listHistory({ limit: 10 })).toEqual([]);
     expect(await ipc.saveCsvFile("a,b\n1,2")).toEqual({ canceled: true });
 
     expect(invoke.mock.calls.length).toBe(before);
@@ -287,8 +316,6 @@ describe("createTauriDragonIpc", () => {
       }),
     ).rejects.toThrow(/SP-3 Phase B: saveTabState/);
     await expect(ipc.deleteTabState("t1")).rejects.toThrow(/SP-3 Phase B: deleteTabState/);
-    await expect(ipc.deleteHistory("h1")).rejects.toThrow(/SP-3 Phase B: deleteHistory/);
-    await expect(ipc.clearHistory("p1")).rejects.toThrow(/SP-3 Phase B: clearHistory/);
     await expect(
       ipc.updateRow({
         connectionId: "c1",

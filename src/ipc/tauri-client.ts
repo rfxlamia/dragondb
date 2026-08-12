@@ -135,7 +135,7 @@ export function createTauriDragonIpc(): DragonIpc {
     deleteFolder(id: string, deleteQueries: boolean): Promise<void> {
       return invokeCommand("delete_folder", { id, deleteQueries });
     },
-    // SP-3 Phase A stubs — tabs/history/csv/row-ops until T3/T4/T6.
+    // SP-3 Phase A stubs — tabs/csv/row-ops until T4/T6.
     // Do NOT call invoke for these yet.
     listTabStates(): Promise<TabStateDto[]> {
       return Promise.resolve([]);
@@ -146,14 +146,15 @@ export function createTauriDragonIpc(): DragonIpc {
     deleteTabState(_id: string): Promise<void> {
       return phaseBStub("deleteTabState");
     },
-    listHistory(_opts: HistoryListOptions): Promise<HistoryDto[]> {
-      return Promise.resolve([]);
+    // SP-3 history — real Tauri invoke maps (Phase B).
+    listHistory(opts: HistoryListOptions): Promise<HistoryDto[]> {
+      return invokeCommand("list_history", { ...opts });
     },
-    deleteHistory(_id: string): Promise<void> {
-      return phaseBStub("deleteHistory");
+    deleteHistory(id: string): Promise<void> {
+      return invokeCommand("delete_history", { id });
     },
-    clearHistory(_profileId: ProfileId): Promise<void> {
-      return phaseBStub("clearHistory");
+    clearHistory(profileId: ProfileId): Promise<void> {
+      return invokeCommand("clear_history", { profileId });
     },
     saveCsvFile(_csvText: string, _defaultPath?: string): Promise<SaveCsvFileResult> {
       return Promise.resolve({ canceled: true });

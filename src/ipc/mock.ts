@@ -248,7 +248,7 @@ export function createMockDragonIpc(mode: MockMode = "happy"): DragonIpc {
     ): Promise<void> {},
     async deleteTabState(_id: string): Promise<void> {},
 
-    // SP-3 history
+    // SP-3 history — empty placeholders (real persistence via Tauri; store tests inject mocks)
     async listHistory(_opts: HistoryListOptions): Promise<HistoryDto[]> {
       return [];
     },
