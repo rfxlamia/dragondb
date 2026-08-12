@@ -8,6 +8,7 @@ import type {
   DragonIpc,
   HistoryDto,
   HistoryListOptions,
+  IpcError,
   ProfileId,
   QueryFolderDto,
   QueryResult,
@@ -220,7 +221,11 @@ export function createMockDragonIpc(mode: MockMode = "happy"): DragonIpc {
     },
     async deleteSavedQueries(_ids: string[]): Promise<void> {},
     async duplicateSavedQuery(_id: string): Promise<SavedQueryDto> {
-      throw { kind: "unknown", message: "SP-3 mock: duplicateSavedQuery not implemented" };
+      const err: IpcError = {
+        kind: "unknown",
+        message: "Saved query not found",
+      };
+      throw err;
     },
     async moveSavedQuery(_id: string, _folderId: string | null): Promise<void> {},
     async listQueryFolders(): Promise<QueryFolderDto[]> {

@@ -34,6 +34,16 @@ pub fn run() {
             commands::list_tables,
             commands::list_columns,
             commands::run_query,
+            commands::list_saved_queries,
+            commands::get_saved_query,
+            commands::save_saved_query,
+            commands::delete_saved_queries,
+            commands::duplicate_saved_query,
+            commands::move_saved_query,
+            commands::list_folders,
+            commands::create_folder,
+            commands::rename_folder,
+            commands::delete_folder,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

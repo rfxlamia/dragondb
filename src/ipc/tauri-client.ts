@@ -104,38 +104,39 @@ export function createTauriDragonIpc(): DragonIpc {
       return invokeCommand("run_query", { connectionId: c, sql });
     },
 
-    // SP-3 Phase A stubs — empty reads; mutating methods throw until Phase B.
-    // Do NOT call invoke for these yet.
+    // SP-3 library — real Tauri invoke maps (Phase B).
     listSavedQueries(): Promise<SavedQueryDto[]> {
-      return Promise.resolve([]);
+      return invokeCommand("list_saved_queries");
     },
-    getSavedQuery(_id: string): Promise<SavedQueryDto | null> {
-      return Promise.resolve(null);
+    getSavedQuery(id: string): Promise<SavedQueryDto | null> {
+      return invokeCommand("get_saved_query", { id });
     },
-    saveSavedQuery(_query: SavedQueryDto): Promise<SavedQueryDto> {
-      return phaseBStub("saveSavedQuery");
+    saveSavedQuery(query: SavedQueryDto): Promise<SavedQueryDto> {
+      return invokeCommand("save_saved_query", { query });
     },
-    deleteSavedQueries(_ids: string[]): Promise<void> {
-      return phaseBStub("deleteSavedQueries");
+    deleteSavedQueries(ids: string[]): Promise<void> {
+      return invokeCommand("delete_saved_queries", { ids });
     },
-    duplicateSavedQuery(_id: string): Promise<SavedQueryDto> {
-      return phaseBStub("duplicateSavedQuery");
+    duplicateSavedQuery(id: string): Promise<SavedQueryDto> {
+      return invokeCommand("duplicate_saved_query", { id });
     },
-    moveSavedQuery(_id: string, _folderId: string | null): Promise<void> {
-      return phaseBStub("moveSavedQuery");
+    moveSavedQuery(id: string, folderId: string | null): Promise<void> {
+      return invokeCommand("move_saved_query", { id, folderId });
     },
     listQueryFolders(): Promise<QueryFolderDto[]> {
-      return Promise.resolve([]);
+      return invokeCommand("list_folders");
     },
-    createQueryFolder(_name: string): Promise<QueryFolderDto> {
-      return phaseBStub("createQueryFolder");
+    createQueryFolder(name: string): Promise<QueryFolderDto> {
+      return invokeCommand("create_folder", { name });
     },
-    renameQueryFolder(_id: string, _name: string): Promise<void> {
-      return phaseBStub("renameQueryFolder");
+    renameQueryFolder(id: string, name: string): Promise<void> {
+      return invokeCommand("rename_folder", { id, name });
     },
-    deleteFolder(_id: string, _deleteQueries: boolean): Promise<void> {
-      return phaseBStub("deleteFolder");
+    deleteFolder(id: string, deleteQueries: boolean): Promise<void> {
+      return invokeCommand("delete_folder", { id, deleteQueries });
     },
+    // SP-3 Phase A stubs — tabs/history/csv/row-ops until T3/T4/T6.
+    // Do NOT call invoke for these yet.
     listTabStates(): Promise<TabStateDto[]> {
       return Promise.resolve([]);
     },
