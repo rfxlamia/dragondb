@@ -19,6 +19,10 @@ export interface ConnectionPanelProps {
   ipc: DragonIpc;
   isConnected: boolean;
   activeProfileId?: ProfileId;
+  /** Session connect via store (generation-guarded). Profile CRUD stays on ipc. */
+  connectProfile: (id: ProfileId) => Promise<ConnectResult>;
+  /** Session disconnect via store (orchestrator clear). Never raw ipc.disconnect for live session. */
+  disconnectSession: () => Promise<void>;
   onConnected: (result: ConnectResult) => void;
   onDisconnected: () => void;
   onSwitchSuccess: (result: ConnectResult) => void;
@@ -39,6 +43,8 @@ export function ConnectionPanel(props: ConnectionPanelProps): React.JSX.Element 
     ipc,
     isConnected,
     activeProfileId,
+    connectProfile,
+    disconnectSession,
     onConnected,
     onDisconnected,
     onSwitchSuccess,
@@ -153,7 +159,7 @@ export function ConnectionPanel(props: ConnectionPanelProps): React.JSX.Element 
     setBusy(true);
     setErrorMessage(null);
     try {
-      const result = await ipc.connectProfile(selectedId);
+      const result = await connectProfile(selectedId);
       setSessionClaimed(true);
       setConnectedProfileId(result.profileId);
       onConnected(result);
@@ -170,7 +176,7 @@ export function ConnectionPanel(props: ConnectionPanelProps): React.JSX.Element 
     setBusy(true);
     setErrorMessage(null);
     try {
-      await ipc.disconnect();
+      await disconnectSession();
       setSessionClaimed(false);
       setConnectedProfileId(null);
       onDisconnected();
@@ -188,7 +194,7 @@ export function ConnectionPanel(props: ConnectionPanelProps): React.JSX.Element 
     setBusy(true);
     setErrorMessage(null);
     try {
-      await ipc.disconnect();
+      await disconnectSession();
     } catch (error) {
       // Keep Connected claim; disconnect failure is not connect-B failure.
       setErrorMessage(humanIpcErrorMessage(error));
@@ -200,7 +206,7 @@ export function ConnectionPanel(props: ConnectionPanelProps): React.JSX.Element 
     setConnectedProfileId(null);
     onDisconnected();
     try {
-      const result = await ipc.connectProfile(targetId);
+      const result = await connectProfile(targetId);
       setSessionClaimed(true);
       setConnectedProfileId(result.profileId);
       setSelectedId(targetId);
@@ -231,7 +237,7 @@ export function ConnectionPanel(props: ConnectionPanelProps): React.JSX.Element 
       const liveId = connectedProfileId ?? activeProfileId ?? selectedId;
       const isActiveConnected = sessionClaimed && liveId === id;
       if (isActiveConnected) {
-        await ipc.disconnect();
+        await disconnectSession();
         setSessionClaimed(false);
         setConnectedProfileId(null);
         onDisconnected();

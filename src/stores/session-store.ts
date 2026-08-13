@@ -5,7 +5,7 @@ export type SessionState = {
   isConnected: boolean;
   connectionId: ConnectionId | null;
   profileId: ProfileId | null;
-  connect: (profileId: ProfileId) => Promise<void>;
+  connect: (profileId: ProfileId) => Promise<ConnectResult>;
   disconnect: () => Promise<void>;
   /** Disconnect then connect to `profileId` (SP-2 switch success path). */
   switchSuccess: (profileId: ProfileId) => Promise<void>;
@@ -38,13 +38,16 @@ export function createSessionStore(
       const generation = ++connectGeneration;
       try {
         const result = await ipc.connectProfile(profileId);
-        if (generation !== connectGeneration) return;
+        if (generation !== connectGeneration) {
+          throw { kind: "unknown", message: "cancelled" };
+        }
         set({
           isConnected: true,
           connectionId: result.connectionId,
           profileId: result.profileId,
         });
         await options.onConnected?.(result);
+        return result;
       } catch (error) {
         if (generation === connectGeneration) {
           set({

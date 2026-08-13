@@ -49,6 +49,14 @@ describe("App production default (no runtime mock)", () => {
     expect(screen.queryByTestId(VisualQueryAccessibility.runQuery)).toBeDisabled();
     expect(screen.getAllByTestId(VisualQueryAccessibility.runQuery)).toHaveLength(1);
   });
+
+  it("Phase C must not render TabBar / History browser / Export button", async () => {
+    const ipc = createMockDragonIpc("happy");
+    render(<App ipc={ipc} />);
+    expect(screen.queryByRole("tablist")).toBeNull();
+    expect(screen.queryByText(/history/i)).toBeNull();
+    expect(screen.queryByRole("button", { name: /export/i })).toBeNull();
+  });
 });
 
 describe("App session connect / disconnect / switch", () => {

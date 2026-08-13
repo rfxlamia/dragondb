@@ -17,6 +17,49 @@ describe("session-store", () => {
     expect(onConnected).toHaveBeenCalledWith({ connectionId: "c-a", profileId: "P" });
   });
 
+  it("connect returns ConnectResult after success set", async () => {
+    const connectProfile = vi.fn(async () => ({ connectionId: "c-a", profileId: "P" }));
+    const onConnected = vi.fn();
+    const ipc = { connectProfile, disconnect: vi.fn() } as unknown as DragonIpc;
+    const store = createSessionStore(ipc, { onConnected });
+    const result = await store.getState().connect("P");
+    expect(result).toEqual({ connectionId: "c-a", profileId: "P" });
+    expect(onConnected).toHaveBeenCalledWith(result);
+    expect(store.getState()).toMatchObject({
+      isConnected: true,
+      connectionId: "c-a",
+      profileId: "P",
+    });
+  });
+
+  it("superseded connect success throws cancelled without wiping newer session", async () => {
+    let resolveA!: (v: { connectionId: string; profileId: string }) => void;
+    const connectProfile = vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveA = resolve;
+          }),
+      )
+      .mockResolvedValueOnce({ connectionId: "c-b", profileId: "B" });
+    const onConnected = vi.fn();
+    const ipc = { connectProfile, disconnect: vi.fn() } as unknown as DragonIpc;
+    const store = createSessionStore(ipc, { onConnected });
+    const pA = store.getState().connect("A");
+    await store.getState().connect("B");
+    expect(store.getState()).toMatchObject({ connectionId: "c-b", profileId: "B" });
+    resolveA({ connectionId: "c-a", profileId: "A" });
+    await expect(pA).rejects.toMatchObject({ kind: "unknown", message: "cancelled" });
+    expect(store.getState()).toMatchObject({
+      isConnected: true,
+      connectionId: "c-b",
+      profileId: "B",
+    });
+    expect(onConnected).toHaveBeenCalledTimes(1);
+    expect(onConnected).toHaveBeenCalledWith({ connectionId: "c-b", profileId: "B" });
+  });
+
   it("connect auth fail stays disconnected with no connectionId", async () => {
     const err: IpcError = { kind: "auth", message: "Authentication failed" };
     const connectProfile = vi.fn(async () => {

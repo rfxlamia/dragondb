@@ -1,8 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useSyncExternalStore } from "react";
+import { useStore } from "zustand";
 import type { ExecutableSQL, TableReference } from "./core";
-import type { ConnectionId, ConnectResult, DragonIpc, IpcError, ProfileId } from "./ipc/contract";
+import type { ConnectResult, DragonIpc, IpcError, ProfileId } from "./ipc/contract";
 import { coreToTableRef, tableRefToCore } from "./ipc/table-ref";
 import { createTauriDragonIpc } from "./ipc/tauri-client";
+import { composeAppStores, type AppStores } from "./stores/compose-app-stores";
 import { ConnectionPanel } from "./ui/connection/connection-panel";
 import { VisualQueryCanvas } from "./ui/visual-query/canvas";
 import { VisualQueryCopy } from "./ui/visual-query/copy";
@@ -18,121 +20,70 @@ function ensureDefaultIpc(ref: { current: DragonIpc | null }): DragonIpc {
   return created;
 }
 
+function mapSchemaError(code: string | null): string | null {
+  if (code === null) return null;
+  if (code === "tables_load_failed") return VisualQueryCopy.tablesLoadError;
+  if (code === "columns_load_failed") return VisualQueryCopy.columnsLoadError;
+  return code;
+}
+
 export default function App({ ipc: ipcProp }: AppProps = {}) {
   // Lazy default: never call createTauriDragonIpc at module scope or when ipc is injected.
   const defaultIpcRef = useRef<DragonIpc | null>(null);
   const ipc = ipcProp ?? ensureDefaultIpc(defaultIpcRef);
 
-  const [isConnected, setIsConnected] = useState(false);
-  const [connectionId, setConnectionId] = useState<ConnectionId | null>(null);
-  const [profileId, setProfileId] = useState<ProfileId | null>(null);
-  const [canvasEpoch, setCanvasEpoch] = useState(0);
+  const storesHolder = useRef<{ ipc: DragonIpc; stores: AppStores } | null>(null);
+  if (storesHolder.current === null || storesHolder.current.ipc !== ipc) {
+    storesHolder.current = { ipc, stores: composeAppStores(ipc) };
+  }
+  const stores = storesHolder.current.stores;
 
-  const [tables, setTables] = useState<TableReference[]>([]);
-  const [columnNames, setColumnNames] = useState<string[]>([]);
-  const [metadataErrorMessage, setMetadataErrorMessage] = useState<string | null>(null);
+  const isConnected = useStore(stores.session, (s) => s.isConnected);
+  const connectionId = useStore(stores.session, (s) => s.connectionId);
+  const profileId = useStore(stores.session, (s) => s.profileId);
+  const tableRefs = useStore(stores.schema, (s) => s.tables);
+  const columnNames = useStore(stores.schema, (s) => s.columnNames);
+  const metadataErrorCode = useStore(stores.schema, (s) => s.metadataErrorMessage);
+  const canvasEpoch = useSyncExternalStore(stores.subscribeCanvasEpoch, stores.getCanvasEpoch);
 
-  const columnGeneration = useRef(0);
-  const tableGeneration = useRef(0);
-  const mounted = useRef(true);
-  /** Live connection id for in-flight column loads (avoids stale closure). */
-  const connectionIdRef = useRef<ConnectionId | null>(null);
-  connectionIdRef.current = connectionId;
-  /** Profile id at last disconnect — used to remount when reconnecting a different profile. */
-  const snapshotProfileIdRef = useRef<ProfileId | null>(null);
-
-  useEffect(() => {
-    mounted.current = true;
-    return () => {
-      mounted.current = false;
-      columnGeneration.current += 1;
-      tableGeneration.current += 1;
-    };
-  }, []);
-
-  function loadTables(cid: ConnectionId): void {
-    const generation = ++tableGeneration.current;
-    void ipc.listTables(cid).then(
-      (rows) => {
-        if (!mounted.current || generation !== tableGeneration.current) return;
-        setTables(rows.map(tableRefToCore));
-      },
-      () => {
-        if (!mounted.current || generation !== tableGeneration.current) return;
-        setTables([]);
-        setMetadataErrorMessage(VisualQueryCopy.tablesLoadError);
-      },
-    );
+  /** Last live profile id — store clears before panel calls onDisconnected. */
+  const lastProfileIdRef = useRef<ProfileId | null>(null);
+  if (isConnected && profileId !== null) {
+    lastProfileIdRef.current = profileId;
   }
 
-  function clearSession(): void {
-    setIsConnected(false);
-    setConnectionId(null);
-    setProfileId(null);
-  }
-
-  function applyConnected(result: ConnectResult): void {
-    setIsConnected(true);
-    setConnectionId(result.connectionId);
-    setProfileId(result.profileId);
-    setColumnNames([]);
-    setMetadataErrorMessage(null);
-    loadTables(result.connectionId);
-  }
+  const tables = tableRefs.map(tableRefToCore);
+  const metadataErrorMessage = mapSchemaError(metadataErrorCode);
 
   function handleConnected(result: ConnectResult): void {
-    const prior = snapshotProfileIdRef.current;
-    snapshotProfileIdRef.current = null;
-    if (prior !== null && prior !== result.profileId) {
-      setCanvasEpoch((epoch) => epoch + 1);
-      setTables([]);
-      setColumnNames([]);
-      setMetadataErrorMessage(null);
+    if (stores.shouldRemountCanvasOnConnect(result.profileId)) {
+      stores.bumpCanvasEpoch();
     }
-    applyConnected(result);
+    stores.acknowledgeConnect(result.profileId);
   }
 
   function handleDisconnected(): void {
-    // Lock canvas; preserve cards by not remounting (no canvasEpoch bump).
-    snapshotProfileIdRef.current = profileId;
-    clearSession();
+    stores.noteCanvasDisconnect(lastProfileIdRef.current);
   }
 
   function handleSwitchSuccess(result: ConnectResult): void {
-    snapshotProfileIdRef.current = null;
-    setCanvasEpoch((epoch) => epoch + 1);
-    setTables([]);
-    setColumnNames([]);
-    setMetadataErrorMessage(null);
-    applyConnected(result);
+    stores.bumpCanvasEpoch();
+    stores.acknowledgeConnect(result.profileId);
   }
 
   function handleSwitchFailure(_error: IpcError): void {
-    // Panel already shows errorMessage; lock snapshot without remounting.
-    snapshotProfileIdRef.current = null;
-    clearSession();
+    // Session already disconnected via store; clear canvas disconnect snapshot only.
+    stores.acknowledgeConnect(lastProfileIdRef.current ?? "");
   }
 
   function handleCommittedFromChange(table: TableReference | null): void {
-    const generation = ++columnGeneration.current;
-    setColumnNames([]);
-    setMetadataErrorMessage(null);
-    if (table === null) return;
-
-    const liveId = connectionIdRef.current;
+    if (table === null) {
+      stores.schema.getState().clearColumns();
+      return;
+    }
+    const liveId = stores.session.getState().connectionId;
     if (liveId === null) return;
-
-    void ipc.listColumns(liveId, coreToTableRef(table)).then(
-      (rows) => {
-        if (!mounted.current || generation !== columnGeneration.current) return;
-        setColumnNames(rows.map((column) => column.name));
-      },
-      () => {
-        if (!mounted.current || generation !== columnGeneration.current) return;
-        setColumnNames([]);
-        setMetadataErrorMessage(VisualQueryCopy.columnsLoadError);
-      },
-    );
+    void stores.schema.getState().loadColumns(liveId, coreToTableRef(table));
   }
 
   const onRunQuery =
@@ -146,6 +97,8 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
         ipc={ipc}
         isConnected={isConnected}
         activeProfileId={profileId ?? undefined}
+        connectProfile={(id) => stores.session.getState().connect(id)}
+        disconnectSession={() => stores.session.getState().disconnect()}
         onConnected={handleConnected}
         onDisconnected={handleDisconnected}
         onSwitchSuccess={handleSwitchSuccess}

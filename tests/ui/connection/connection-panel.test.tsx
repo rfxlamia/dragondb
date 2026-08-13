@@ -11,6 +11,13 @@ function baseProfileFields() {
   return { ...fixtureProfileFields(), name: "dev" };
 }
 
+function sessionPropsFromIpc(ipc: ReturnType<typeof createMockDragonIpc>) {
+  return {
+    connectProfile: (id: string) => ipc.connectProfile(id),
+    disconnectSession: () => ipc.disconnect(),
+  };
+}
+
 describe("ConnectionPanel Save-then-Connect", () => {
   it("keeps Connect unavailable until the profile is saved", async () => {
     const user = userEvent.setup();
@@ -20,6 +27,7 @@ describe("ConnectionPanel Save-then-Connect", () => {
       <ConnectionPanel
         ipc={ipc}
         isConnected={false}
+        {...sessionPropsFromIpc(ipc)}
         onConnected={onConnected}
         onDisconnected={vi.fn()}
         onSwitchSuccess={vi.fn()}
@@ -45,6 +53,7 @@ describe("ConnectionPanel Save-then-Connect", () => {
       <ConnectionPanel
         ipc={ipc}
         isConnected={false}
+        {...sessionPropsFromIpc(ipc)}
         onConnected={onConnected}
         onDisconnected={vi.fn()}
         onSwitchSuccess={vi.fn()}
@@ -64,6 +73,34 @@ describe("ConnectionPanel Save-then-Connect", () => {
     expect(result.connectionId).not.toBe(result.profileId);
   });
 
+  it("calls onConnected via connectProfile prop (not raw ipc.connectProfile for session path)", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    const connectProfile = vi.fn(async (id: string) => ipc.connectProfile(id));
+    const disconnectSession = vi.fn(async () => ipc.disconnect());
+    const onConnected = vi.fn();
+    render(
+      <ConnectionPanel
+        ipc={ipc}
+        isConnected={false}
+        connectProfile={connectProfile}
+        disconnectSession={disconnectSession}
+        onConnected={onConnected}
+        onDisconnected={vi.fn()}
+        onSwitchSuccess={vi.fn()}
+        onSwitchFailure={vi.fn()}
+      />,
+    );
+    await user.type(screen.getByLabelText(/host/i), "127.0.0.1");
+    await user.type(screen.getByLabelText(/username/i), "postgres");
+    await user.type(screen.getByLabelText(/database/i), "app");
+    await user.type(screen.getByLabelText(/^password$/i), "pw");
+    await user.click(screen.getByRole("button", { name: /save/i }));
+    await user.click(await screen.findByRole("button", { name: /connect/i }));
+    await waitFor(() => expect(onConnected).toHaveBeenCalled());
+    expect(connectProfile).toHaveBeenCalled();
+  });
+
   it("hides verify-ca and verify-full SSL options when sshEnabled", async () => {
     const user = userEvent.setup();
     const ipc = createMockDragonIpc("happy");
@@ -71,6 +108,7 @@ describe("ConnectionPanel Save-then-Connect", () => {
       <ConnectionPanel
         ipc={ipc}
         isConnected={false}
+        {...sessionPropsFromIpc(ipc)}
         onConnected={vi.fn()}
         onDisconnected={vi.fn()}
         onSwitchSuccess={vi.fn()}
@@ -84,6 +122,34 @@ describe("ConnectionPanel Save-then-Connect", () => {
     // Options must not be selectable even if present as disabled leftovers:
     expect(screen.queryByRole("option", { name: /verify-ca/i })).toBeNull();
     expect(screen.queryByRole("option", { name: /verify-full/i })).toBeNull();
+  });
+
+  it("Disconnect uses disconnectSession prop", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    const saved = await ipc.saveProfile({
+      profile: baseProfileFields(),
+      secrets: { password: "pw" },
+    });
+    await ipc.connectProfile(saved.id);
+    const disconnectSession = vi.fn(async () => ipc.disconnect());
+    const onDisconnected = vi.fn();
+    render(
+      <ConnectionPanel
+        ipc={ipc}
+        isConnected={true}
+        activeProfileId={saved.id}
+        connectProfile={(id) => ipc.connectProfile(id)}
+        disconnectSession={disconnectSession}
+        onConnected={vi.fn()}
+        onDisconnected={onDisconnected}
+        onSwitchSuccess={vi.fn()}
+        onSwitchFailure={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: /disconnect/i }));
+    await waitFor(() => expect(disconnectSession).toHaveBeenCalled());
+    expect(onDisconnected).toHaveBeenCalled();
   });
 
   it("calls onDisconnected when Disconnect is clicked while Connected", async () => {
@@ -100,6 +166,7 @@ describe("ConnectionPanel Save-then-Connect", () => {
         ipc={ipc}
         isConnected={true}
         activeProfileId={saved.id}
+        {...sessionPropsFromIpc(ipc)}
         onConnected={vi.fn()}
         onDisconnected={onDisconnected}
         onSwitchSuccess={vi.fn()}
@@ -140,6 +207,7 @@ describe("ConnectionPanel Save-then-Connect", () => {
         ipc={ipc}
         isConnected={true}
         activeProfileId={a.id}
+        {...sessionPropsFromIpc(ipc)}
         onConnected={vi.fn()}
         onDisconnected={onDisconnected}
         onSwitchSuccess={onSwitchSuccess}
@@ -178,6 +246,7 @@ describe("ConnectionPanel Save-then-Connect", () => {
         ipc={ipc}
         isConnected={true}
         activeProfileId={a.id}
+        {...sessionPropsFromIpc(ipc)}
         onConnected={vi.fn()}
         onDisconnected={vi.fn()}
         onSwitchSuccess={onSwitchSuccess}
@@ -201,6 +270,7 @@ describe("ConnectionPanel Save-then-Connect", () => {
         ipc={ipc}
         isConnected={true}
         activeProfileId={a.id}
+        {...sessionPropsFromIpc(ipc)}
         onConnected={vi.fn()}
         onDisconnected={vi.fn()}
         onSwitchSuccess={onSwitchSuccess}
@@ -242,6 +312,7 @@ describe("ConnectionPanel Save-then-Connect", () => {
         ipc={ipc}
         isConnected={true}
         activeProfileId={a.id}
+        {...sessionPropsFromIpc(ipc)}
         onConnected={vi.fn()}
         onDisconnected={vi.fn()}
         onSwitchSuccess={onSwitchSuccess}
@@ -274,6 +345,7 @@ describe("ConnectionPanel Save-then-Connect", () => {
         ipc={ipc}
         isConnected={false}
         activeProfileId={saved.id}
+        {...sessionPropsFromIpc(ipc)}
         onConnected={onConnected}
         onDisconnected={vi.fn()}
         onSwitchSuccess={vi.fn()}
@@ -295,13 +367,15 @@ describe("ConnectionPanel Save-then-Connect", () => {
     });
     await ipc.connectProfile(saved.id);
     const deleteSpy = vi.spyOn(ipc, "deleteProfile");
-    const disconnectSpy = vi.spyOn(ipc, "disconnect");
+    const disconnectSession = vi.fn(async () => ipc.disconnect());
     const onDisconnected = vi.fn();
     render(
       <ConnectionPanel
         ipc={ipc}
         isConnected={true}
         activeProfileId={saved.id}
+        connectProfile={(id) => ipc.connectProfile(id)}
+        disconnectSession={disconnectSession}
         onConnected={vi.fn()}
         onDisconnected={onDisconnected}
         onSwitchSuccess={vi.fn()}
@@ -311,9 +385,44 @@ describe("ConnectionPanel Save-then-Connect", () => {
     await user.click(screen.getByRole("button", { name: /delete/i }));
     await user.click(screen.getByRole("button", { name: /confirm/i }));
     await waitFor(() => expect(deleteSpy).toHaveBeenCalledWith(saved.id));
-    expect(disconnectSpy).toHaveBeenCalled();
+    expect(disconnectSession).toHaveBeenCalled();
     expect(onDisconnected).toHaveBeenCalled();
     expect(await ipc.getProfile(saved.id)).toBeNull();
+  });
+
+  it("delete active connected profile calls disconnectSession not raw ipc.disconnect", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    const saved = await ipc.saveProfile({
+      profile: baseProfileFields(),
+      secrets: { password: "pw" },
+    });
+    await ipc.connectProfile(saved.id);
+    const disconnectSession = vi.fn(async () => ipc.disconnect());
+    const disconnectSpy = vi.spyOn(ipc, "disconnect");
+    const onDisconnected = vi.fn();
+    render(
+      <ConnectionPanel
+        ipc={ipc}
+        isConnected={true}
+        activeProfileId={saved.id}
+        connectProfile={(id) => ipc.connectProfile(id)}
+        disconnectSession={disconnectSession}
+        onConnected={vi.fn()}
+        onDisconnected={onDisconnected}
+        onSwitchSuccess={vi.fn()}
+        onSwitchFailure={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: /delete/i }));
+    await user.click(screen.getByRole("button", { name: /confirm/i }));
+    await waitFor(() => expect(disconnectSession).toHaveBeenCalled());
+    expect(onDisconnected).toHaveBeenCalled();
+    // Session path must go through disconnectSession; raw spy is only via that prop.
+    expect(disconnectSpy).toHaveBeenCalledTimes(1);
+    expect(disconnectSession.mock.invocationCallOrder[0]).toBeLessThan(
+      disconnectSpy.mock.invocationCallOrder[0]!,
+    );
   });
 
   it("surfaces listProfiles failure on mount", async () => {
@@ -325,6 +434,7 @@ describe("ConnectionPanel Save-then-Connect", () => {
       <ConnectionPanel
         ipc={ipc}
         isConnected={false}
+        {...sessionPropsFromIpc(ipc)}
         onConnected={vi.fn()}
         onDisconnected={vi.fn()}
         onSwitchSuccess={vi.fn()}
