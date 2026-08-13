@@ -4,7 +4,7 @@ import type { ExecutableSQL, TableReference } from "./core";
 import type { ConnectResult, DragonIpc, IpcError, ProfileId } from "./ipc/contract";
 import { coreToTableRef, tableRefToCore } from "./ipc/table-ref";
 import { createTauriDragonIpc } from "./ipc/tauri-client";
-import { composeAppStores, type AppStores } from "./stores/compose-app-stores";
+import { type AppStores, composeAppStores } from "./stores/compose-app-stores";
 import { runSelectOnActiveTab } from "./stores/run-select-on-active-tab";
 import { ConnectionPanel } from "./ui/connection/connection-panel";
 import { VisualQueryCanvas } from "./ui/visual-query/canvas";

@@ -122,4 +122,50 @@ describe("run → executing tab orchestration", () => {
       message: "syntax error",
     });
   });
+
+  it("superseded older connect fail must not clear newer session or wipe newer schema", async () => {
+    let rejectA!: (e: { kind: string; message: string }) => void;
+    const connectProfile = vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise((_resolve, reject) => {
+            rejectA = reject;
+          }),
+      )
+      .mockResolvedValueOnce({ connectionId: "c-b", profileId: "B" });
+    const listTables = vi.fn().mockResolvedValueOnce([{ name: "b_only", schema: "public" }]);
+    const ipc = composeIpc({ connectProfile, listTables });
+    const stores = composeAppStores(ipc);
+    const pA = stores.session.getState().connect("A");
+    await stores.session.getState().connect("B");
+    rejectA({ kind: "unknown", message: "cancelled" });
+    await expect(pA).rejects.toMatchObject({ message: "cancelled" });
+    expect(stores.session.getState()).toMatchObject({
+      isConnected: true,
+      connectionId: "c-b",
+      profileId: "B",
+    });
+    expect(stores.schema.getState().tables).toEqual([{ name: "b_only", schema: "public" }]);
+  });
+
+  it("switchFailAfterTeardown clears tab results (dual-exit AC)", async () => {
+    const err = { kind: "auth" as const, message: "B failed" };
+    const connectProfile = vi
+      .fn()
+      .mockResolvedValueOnce({ connectionId: "c-a", profileId: "A" })
+      .mockRejectedValueOnce(err);
+    const ipc = composeIpc({ connectProfile });
+    const stores = composeAppStores(ipc);
+    await stores.session.getState().connect("A");
+    const tab = stores.tabs.getState().createTab();
+    await runSelectOnActiveTab(stores, ipc, FIXTURE_SQL);
+    expect(stores.tabs.getState().tabs.find((t) => t.id === tab.id)?.status?.kind).toBe("ok");
+    await expect(stores.session.getState().switchFailAfterTeardown("B")).rejects.toEqual(err);
+    expect(stores.tabs.getState().tabs.find((t) => t.id === tab.id)?.raw).toBeNull();
+    expect(stores.tabs.getState().tabs.find((t) => t.id === tab.id)?.status).toEqual({
+      kind: "idle",
+    });
+    expect(stores.session.getState().isConnected).toBe(false);
+  });
 });
