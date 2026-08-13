@@ -290,7 +290,7 @@ describe("App session connect / disconnect / switch", () => {
     expect(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock)).toBeDisabled();
   });
 
-  it.fails("after failed switch to B, connecting to B remounts canvas empty (AC Session)", async () => {
+  it("after failed switch to B, connecting to B remounts canvas empty (AC Session)", async () => {
     // Spec: Switch fail keeps A cards as snapshot; later connect to different profile B
     // must remount empty — same as disconnect→connect different profile.
     const user = userEvent.setup();

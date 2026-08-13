@@ -172,7 +172,7 @@ describe("SP-3 audit — App hydrates tabs on start (AC Tabs)", () => {
 });
 
 describe("SP-3 audit — switch-fail snapshot must remount next different profile (AC Session)", () => {
-  it.fails("App.handleSwitchFailure must not wipe the disconnect snapshot", () => {
+  it("App.handleSwitchFailure must not wipe the disconnect snapshot", () => {
     // Spec: Switch fails after teardown → cards snapshot without result; later
     // connect to a different profile must remount empty (same as disconnect→B).
     // Bug: App.tsx handleSwitchFailure calls noteCanvasDisconnect(null).

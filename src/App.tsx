@@ -75,8 +75,7 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
   }
 
   function handleSwitchFailure(_error: IpcError): void {
-    // Session already disconnected via store; clear canvas disconnect snapshot only.
-    stores.noteCanvasDisconnect(null);
+    // Snapshot already set by onDisconnected after A teardown — keep it for remount-on-B.
   }
 
   function handleCommittedFromChange(table: TableReference | null): void {
