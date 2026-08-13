@@ -30,6 +30,20 @@ export type ParsedConnectionString = {
 const DEFAULT_PORT = 5432;
 const SCHEME_RE = /^(postgres|postgresql):\/\//i;
 
+function decodeComponent(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch (error) {
+    if (error instanceof URIError) {
+      throw new ConnectionStringParseError(
+        "invalidPercentEncoding",
+        "Invalid percent-encoding in connection string",
+      );
+    }
+    throw error;
+  }
+}
+
 function lookLikeInvalidPort(input: string): boolean {
   // Authority port that is present but non-numeric → invalidPort taxonomy.
   const match = input.match(/^postgres(?:ql)?:\/\/(?:[^@/?#]*@)?[^:/?#]*:([^@/?#]*)/i);
@@ -95,7 +109,7 @@ export function parseConnectionString(connectionString: string): ParsedConnectio
   }
 
   const databasePath = url.pathname.replace(/^\/+/, "");
-  const database = databasePath.length > 0 ? decodeURIComponent(databasePath) : undefined;
+  const database = databasePath.length > 0 ? decodeComponent(databasePath) : undefined;
 
   const queryParameters: Record<string, string> = {};
   url.searchParams.forEach((value, key) => {
@@ -108,8 +122,8 @@ export function parseConnectionString(connectionString: string): ParsedConnectio
     scheme,
     host,
     port,
-    user: url.username ? decodeURIComponent(url.username) : undefined,
-    password: url.password ? decodeURIComponent(url.password) : undefined,
+    user: url.username ? decodeComponent(url.username) : undefined,
+    password: url.password ? decodeComponent(url.password) : undefined,
     database,
     sslmode: sslmode !== undefined ? sslmode : undefined,
     queryParameters,
