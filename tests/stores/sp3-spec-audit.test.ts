@@ -246,7 +246,7 @@ describe("SP-3 audit — connection string taxonomy (AC Utils)", () => {
 });
 
 describe("SP-3 audit — TabState timestamp round-trip (AC Tabs)", () => {
-  it.fails("tab_write_from_input / TabStateWrite must carry client createdAt/lastAccessedAt", () => {
+  it("tab_write_from_input / TabStateWrite must carry client createdAt/lastAccessedAt", () => {
     // Spec: Persist round-trip all TabState checklist fields including timestamps
     // (MRU closeTab depends on lastAccessedAt surviving restart).
     const session = readFileSync(join(process.cwd(), "src-tauri/src/session/mod.rs"), "utf8");

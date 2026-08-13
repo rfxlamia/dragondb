@@ -1099,6 +1099,8 @@ fn tab_write_from_input(
         saved_query_id: input.saved_query_id.clone(),
         is_active: input.is_active,
         order_index: input.order,
+        created_at: input.created_at.clone(),
+        last_accessed_at: input.last_accessed_at.clone(),
         selected_table_schema: input.selected_table_schema.clone(),
         selected_table_name: input.selected_table_name.clone(),
         selected_schema_filter: input.selected_schema_filter.clone(),

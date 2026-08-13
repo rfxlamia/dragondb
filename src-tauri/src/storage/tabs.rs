@@ -36,6 +36,10 @@ pub struct TabStateWrite {
     pub saved_query_id: Option<String>,
     pub is_active: bool,
     pub order_index: i64,
+    /// Client-provided created_at; insert uses this or server now.
+    pub created_at: Option<String>,
+    /// Client-provided last_accessed_at; upsert uses this or server now.
+    pub last_accessed_at: Option<String>,
     pub selected_table_schema: Option<String>,
     pub selected_table_name: Option<String>,
     pub selected_schema_filter: Option<String>,
@@ -85,6 +89,11 @@ const TAB_SELECT: &str = "id, connection_id, database_name, query_text, saved_qu
 /// For IPC create with a client-generated id, use [`insert_tab_state_with_id`].
 pub fn upsert_tab_state(conn: &Connection, write: TabStateWrite) -> SqliteResult<String> {
     let now = utc_now_millis();
+    let last_accessed = write
+        .last_accessed_at
+        .clone()
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| now.clone());
     if let Some(ref id) = write.id {
         let n = if write.include_cached_results {
             conn.execute(
@@ -111,7 +120,7 @@ pub fn upsert_tab_state(conn: &Connection, write: TabStateWrite) -> SqliteResult
                     write.saved_query_id,
                     write.is_active as i64,
                     write.order_index,
-                    now,
+                    last_accessed,
                     write.selected_table_schema,
                     write.selected_table_name,
                     write.selected_schema_filter,
@@ -143,7 +152,7 @@ pub fn upsert_tab_state(conn: &Connection, write: TabStateWrite) -> SqliteResult
                     write.saved_query_id,
                     write.is_active as i64,
                     write.order_index,
-                    now,
+                    last_accessed,
                     write.selected_table_schema,
                     write.selected_table_name,
                     write.selected_schema_filter,
@@ -162,6 +171,11 @@ pub fn upsert_tab_state(conn: &Connection, write: TabStateWrite) -> SqliteResult
         } else {
             (None, None)
         };
+        let created = write
+            .created_at
+            .clone()
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| now.clone());
         conn.execute(
             r#"
             INSERT INTO tab_states (
@@ -179,8 +193,8 @@ pub fn upsert_tab_state(conn: &Connection, write: TabStateWrite) -> SqliteResult
                 write.saved_query_id,
                 write.is_active as i64,
                 write.order_index,
-                now,
-                now,
+                created,
+                last_accessed,
                 write.selected_table_schema,
                 write.selected_table_name,
                 write.selected_schema_filter,
@@ -204,6 +218,16 @@ pub fn insert_tab_state_with_id(
     } else {
         (None, None)
     };
+    let created = write
+        .created_at
+        .clone()
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| now.clone());
+    let last_accessed = write
+        .last_accessed_at
+        .clone()
+        .filter(|s| !s.is_empty())
+        .unwrap_or(now);
     conn.execute(
         r#"
         INSERT INTO tab_states (
@@ -221,8 +245,8 @@ pub fn insert_tab_state_with_id(
             write.saved_query_id,
             write.is_active as i64,
             write.order_index,
-            now,
-            now,
+            created,
+            last_accessed,
             write.selected_table_schema,
             write.selected_table_name,
             write.selected_schema_filter,
@@ -299,6 +323,8 @@ mod tests {
                 saved_query_id: None,
                 is_active: true,
                 order_index: 0,
+                created_at: Some("10".into()),
+                last_accessed_at: Some("20".into()),
                 selected_table_schema: Some("public".into()),
                 selected_table_name: Some("users".into()),
                 selected_schema_filter: None,
@@ -338,6 +364,8 @@ mod tests {
                 saved_query_id: None,
                 is_active: false,
                 order_index: 1,
+                created_at: None,
+                last_accessed_at: Some("30".into()),
                 selected_table_schema: Some("public".into()),
                 selected_table_name: Some("users".into()),
                 selected_schema_filter: Some("public".into()),
@@ -355,9 +383,9 @@ mod tests {
             after_meta.cached_results_data.as_deref(),
             Some(&b"RAWBLOB"[..])
         );
-        // timestamps must round-trip (non-empty; last_accessed_at updates on metadata upsert)
-        assert!(!after_meta.created_at.is_empty());
-        assert!(!after_meta.last_accessed_at.is_empty());
+        // Client timestamps round-trip (created preserved from insert; last_accessed from update)
+        assert_eq!(after_meta.created_at, "10");
+        assert_eq!(after_meta.last_accessed_at, "30");
 
         delete_tab_state(&conn, &id).unwrap();
         assert!(get_tab_state(&conn, &id).unwrap().is_none());
