@@ -7,10 +7,7 @@
  */
 import type { ExecutableSQL } from "../core";
 import type { DragonIpc, QueryResult } from "../ipc/contract";
-import {
-  QUERY_FAILED_MESSAGE,
-  unknownErrorMessage,
-} from "../lib/unknown-error-message";
+import { QUERY_FAILED_MESSAGE, unknownErrorMessage } from "../lib/unknown-error-message";
 import type { AppStores } from "./compose-app-stores";
 
 function ensureActiveTab(stores: AppStores): string {

@@ -1,10 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
-import type { DragonIpc, IpcError } from "../../src/ipc/contract";
+import type { ConnectResult, DragonIpc, IpcError } from "../../src/ipc/contract";
 import { createSessionStore } from "../../src/stores/session-store";
 
 describe("session-store", () => {
   it("connect success sets isConnected + ids", async () => {
-    const connectProfile = vi.fn(async () => ({ connectionId: "c-a", profileId: "P" , database: "app"}));
+    const connectProfile = vi.fn(async () => ({
+      connectionId: "c-a",
+      profileId: "P",
+      database: "app",
+    }));
     const ipc = { connectProfile, disconnect: vi.fn() } as unknown as DragonIpc;
     const onConnected = vi.fn();
     const store = createSessionStore(ipc, { onConnected });
@@ -15,16 +19,24 @@ describe("session-store", () => {
       profileId: "P",
       databaseName: "app",
     });
-    expect(onConnected).toHaveBeenCalledWith({ connectionId: "c-a", profileId: "P" , database: "app"});
+    expect(onConnected).toHaveBeenCalledWith({
+      connectionId: "c-a",
+      profileId: "P",
+      database: "app",
+    });
   });
 
   it("connect returns ConnectResult after success set", async () => {
-    const connectProfile = vi.fn(async () => ({ connectionId: "c-a", profileId: "P" , database: "app"}));
+    const connectProfile = vi.fn(async () => ({
+      connectionId: "c-a",
+      profileId: "P",
+      database: "app",
+    }));
     const onConnected = vi.fn();
     const ipc = { connectProfile, disconnect: vi.fn() } as unknown as DragonIpc;
     const store = createSessionStore(ipc, { onConnected });
     const result = await store.getState().connect("P");
-    expect(result).toEqual({ connectionId: "c-a", profileId: "P" , database: "app"});
+    expect(result).toEqual({ connectionId: "c-a", profileId: "P", database: "app" });
     expect(onConnected).toHaveBeenCalledWith(result);
     expect(store.getState()).toMatchObject({
       isConnected: true,
@@ -35,24 +47,28 @@ describe("session-store", () => {
   });
 
   it("superseded connect success throws cancelled without wiping newer session", async () => {
-    let resolveA!: (v: { connectionId: string; profileId: string }) => void;
+    let resolveA!: (v: ConnectResult) => void;
     const connectProfile = vi
       .fn()
       .mockImplementationOnce(
         () =>
-          new Promise((resolve) => {
+          new Promise<ConnectResult>((resolve) => {
             resolveA = resolve;
           }),
       )
-      .mockResolvedValueOnce({ connectionId: "c-b", profileId: "B" , database: "app"});
+      .mockResolvedValueOnce({ connectionId: "c-b", profileId: "B", database: "app" });
     const disconnect = vi.fn(async () => undefined);
     const onConnected = vi.fn();
     const ipc = { connectProfile, disconnect } as unknown as DragonIpc;
     const store = createSessionStore(ipc, { onConnected });
     const pA = store.getState().connect("A");
     await store.getState().connect("B");
-    expect(store.getState()).toMatchObject({ connectionId: "c-b", profileId: "B", databaseName: "app" });
-    resolveA({ connectionId: "c-a", profileId: "A" , database: "app"});
+    expect(store.getState()).toMatchObject({
+      connectionId: "c-b",
+      profileId: "B",
+      databaseName: "app",
+    });
+    resolveA({ connectionId: "c-a", profileId: "A", database: "app" });
     await expect(pA).rejects.toMatchObject({ kind: "unknown", message: "cancelled" });
     expect(store.getState()).toMatchObject({
       isConnected: true,
@@ -60,7 +76,11 @@ describe("session-store", () => {
       profileId: "B",
     });
     expect(onConnected).toHaveBeenCalledTimes(1);
-    expect(onConnected).toHaveBeenCalledWith({ connectionId: "c-b", profileId: "B" , database: "app"});
+    expect(onConnected).toHaveBeenCalledWith({
+      connectionId: "c-b",
+      profileId: "B",
+      database: "app",
+    });
     // Newer connect owns the live session — cancelled A must not ipc.disconnect() B.
     expect(disconnect).not.toHaveBeenCalled();
   });
@@ -82,18 +102,18 @@ describe("session-store", () => {
   });
 
   it("superseded older fail must not clear newer success", async () => {
-    let resolveA!: (v: { connectionId: string; profileId: string }) => void;
+    let resolveA!: (v: ConnectResult) => void;
     let rejectA!: (e: IpcError) => void;
     const connectProfile = vi
       .fn()
       .mockImplementationOnce(
         () =>
-          new Promise((resolve, reject) => {
+          new Promise<ConnectResult>((resolve, reject) => {
             resolveA = resolve;
             rejectA = reject;
           }),
       )
-      .mockResolvedValueOnce({ connectionId: "c-b", profileId: "B" , database: "app"});
+      .mockResolvedValueOnce({ connectionId: "c-b", profileId: "B", database: "app" });
     const ipc = { connectProfile } as unknown as DragonIpc;
     const store = createSessionStore(ipc, { onConnected: vi.fn() });
     const pA = store.getState().connect("A");
@@ -112,7 +132,7 @@ describe("session-store", () => {
   it("disconnect clears session", async () => {
     const disconnect = vi.fn(async () => undefined);
     const ipc = {
-      connectProfile: vi.fn(async () => ({ connectionId: "c1", profileId: "P" , database: "app"})),
+      connectProfile: vi.fn(async () => ({ connectionId: "c1", profileId: "P", database: "app" })),
       disconnect,
     } as unknown as DragonIpc;
     const onDisconnected = vi.fn();
@@ -152,7 +172,7 @@ describe("session-store", () => {
     const err: IpcError = { kind: "auth", message: "B failed" };
     const connectProfile = vi
       .fn()
-      .mockResolvedValueOnce({ connectionId: "c-a", profileId: "A" , database: "app"})
+      .mockResolvedValueOnce({ connectionId: "c-a", profileId: "A", database: "app" })
       .mockRejectedValueOnce(err);
     const disconnect = vi.fn(async () => undefined);
     const ipc = { connectProfile, disconnect } as unknown as DragonIpc;

@@ -76,7 +76,7 @@ describe("createTauriDragonIpc", () => {
     await ipc.deleteProfile("p1");
     expect(invoke).toHaveBeenCalledWith("delete_profile", { id: "p1" });
 
-    invoke.mockResolvedValueOnce({ connectionId: "c-uuid", profileId: "p1" , database: "app"});
+    invoke.mockResolvedValueOnce({ connectionId: "c-uuid", profileId: "p1", database: "app" });
     await expect(ipc.connectProfile("p1")).resolves.toEqual({
       connectionId: "c-uuid",
       profileId: "p1",

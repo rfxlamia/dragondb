@@ -241,7 +241,8 @@ describe("DragonIpc contract delta (SP-3 library/tab/history/row/csv)", () => {
         throw new Error("unimplemented");
       },
       deleteProfile: async () => {},
-      connectProfile: async () => ({ connectionId: "c", profileId: "p" , database: "app"}) satisfies ConnectResult,
+      connectProfile: async () =>
+        ({ connectionId: "c", profileId: "p", database: "app" }) satisfies ConnectResult,
       disconnect: async () => {},
       listTables: async () => [],
       listColumns: async () => [],

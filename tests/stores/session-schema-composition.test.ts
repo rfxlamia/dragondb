@@ -9,7 +9,7 @@ describe("session↔schema composition", () => {
     const listTables = vi.fn(async () => [{ name: "users", schema: "public" }]);
     const connectProfile = vi
       .fn()
-      .mockResolvedValueOnce({ connectionId: "c1", profileId: "P" , database: "app"})
+      .mockResolvedValueOnce({ connectionId: "c1", profileId: "P", database: "app" })
       .mockRejectedValueOnce(err);
     const ipc = {
       connectProfile,

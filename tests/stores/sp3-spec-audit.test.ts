@@ -8,16 +8,18 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import type { DragonIpc, TabStateDto } from "../../src/ipc/contract";
+import type { ConnectResult, DragonIpc, TabStateDto } from "../../src/ipc/contract";
 import { parseConnectionString } from "../../src/lib/connection-string";
 import { composeAppStores } from "../../src/stores/compose-app-stores";
 import { createLibraryStore } from "../../src/stores/library-store";
 import { createSessionStore } from "../../src/stores/session-store";
 import { createTabsStore } from "../../src/stores/tabs-store";
 
+type SaveTabOpts = { includeCachedResults?: boolean };
+
 function stubIpc(overrides: Partial<DragonIpc> = {}): DragonIpc {
   return {
-    connectProfile: vi.fn(async () => ({ connectionId: "c1", profileId: "P" , database: "app"})),
+    connectProfile: vi.fn(async () => ({ connectionId: "c1", profileId: "P", database: "app" })),
     disconnect: vi.fn(async () => undefined),
     listTables: vi.fn(async () => []),
     listColumns: vi.fn(async () => []),
@@ -68,7 +70,7 @@ describe("SP-3 audit — compose createTab inherits databaseName (AC Tabs)", () 
     // "new tab has connectionId/databaseName inherited"
     const ipc = stubIpc({
       // Profile database is "app"; composition must surface it to tabs getters.
-      connectProfile: vi.fn(async () => ({ connectionId: "c1", profileId: "P" , database: "app"})),
+      connectProfile: vi.fn(async () => ({ connectionId: "c1", profileId: "P", database: "app" })),
       getProfile: undefined,
     });
     const stores = composeAppStores(ipc);
@@ -86,7 +88,7 @@ describe("SP-3 audit — tab metadata persist (AC Tabs)", () => {
   it("createTab / switchTab / closeTab metadata-sync via saveTabState", async () => {
     // Spec: create/switch/close + persist metadata sync vs results-blob sync
     // Scenario: Metadata sync does not rewrite blob
-    const saveTabState = vi.fn(async () => undefined);
+    const saveTabState = vi.fn(async (_dto: TabStateDto, _opts?: SaveTabOpts) => undefined);
     const ipc = stubIpc({ saveTabState });
     const store = createTabsStore(ipc, {
       getConnectionId: () => "c1",
@@ -128,11 +130,11 @@ describe("SP-3 audit — pending-deleted TOCTOU (AC Tabs)", () => {
       releaseSave = resolve;
     });
     const savedIds: string[] = [];
-    const saveTabState = vi.fn(async (dto: TabStateDto) => {
+    const saveTabState = vi.fn(async (dto: TabStateDto, _opts?: SaveTabOpts) => {
       await saveGate;
       savedIds.push(dto.id);
     });
-    const deleteTabState = vi.fn(async () => undefined);
+    const deleteTabState = vi.fn(async (_id: string) => undefined);
     const ipc = stubIpc({ saveTabState, deleteTabState });
     const store = createTabsStore(ipc, {
       getConnectionId: () => "c1",
@@ -189,10 +191,10 @@ describe("SP-3 audit — switch-fail snapshot must remount next different profil
 describe("SP-3 audit — disconnect during in-flight connect (AC Session)", () => {
   it("cancelled connect after disconnect does not leave live Rust session orphaned", async () => {
     // Spec: Disconnect clears session; cancelled connect must not leave live I/O
-    let resolveConnect!: (v: { connectionId: string; profileId: string }) => void;
+    let resolveConnect!: (v: ConnectResult) => void;
     const connectProfile = vi.fn(
-      () =>
-        new Promise<{ connectionId: string; profileId: string }>((resolve) => {
+      (_id: string) =>
+        new Promise<ConnectResult>((resolve) => {
           resolveConnect = resolve;
         }),
     );
@@ -203,7 +205,7 @@ describe("SP-3 audit — disconnect during in-flight connect (AC Session)", () =
     const connectPromise = store.getState().connect("P");
     await store.getState().disconnect();
     // Rust connect finishes after TS disconnect — generation cancels apply
-    resolveConnect({ connectionId: "orphan-c", profileId: "P" , database: "app"});
+    resolveConnect({ connectionId: "orphan-c", profileId: "P", database: "app" });
     await expect(connectPromise).rejects.toMatchObject({ message: "cancelled" });
 
     expect(store.getState().isConnected).toBe(false);
