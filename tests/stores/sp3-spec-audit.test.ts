@@ -1,12 +1,9 @@
 /**
  * SP-3 spec audit oracles — encode AC / Gherkin gaps found by bug-hunting.
  *
- * These tests are intentionally written against the approved spec
+ * These tests lock approved-spec behavior
  * (docs/pocket/spec/2026-08-11-sp3-stores/stores-utils-ipc.md).
- *
- * Marked `it.fails`: each oracle currently FAILS against Phase A/B/C code.
- * When a gap is fixed, the corresponding `it.fails` will turn red — flip it
- * to `it` and keep the assertion as the regression lock.
+ * Former `it.fails` oracles were flipped to `it` as each gap was fixed.
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
