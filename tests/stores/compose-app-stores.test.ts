@@ -35,6 +35,7 @@ describe("composeAppStores", () => {
     } as unknown as DragonIpc;
     const stores = composeAppStores(ipc);
     await stores.session.getState().connect("P");
+    expect(listTables).toHaveBeenCalledTimes(1);
     expect(listTables).toHaveBeenCalledWith("c1");
     expect(stores.session.getState()).toMatchObject({
       isConnected: true,

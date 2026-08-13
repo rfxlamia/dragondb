@@ -67,7 +67,7 @@ describe("App session connect / disconnect / switch", () => {
     render(<App ipc={ipc} />);
     await connectFirst(user, ipc);
 
-    await waitFor(() => expect(listTables).toHaveBeenCalled());
+    await waitFor(() => expect(listTables).toHaveBeenCalledTimes(1));
     const connectionId = listTables.mock.calls[0]?.[0];
     expect(connectionId).toBeTruthy();
     expect(connectionId).not.toBe(FIXTURE_CONNECTION_ID);

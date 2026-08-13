@@ -368,6 +368,7 @@ describe("ConnectionPanel Save-then-Connect", () => {
     await ipc.connectProfile(saved.id);
     const deleteSpy = vi.spyOn(ipc, "deleteProfile");
     const disconnectSession = vi.fn(async () => ipc.disconnect());
+    const disconnectSpy = vi.spyOn(ipc, "disconnect");
     const onDisconnected = vi.fn();
     render(
       <ConnectionPanel
@@ -388,41 +389,14 @@ describe("ConnectionPanel Save-then-Connect", () => {
     expect(disconnectSession).toHaveBeenCalled();
     expect(onDisconnected).toHaveBeenCalled();
     expect(await ipc.getProfile(saved.id)).toBeNull();
-  });
-
-  it("delete active connected profile calls disconnectSession not raw ipc.disconnect", async () => {
-    const user = userEvent.setup();
-    const ipc = createMockDragonIpc("happy");
-    const saved = await ipc.saveProfile({
-      profile: baseProfileFields(),
-      secrets: { password: "pw" },
-    });
-    await ipc.connectProfile(saved.id);
-    const disconnectSession = vi.fn(async () => ipc.disconnect());
-    const disconnectSpy = vi.spyOn(ipc, "disconnect");
-    const onDisconnected = vi.fn();
-    render(
-      <ConnectionPanel
-        ipc={ipc}
-        isConnected={true}
-        activeProfileId={saved.id}
-        connectProfile={(id) => ipc.connectProfile(id)}
-        disconnectSession={disconnectSession}
-        onConnected={vi.fn()}
-        onDisconnected={onDisconnected}
-        onSwitchSuccess={vi.fn()}
-        onSwitchFailure={vi.fn()}
-      />,
-    );
-    await user.click(screen.getByRole("button", { name: /delete/i }));
-    await user.click(screen.getByRole("button", { name: /confirm/i }));
-    await waitFor(() => expect(disconnectSession).toHaveBeenCalled());
-    expect(onDisconnected).toHaveBeenCalled();
     // Session path must go through disconnectSession; raw spy is only via that prop.
     expect(disconnectSpy).toHaveBeenCalledTimes(1);
-    expect(disconnectSession.mock.invocationCallOrder[0]).toBeLessThan(
-      disconnectSpy.mock.invocationCallOrder[0]!,
-    );
+    const sessionOrder = disconnectSession.mock.invocationCallOrder[0];
+    const disconnectOrder = disconnectSpy.mock.invocationCallOrder[0];
+    if (sessionOrder === undefined || disconnectOrder === undefined) {
+      throw new Error("expected disconnectSession and ipc.disconnect invocation orders");
+    }
+    expect(sessionOrder).toBeLessThan(disconnectOrder);
   });
 
   it("surfaces listProfiles failure on mount", async () => {

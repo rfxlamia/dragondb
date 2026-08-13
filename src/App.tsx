@@ -1,4 +1,4 @@
-import { useRef, useSyncExternalStore } from "react";
+import { useEffect, useRef, useSyncExternalStore } from "react";
 import { useStore } from "zustand";
 import type { ExecutableSQL, TableReference } from "./core";
 import type { ConnectResult, DragonIpc, IpcError, ProfileId } from "./ipc/contract";
@@ -49,9 +49,11 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
 
   /** Last live profile id — store clears before panel calls onDisconnected. */
   const lastProfileIdRef = useRef<ProfileId | null>(null);
-  if (isConnected && profileId !== null) {
-    lastProfileIdRef.current = profileId;
-  }
+  useEffect(() => {
+    if (isConnected && profileId !== null) {
+      lastProfileIdRef.current = profileId;
+    }
+  }, [isConnected, profileId]);
 
   const tables = tableRefs.map(tableRefToCore);
   const metadataErrorMessage = mapSchemaError(metadataErrorCode);
@@ -74,7 +76,7 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
 
   function handleSwitchFailure(_error: IpcError): void {
     // Session already disconnected via store; clear canvas disconnect snapshot only.
-    stores.acknowledgeConnect(lastProfileIdRef.current ?? "");
+    stores.noteCanvasDisconnect(null);
   }
 
   function handleCommittedFromChange(table: TableReference | null): void {
