@@ -672,6 +672,12 @@ impl AppSession {
         patch: &serde_json::Map<String, serde_json::Value>,
     ) -> Result<(), RowOperationError> {
         self.require_live_row_op(connection_id, RowOperationErrorKind::UpdateFailed)?;
+        if table.name.trim().is_empty() {
+            return Err(RowOperationError::new(
+                RowOperationErrorKind::NoTableSelected,
+                "No table selected for row update.",
+            ));
+        }
         let schema = table.schema.as_deref().unwrap_or("public");
         let table_name = table.name.as_str();
 
@@ -709,6 +715,12 @@ impl AppSession {
         primary_keys: &[serde_json::Map<String, serde_json::Value>],
     ) -> Result<(), RowOperationError> {
         self.require_live_row_op(connection_id, RowOperationErrorKind::DeleteFailed)?;
+        if table.name.trim().is_empty() {
+            return Err(RowOperationError::new(
+                RowOperationErrorKind::NoTableSelected,
+                "No table selected for row delete.",
+            ));
+        }
         let schema = table.schema.as_deref().unwrap_or("public");
         let table_name = table.name.as_str();
 
