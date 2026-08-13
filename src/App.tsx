@@ -5,6 +5,7 @@ import type { ConnectResult, DragonIpc, IpcError, ProfileId } from "./ipc/contra
 import { coreToTableRef, tableRefToCore } from "./ipc/table-ref";
 import { createTauriDragonIpc } from "./ipc/tauri-client";
 import { composeAppStores, type AppStores } from "./stores/compose-app-stores";
+import { runSelectOnActiveTab } from "./stores/run-select-on-active-tab";
 import { ConnectionPanel } from "./ui/connection/connection-panel";
 import { VisualQueryCanvas } from "./ui/visual-query/canvas";
 import { VisualQueryCopy } from "./ui/visual-query/copy";
@@ -88,8 +89,14 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
 
   const onRunQuery =
     isConnected && connectionId !== null
-      ? (sql: ExecutableSQL) => ipc.runQuery(connectionId, sql)
+      ? (sql: ExecutableSQL) => runSelectOnActiveTab(stores, ipc, sql)
       : undefined;
+
+  function handleClearTabResults(): void {
+    const activeTabId = stores.tabs.getState().activeTabId;
+    if (activeTabId === null) return;
+    stores.tabs.getState().clearTabResults(activeTabId);
+  }
 
   return (
     <main className="app-shell">
@@ -111,6 +118,7 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
         metadataErrorMessage={metadataErrorMessage}
         isConnected={isConnected}
         onRunQuery={onRunQuery}
+        onClearTabResults={handleClearTabResults}
         onCommittedFromChange={handleCommittedFromChange}
       />
     </main>

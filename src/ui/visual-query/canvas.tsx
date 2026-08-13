@@ -31,6 +31,8 @@ export type VisualQueryCanvasProps = {
   metadataErrorMessage: string | null;
   isConnected: boolean;
   onRunQuery?: (sql: ExecutableSQL) => Promise<QueryResult>;
+  /** Clears in-memory tab results (App → clearTabResults(activeTabId)). */
+  onClearTabResults?: () => void;
   /**
    * Uncontrolled by default: canvas owns one QueryDocument instance for the
    * lifetime of the mount. If `document` is passed, canvas still mutates that
@@ -51,6 +53,7 @@ export function VisualQueryCanvas(props: VisualQueryCanvasProps): React.JSX.Elem
     metadataErrorMessage,
     isConnected,
     onRunQuery,
+    onClearTabResults,
     onDocumentChange,
     onCommittedFromChange,
   } = props;
@@ -114,6 +117,7 @@ export function VisualQueryCanvas(props: VisualQueryCanvasProps): React.JSX.Elem
     });
     setShowClauseMenu(false);
     setShowStatementPicker(false);
+    onClearTabResults?.();
   }
 
   function handleDeleteClause(kind: ClauseKind): void {
