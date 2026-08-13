@@ -3,7 +3,7 @@ import type { ClauseKind, ExecutableSQL, StatementKind, TableReference } from ".
 import { CanvasPresentation, canRun, generateSQL, QueryDocument } from "../../core";
 import type { QueryResult } from "../../ipc/contract";
 import { sameTable } from "../../ipc/table-ref";
-import { humanIpcErrorMessage, isIpcError } from "../connection/connection-copy";
+import { QUERY_FAILED_MESSAGE, unknownErrorMessage } from "../../lib/unknown-error-message";
 import { VisualQueryAccessibility } from "./accessibility";
 import { ClauseCard } from "./clause-card";
 import { VisualQueryCopy } from "./copy";
@@ -150,7 +150,7 @@ export function VisualQueryCanvas(props: VisualQueryCanvasProps): React.JSX.Elem
       setRunOutcome(VisualQueryCopy.runSuccessStatus(result.rows.length, result.durationMs));
     } catch (error) {
       if (generation !== runGeneration.current) return;
-      setRunOutcome(isIpcError(error) ? error.message : humanIpcErrorMessage(error));
+      setRunOutcome(unknownErrorMessage(error, QUERY_FAILED_MESSAGE));
     } finally {
       if (generation === runGeneration.current) {
         setRunInFlight(false);

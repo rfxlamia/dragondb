@@ -7,16 +7,11 @@
  */
 import type { ExecutableSQL } from "../core";
 import type { DragonIpc, QueryResult } from "../ipc/contract";
+import {
+  QUERY_FAILED_MESSAGE,
+  unknownErrorMessage,
+} from "../lib/unknown-error-message";
 import type { AppStores } from "./compose-app-stores";
-
-function errorMessage(error: unknown): string {
-  if (error instanceof Error && error.message.length > 0) return error.message;
-  if (error && typeof error === "object" && "message" in error) {
-    const message = (error as { message: unknown }).message;
-    if (typeof message === "string" && message.length > 0) return message;
-  }
-  return "Query failed";
-}
 
 function ensureActiveTab(stores: AppStores): string {
   const { activeTabId, createTab } = stores.tabs.getState();
@@ -37,10 +32,24 @@ export async function runSelectOnActiveTab(
   const executingTabId = ensureActiveTab(stores);
   const gen = stores.tabs.getState().beginRun(executingTabId);
 
+  let result: QueryResult;
   try {
-    const result = await ipc.runQuery(connectionId, sql);
+    result = await ipc.runQuery(connectionId, sql);
+  } catch (error) {
     const { isConnected } = stores.session.getState();
     if (isConnected && gen !== null) {
+      stores.tabs
+        .getState()
+        .applyRunFailure(executingTabId, unknownErrorMessage(error, QUERY_FAILED_MESSAGE), gen);
+    }
+    throw error;
+  }
+
+  // Persist is best-effort — a rejecting saveTabState must not flip a successful
+  // run into status error / null raw (see tabs-store deleteTabState .catch).
+  const { isConnected } = stores.session.getState();
+  if (isConnected && gen !== null) {
+    try {
       await stores.tabs.getState().applyRunSuccess(
         executingTabId,
         {
@@ -50,13 +59,9 @@ export async function runSelectOnActiveTab(
         },
         gen,
       );
+    } catch {
+      /* best-effort persist */
     }
-    return result;
-  } catch (error) {
-    const { isConnected } = stores.session.getState();
-    if (isConnected && gen !== null) {
-      stores.tabs.getState().applyRunFailure(executingTabId, errorMessage(error), gen);
-    }
-    throw error;
   }
+  return result;
 }

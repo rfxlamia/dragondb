@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { DragonIpc } from "../../src/ipc/contract";
 import { compactCell } from "../../src/lib/result-compactor";
+import { QUERY_FAILED_MESSAGE } from "../../src/lib/unknown-error-message";
 import { composeAppStores } from "../../src/stores/compose-app-stores";
 import { runSelectOnActiveTab } from "../../src/stores/run-select-on-active-tab";
 
@@ -120,6 +121,45 @@ describe("run → executing tab orchestration", () => {
     expect(stores.tabs.getState().tabs.find((t) => t.id === tab.id)?.status).toEqual({
       kind: "error",
       message: "syntax error",
+    });
+  });
+
+  it("saveTabState rejection after successful run keeps ok status and returns QueryResult", async () => {
+    const ipc = composeIpc({
+      saveTabState: vi.fn(async () => {
+        throw new Error("disk full");
+      }),
+    });
+    const stores = composeAppStores(ipc);
+    await stores.session.getState().connect("P");
+    const tab = stores.tabs.getState().createTab();
+    const result = await runSelectOnActiveTab(stores, ipc, FIXTURE_SQL);
+    expect(result).toMatchObject({ columns: ["id"], rows: [[1]], durationMs: 9 });
+    const after = stores.tabs.getState().tabs.find((t) => t.id === tab.id)!;
+    expect(after.status).toEqual({ kind: "ok", rowCount: 1, durationMs: 9 });
+    expect(after.raw).toEqual({ columns: ["id"], rows: [[1]] });
+  });
+
+  it("Not connected guard throws before runQuery", async () => {
+    const ipc = composeIpc();
+    const stores = composeAppStores(ipc);
+    await expect(runSelectOnActiveTab(stores, ipc, FIXTURE_SQL)).rejects.toThrow(/Not connected/);
+    expect(ipc.runQuery).not.toHaveBeenCalled();
+  });
+
+  it("non-Error rejection uses QUERY_FAILED_MESSAGE for tab status", async () => {
+    const ipc = composeIpc({
+      runQuery: vi.fn(async () => {
+        throw "boom";
+      }),
+    });
+    const stores = composeAppStores(ipc);
+    await stores.session.getState().connect("P");
+    const tab = stores.tabs.getState().createTab();
+    await expect(runSelectOnActiveTab(stores, ipc, FIXTURE_SQL)).rejects.toBe("boom");
+    expect(stores.tabs.getState().tabs.find((t) => t.id === tab.id)?.status).toEqual({
+      kind: "error",
+      message: QUERY_FAILED_MESSAGE,
     });
   });
 
