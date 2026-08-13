@@ -86,7 +86,7 @@ describe("SP-3 audit — compose createTab inherits databaseName (AC Tabs)", () 
 });
 
 describe("SP-3 audit — tab metadata persist (AC Tabs)", () => {
-  it.fails("createTab / switchTab / closeTab metadata-sync via saveTabState", async () => {
+  it("createTab / switchTab / closeTab metadata-sync via saveTabState", async () => {
     // Spec: create/switch/close + persist metadata sync vs results-blob sync
     // Scenario: Metadata sync does not rewrite blob
     const saveTabState = vi.fn(async () => undefined);
@@ -231,7 +231,7 @@ describe("SP-3 audit — library store matrix (AC Library)", () => {
 });
 
 describe("SP-3 audit — connection string taxonomy (AC Utils)", () => {
-  it.fails("invalid percent-encoding yields invalidPercentEncoding (not raw URIError)", () => {
+  it("invalid percent-encoding yields invalidPercentEncoding (not raw URIError)", () => {
     // Spec: structured error per Swift taxonomy (invalidPercentEncoding declared)
     try {
       parseConnectionString("postgres://u:%ZZx@127.0.0.1/db");

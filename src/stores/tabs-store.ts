@@ -170,6 +170,20 @@ export function createTabsStore(ipc: DragonIpc, getters: TabsSessionGetters): St
       }));
     }
 
+    function queueMetadataPersist(tab: TabState): void {
+      void get()
+        .persistTab(toTabStateDto(tab), { includeCachedResults: false })
+        .catch(() => {
+          /* best-effort metadata sync */
+        });
+    }
+
+    function syncMetadataForCurrentTabs(): void {
+      for (const tab of get().tabs) {
+        queueMetadataPersist(tab);
+      }
+    }
+
     return {
       tabs: [],
       activeTabId: null,
@@ -182,6 +196,8 @@ export function createTabsStore(ipc: DragonIpc, getters: TabsSessionGetters): St
           tabs: [...state.tabs.map((t) => ({ ...t, isActive: false })), created],
           activeTabId: created.id,
         }));
+        // Persist new active + deactivated siblings (isActive must not stay true in sqlite).
+        syncMetadataForCurrentTabs();
         return created;
       },
 
@@ -193,6 +209,8 @@ export function createTabsStore(ipc: DragonIpc, getters: TabsSessionGetters): St
           ),
           activeTabId: id,
         }));
+        // Always persist target (lastAccessedAt) even when already active; sync siblings too.
+        syncMetadataForCurrentTabs();
       },
 
       closeTab(id) {
@@ -212,6 +230,7 @@ export function createTabsStore(ipc: DragonIpc, getters: TabsSessionGetters): St
         if (remaining.length === 0) {
           const next = emptyTab(getters.getConnectionId(), getters.getDatabaseName(), 0);
           set({ tabs: [next], activeTabId: next.id });
+          queueMetadataPersist(next);
           return;
         }
 
@@ -226,6 +245,7 @@ export function createTabsStore(ipc: DragonIpc, getters: TabsSessionGetters): St
           })),
           activeTabId: nextActive,
         });
+        syncMetadataForCurrentTabs();
       },
 
       async persistTab(dto, opts) {
