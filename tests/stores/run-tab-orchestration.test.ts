@@ -9,7 +9,7 @@ const FIXTURE_SQL = { text: "SELECT 1", params: [] as unknown[] };
 
 function composeIpc(overrides: Partial<DragonIpc> = {}): DragonIpc {
   return {
-    connectProfile: vi.fn(async () => ({ connectionId: "c1", profileId: "P" })),
+    connectProfile: vi.fn(async () => ({ connectionId: "c1", profileId: "P" , database: "app"})),
     disconnect: vi.fn(async () => undefined),
     listTables: vi.fn(async () => [{ name: "users", schema: "public" }]),
     listColumns: vi.fn(async () => []),
@@ -173,7 +173,7 @@ describe("run → executing tab orchestration", () => {
             rejectA = reject;
           }),
       )
-      .mockResolvedValueOnce({ connectionId: "c-b", profileId: "B" });
+      .mockResolvedValueOnce({ connectionId: "c-b", profileId: "B" , database: "app"});
     const listTables = vi.fn().mockResolvedValueOnce([{ name: "b_only", schema: "public" }]);
     const ipc = composeIpc({ connectProfile, listTables });
     const stores = composeAppStores(ipc);
@@ -193,7 +193,7 @@ describe("run → executing tab orchestration", () => {
     const err = { kind: "auth" as const, message: "B failed" };
     const connectProfile = vi
       .fn()
-      .mockResolvedValueOnce({ connectionId: "c-a", profileId: "A" })
+      .mockResolvedValueOnce({ connectionId: "c-a", profileId: "A" , database: "app"})
       .mockRejectedValueOnce(err);
     const ipc = composeIpc({ connectProfile });
     const stores = composeAppStores(ipc);

@@ -5,6 +5,7 @@ export type SessionState = {
   isConnected: boolean;
   connectionId: ConnectionId | null;
   profileId: ProfileId | null;
+  databaseName: string | null;
   connect: (profileId: ProfileId) => Promise<ConnectResult>;
   disconnect: () => Promise<void>;
   /** Disconnect then connect to `profileId` (SP-2 switch success path). */
@@ -35,6 +36,7 @@ export function createSessionStore(
     isConnected: false,
     connectionId: null,
     profileId: null,
+    databaseName: null,
 
     async connect(profileId) {
       const generation = ++connectGeneration;
@@ -57,6 +59,7 @@ export function createSessionStore(
           isConnected: true,
           connectionId: result.connectionId,
           profileId: result.profileId,
+          databaseName: result.database,
         });
         await options.onConnected?.(result);
         return result;
@@ -66,6 +69,7 @@ export function createSessionStore(
             isConnected: false,
             connectionId: null,
             profileId: null,
+            databaseName: null,
           });
         }
         throw error;
@@ -79,6 +83,7 @@ export function createSessionStore(
         isConnected: false,
         connectionId: null,
         profileId: null,
+        databaseName: null,
       });
       await options.onDisconnected?.();
     },

@@ -184,7 +184,7 @@ export function createMockDragonIpc(mode: MockMode = "happy"): DragonIpc {
       connectionSeq += 1;
       connectedProfileId = id;
       connectionId = `mock-conn-${connectionSeq}`;
-      return { connectionId, profileId: id };
+      return { connectionId, profileId: id, database: profiles.get(id)!.database };
     },
 
     async disconnect(): Promise<void> {

@@ -41,7 +41,7 @@ export function composeAppStores(ipc: DragonIpc): AppStores {
 
   tabs = createTabsStore(ipc, {
     getConnectionId: () => session.getState().connectionId,
-    getDatabaseName: () => null,
+    getDatabaseName: () => session.getState().databaseName,
   });
 
   function noteCanvasDisconnect(profileId: ProfileId | null): void {

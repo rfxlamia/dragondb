@@ -20,7 +20,7 @@ import { createTabsStore } from "../../src/stores/tabs-store";
 
 function stubIpc(overrides: Partial<DragonIpc> = {}): DragonIpc {
   return {
-    connectProfile: vi.fn(async () => ({ connectionId: "c1", profileId: "P" })),
+    connectProfile: vi.fn(async () => ({ connectionId: "c1", profileId: "P" , database: "app"})),
     disconnect: vi.fn(async () => undefined),
     listTables: vi.fn(async () => []),
     listColumns: vi.fn(async () => []),
@@ -66,12 +66,12 @@ function baseTab(overrides: Partial<TabStateDto> = {}): TabStateDto {
 }
 
 describe("SP-3 audit — compose createTab inherits databaseName (AC Tabs)", () => {
-  it.fails("composeAppStores createTab inherits session databaseName, not null", async () => {
+  it("composeAppStores createTab inherits session databaseName, not null", async () => {
     // Spec: Scenario Create tab inherits connection and empty query
     // "new tab has connectionId/databaseName inherited"
     const ipc = stubIpc({
       // Profile database is "app"; composition must surface it to tabs getters.
-      connectProfile: vi.fn(async () => ({ connectionId: "c1", profileId: "P" })),
+      connectProfile: vi.fn(async () => ({ connectionId: "c1", profileId: "P" , database: "app"})),
       getProfile: undefined,
     });
     const stores = composeAppStores(ipc);
@@ -202,7 +202,7 @@ describe("SP-3 audit — disconnect during in-flight connect (AC Session)", () =
     const connectPromise = store.getState().connect("P");
     await store.getState().disconnect();
     // Rust connect finishes after TS disconnect — generation cancels apply
-    resolveConnect({ connectionId: "orphan-c", profileId: "P" });
+    resolveConnect({ connectionId: "orphan-c", profileId: "P" , database: "app"});
     await expect(connectPromise).rejects.toMatchObject({ message: "cancelled" });
 
     expect(store.getState().isConnected).toBe(false);

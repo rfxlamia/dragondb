@@ -116,6 +116,8 @@ pub struct SaveProfileInput {
 pub struct ConnectResult {
     pub connection_id: String,
     pub profile_id: String,
+    /// Profile database name at connect time (tab inheritance).
+    pub database: String,
 }
 
 /// Table ref for list_columns.
@@ -433,6 +435,7 @@ impl AppSession {
             message: format!("Profile not found: {id}"),
             position: None,
         })?;
+        let database = profile.database.clone();
 
         let secrets = self.load_secrets(id)?;
         let connection_id = Uuid::new_v4().to_string();
@@ -474,6 +477,7 @@ impl AppSession {
         Ok(ConnectResult {
             connection_id,
             profile_id: id.to_string(),
+            database,
         })
     }
 

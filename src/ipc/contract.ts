@@ -46,6 +46,8 @@ export interface SaveProfileInput {
 export interface ConnectResult {
   connectionId: ConnectionId;
   profileId: ProfileId;
+  /** Profile database name at connect time — for tab inheritance. */
+  database: string;
 }
 
 export interface TableRef {

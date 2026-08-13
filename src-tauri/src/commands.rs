@@ -584,14 +584,17 @@ mod tests {
         struct ConnectResultDto {
             connection_id: String,
             profile_id: String,
+            database: String,
         }
         let v = serde_json::to_value(ConnectResultDto {
             connection_id: "c1".into(),
             profile_id: "p1".into(),
+            database: "app".into(),
         })
         .unwrap();
         assert_eq!(v["connectionId"], "c1");
         assert_eq!(v["profileId"], "p1");
+        assert_eq!(v["database"], "app");
     }
 
     #[test]

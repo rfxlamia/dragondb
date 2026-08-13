@@ -25,7 +25,7 @@ describe("composeAppStores", () => {
   it("connect success loads schema tables for connectionId", async () => {
     const listTables = vi.fn(async () => [{ name: "users", schema: "public" }]);
     const ipc = {
-      connectProfile: vi.fn(async () => ({ connectionId: "c1", profileId: "P" })),
+      connectProfile: vi.fn(async () => ({ connectionId: "c1", profileId: "P" , database: "app"})),
       disconnect: vi.fn(async () => undefined),
       listTables,
       listColumns: vi.fn(async () => []),
@@ -47,7 +47,7 @@ describe("composeAppStores", () => {
 
   it("disconnect clears schema and in-memory tab results", async () => {
     const ipc = {
-      connectProfile: vi.fn(async () => ({ connectionId: "c1", profileId: "P" })),
+      connectProfile: vi.fn(async () => ({ connectionId: "c1", profileId: "P" , database: "app"})),
       disconnect: vi.fn(async () => undefined),
       listTables: vi.fn(async () => [{ name: "users", schema: "public" }]),
       listColumns: vi.fn(async () => []),
@@ -82,7 +82,7 @@ describe("composeAppStores", () => {
     const err: IpcError = { kind: "auth", message: "B failed" };
     const connectProfile = vi
       .fn()
-      .mockResolvedValueOnce({ connectionId: "c-a", profileId: "A" })
+      .mockResolvedValueOnce({ connectionId: "c-a", profileId: "A" , database: "app"})
       .mockRejectedValueOnce(err);
     const ipc = {
       connectProfile,
