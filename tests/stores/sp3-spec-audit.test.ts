@@ -186,7 +186,7 @@ describe("SP-3 audit — switch-fail snapshot must remount next different profil
 });
 
 describe("SP-3 audit — disconnect during in-flight connect (AC Session)", () => {
-  it.fails("cancelled connect after disconnect does not leave live Rust session orphaned", async () => {
+  it("cancelled connect after disconnect does not leave live Rust session orphaned", async () => {
     // Spec: Disconnect clears session; cancelled connect must not leave live I/O
     let resolveConnect!: (v: { connectionId: string; profileId: string }) => void;
     const connectProfile = vi.fn(

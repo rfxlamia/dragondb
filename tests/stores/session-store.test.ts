@@ -43,8 +43,9 @@ describe("session-store", () => {
           }),
       )
       .mockResolvedValueOnce({ connectionId: "c-b", profileId: "B" });
+    const disconnect = vi.fn(async () => undefined);
     const onConnected = vi.fn();
-    const ipc = { connectProfile, disconnect: vi.fn() } as unknown as DragonIpc;
+    const ipc = { connectProfile, disconnect } as unknown as DragonIpc;
     const store = createSessionStore(ipc, { onConnected });
     const pA = store.getState().connect("A");
     await store.getState().connect("B");
@@ -58,6 +59,8 @@ describe("session-store", () => {
     });
     expect(onConnected).toHaveBeenCalledTimes(1);
     expect(onConnected).toHaveBeenCalledWith({ connectionId: "c-b", profileId: "B" });
+    // Newer connect owns the live session — cancelled A must not ipc.disconnect() B.
+    expect(disconnect).not.toHaveBeenCalled();
   });
 
   it("connect auth fail stays disconnected with no connectionId", async () => {

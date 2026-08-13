@@ -28,6 +28,8 @@ export function createSessionStore(
   options: SessionStoreOptions = {},
 ): StoreApi<SessionState> {
   let connectGeneration = 0;
+  /** Last `connect()` start generation — not bumped by `disconnect()` alone. */
+  let lastConnectAttempt = 0;
 
   const store = createStore<SessionState>((set, get) => ({
     isConnected: false,
@@ -36,9 +38,19 @@ export function createSessionStore(
 
     async connect(profileId) {
       const generation = ++connectGeneration;
+      lastConnectAttempt = generation;
       try {
         const result = await ipc.connectProfile(profileId);
         if (generation !== connectGeneration) {
+          // Own attempt still latest connect() start → tear down orphaned Rust session.
+          // A newer connect() start owns teardown via its connectProfile; skip disconnect.
+          if (lastConnectAttempt === generation) {
+            try {
+              await ipc.disconnect();
+            } catch {
+              /* best-effort teardown */
+            }
+          }
           throw { kind: "unknown", message: "cancelled" };
         }
         set({
