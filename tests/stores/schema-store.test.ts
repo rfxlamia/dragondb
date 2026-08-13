@@ -1,6 +1,18 @@
 import { describe, expect, it, vi } from "vitest";
-import type { DragonIpc } from "../../src/ipc/contract";
+import type { ColumnInfo, DragonIpc } from "../../src/ipc/contract";
 import { createSchemaStore } from "../../src/stores/schema-store";
+
+function column(name: string): ColumnInfo {
+  return {
+    name,
+    dataType: "text",
+    isNullable: true,
+    defaultValue: null,
+    isPrimaryKey: false,
+    isUnique: false,
+    isForeignKey: false,
+  };
+}
 
 describe("schema-store", () => {
   it("loadTables started on connect path via generation-guarded listTables", async () => {
@@ -41,5 +53,108 @@ describe("schema-store", () => {
     resolveLate([{ name: "stale", schema: "public" }]);
     await pending;
     expect(store.getState().tables).toEqual([]);
+  });
+
+  it("loadColumns success sets columnNames from listColumns", async () => {
+    const listColumns = vi.fn(async () => [column("id"), column("email")]);
+    const ipc = { listTables: vi.fn(), listColumns } as unknown as DragonIpc;
+    const store = createSchemaStore(ipc);
+    await store.getState().loadColumns("c-a", { name: "users", schema: "public" });
+    expect(listColumns).toHaveBeenCalledWith("c-a", { name: "users", schema: "public" });
+    expect(store.getState().columnNames).toEqual(["id", "email"]);
+    expect(store.getState().metadataErrorMessage).toBeNull();
+  });
+
+  it("late loadColumns success after clear() ignored", async () => {
+    let resolveLate!: (rows: ColumnInfo[]) => void;
+    const listColumns = vi.fn(
+      () =>
+        new Promise<ColumnInfo[]>((resolve) => {
+          resolveLate = resolve;
+        }),
+    );
+    const ipc = { listTables: vi.fn(), listColumns } as unknown as DragonIpc;
+    const store = createSchemaStore(ipc);
+    const pending = store.getState().loadColumns("c-old", { name: "users" });
+    store.getState().clear();
+    resolveLate([column("stale")]);
+    await pending;
+    expect(store.getState().columnNames).toEqual([]);
+  });
+
+  it("late loadColumns rejection after clear() does not set metadataErrorMessage", async () => {
+    let rejectLate!: (error: Error) => void;
+    const listColumns = vi.fn(
+      () =>
+        new Promise<never>((_resolve, reject) => {
+          rejectLate = reject;
+        }),
+    );
+    const ipc = { listTables: vi.fn(), listColumns } as unknown as DragonIpc;
+    const store = createSchemaStore(ipc);
+    const pending = store.getState().loadColumns("c-old", { name: "users" });
+    store.getState().clear();
+    rejectLate(new Error("gone"));
+    await pending;
+    expect(store.getState().metadataErrorMessage).toBeNull();
+    expect(store.getState().columnNames).toEqual([]);
+  });
+
+  it("live loadColumns failure sets metadataErrorMessage columns_load_failed and empty columnNames", async () => {
+    const listColumns = vi.fn(async () => {
+      throw new Error("boom");
+    });
+    const ipc = { listTables: vi.fn(), listColumns } as unknown as DragonIpc;
+    const store = createSchemaStore(ipc);
+    await store.getState().loadColumns("c-a", { name: "users" });
+    expect(store.getState().columnNames).toEqual([]);
+    expect(store.getState().metadataErrorMessage).toBe("columns_load_failed");
+  });
+
+  it("clearColumns bumps generation and clears columns+error without clearing tables", async () => {
+    const listTables = vi.fn(async () => [{ name: "users", schema: "public" }]);
+    let resolveLate!: (rows: ColumnInfo[]) => void;
+    const listColumns = vi
+      .fn()
+      .mockResolvedValueOnce([column("id")])
+      .mockRejectedValueOnce(new Error("boom"))
+      .mockImplementationOnce(
+        () =>
+          new Promise<ColumnInfo[]>((resolve) => {
+            resolveLate = resolve;
+          }),
+      );
+    const ipc = { listTables, listColumns } as unknown as DragonIpc;
+    const store = createSchemaStore(ipc);
+    await store.getState().loadTables("c-a");
+    await store.getState().loadColumns("c-a", { name: "users" });
+    expect(store.getState().columnNames).toEqual(["id"]);
+    await store.getState().loadColumns("c-a", { name: "users" });
+    expect(store.getState().metadataErrorMessage).toBe("columns_load_failed");
+
+    const pending = store.getState().loadColumns("c-a", { name: "users" });
+    store.getState().clearColumns();
+    expect(store.getState().columnNames).toEqual([]);
+    expect(store.getState().metadataErrorMessage).toBeNull();
+    expect(store.getState().tables).toEqual([{ name: "users", schema: "public" }]);
+    resolveLate([column("stale")]);
+    await pending;
+    expect(store.getState().columnNames).toEqual([]);
+    expect(store.getState().tables).toEqual([{ name: "users", schema: "public" }]);
+  });
+
+  it("loadTables failure then success clears tables_load_failed", async () => {
+    const listTables = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("fail"))
+      .mockResolvedValueOnce([{ name: "users", schema: "public" }]);
+    const ipc = { listTables, listColumns: vi.fn() } as unknown as DragonIpc;
+    const store = createSchemaStore(ipc);
+    await store.getState().loadTables("c-a");
+    expect(store.getState().tables).toEqual([]);
+    expect(store.getState().metadataErrorMessage).toBe("tables_load_failed");
+    await store.getState().loadTables("c-a");
+    expect(store.getState().tables).toEqual([{ name: "users", schema: "public" }]);
+    expect(store.getState().metadataErrorMessage).toBeNull();
   });
 });
