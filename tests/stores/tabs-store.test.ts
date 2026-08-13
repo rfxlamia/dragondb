@@ -138,4 +138,193 @@ describe("tabs-store", () => {
     expect(tab?.raw?.rows[0]?.[0]).toBe(long);
     expect(tab?.compact?.rows[0]?.[0]).toBe(compactCell(long));
   });
+
+  function mockTabsIpc() {
+    return {
+      saveTabState: vi.fn(async () => undefined),
+      deleteTabState: vi.fn(async () => undefined),
+      listTabStates: vi.fn(async () => []),
+    } as unknown as DragonIpc;
+  }
+
+  function tabsWithResults(
+    ipc: DragonIpc,
+    tabs: ReturnType<typeof baseTab>[],
+    activeTabId: string,
+  ) {
+    const store = createTabsStore(ipc, {
+      getConnectionId: () => "c1",
+      getDatabaseName: () => "app",
+    });
+    store.setState({
+      tabs: tabs.map((t) => ({
+        ...t,
+        raw: { columns: ["c"], rows: [["prior"]] },
+        compact: { columns: ["c"], rows: [["prior"]] },
+        status: { kind: "ok" as const, rowCount: 1, durationMs: 1 },
+      })),
+      activeTabId,
+    });
+    return store;
+  }
+
+  it("beginRun clears prior result, sets status=running, returns generation", () => {
+    const ipc = mockTabsIpc();
+    const store = tabsWithResults(ipc, [baseTab({ id: "T" })], "T");
+    const gen = store.getState().beginRun("T");
+    expect(gen).toEqual(expect.any(Number));
+    expect(gen).not.toBeNull();
+    const tab = store.getState().tabs.find((t) => t.id === "T");
+    expect(tab?.raw).toBeNull();
+    expect(tab?.compact).toBeNull();
+    expect(tab?.status).toEqual({ kind: "running" });
+  });
+
+  it("beginRun returns null for missing or pending-deleted tab", () => {
+    const ipc = mockTabsIpc();
+    const store = createTabsStore(ipc, {
+      getConnectionId: () => null,
+      getDatabaseName: () => null,
+    });
+    store.setState({
+      tabs: [baseTab({ id: "keep" })],
+      activeTabId: "keep",
+      pendingDeletedIds: new Set(["gone"]),
+    });
+    expect(store.getState().beginRun("gone")).toBeNull();
+    expect(store.getState().beginRun("missing")).toBeNull();
+  });
+
+  it("applyRunSuccess writes raw+compact+ok status and persists blob with matching generation", async () => {
+    const saveTabState = vi.fn(async () => undefined);
+    const ipc = {
+      saveTabState,
+      deleteTabState: vi.fn(async () => undefined),
+      listTabStates: vi.fn(async () => []),
+    } as unknown as DragonIpc;
+    const store = tabsWithResults(ipc, [baseTab({ id: "T" })], "T");
+    const gen = store.getState().beginRun("T");
+    expect(gen).toEqual(expect.any(Number));
+    if (gen === null) throw new Error("expected generation");
+    const long = "x".repeat(3000);
+    await store
+      .getState()
+      .applyRunSuccess("T", { columns: ["c"], rows: [[long]], durationMs: 12 }, gen);
+    const tab = store.getState().tabs.find((t) => t.id === "T");
+    expect(tab?.raw?.rows[0]?.[0]).toBe(long);
+    expect(tab?.compact?.rows[0]?.[0]).toBe(compactCell(long));
+    expect(tab?.compact?.rows[0]?.[0]).toMatch(/\.\.\. \[truncated\]$/);
+    expect(String(tab?.compact?.rows[0]?.[0]).length).toBe(2048);
+    expect(tab?.status).toEqual({ kind: "ok", rowCount: 1, durationMs: 12 });
+    expect(saveTabState).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "T",
+        cachedColumnNames: ["c"],
+        cachedResultsData: expect.stringContaining(long),
+      }),
+      { includeCachedResults: true },
+    );
+  });
+
+  it("applyRunFailure sets error status and clears rows with matching generation", async () => {
+    const ipc = mockTabsIpc();
+    const store = tabsWithResults(ipc, [baseTab({ id: "T" })], "T");
+    const gen = store.getState().beginRun("T");
+    expect(gen).toEqual(expect.any(Number));
+    if (gen === null) throw new Error("expected generation");
+    store.getState().applyRunFailure("T", "boom", gen);
+    const tab = store.getState().tabs.find((t) => t.id === "T");
+    expect(tab?.raw).toBeNull();
+    expect(tab?.compact).toBeNull();
+    expect(tab?.status).toEqual({ kind: "error", message: "boom" });
+  });
+
+  it("applyRunSuccess ignores pending-deleted tab (no persist)", async () => {
+    const saveTabState = vi.fn(async () => undefined);
+    const ipc = {
+      saveTabState,
+      deleteTabState: vi.fn(async () => undefined),
+      listTabStates: vi.fn(async () => []),
+    } as unknown as DragonIpc;
+    const store = createTabsStore(ipc, {
+      getConnectionId: () => null,
+      getDatabaseName: () => null,
+    });
+    store.setState({
+      tabs: [baseTab({ id: "T" })],
+      activeTabId: "T",
+      pendingDeletedIds: new Set(["T"]),
+    });
+    await store.getState().applyRunSuccess("T", { columns: ["c"], rows: [[1]], durationMs: 1 }, 1);
+    expect(saveTabState).not.toHaveBeenCalled();
+    expect(store.getState().tabs.find((t) => t.id === "T")?.status).not.toEqual(
+      expect.objectContaining({ kind: "ok" }),
+    );
+  });
+
+  it("applyRunSuccess ignores mismatched generation", async () => {
+    const saveTabState = vi.fn(async () => undefined);
+    const ipc = {
+      saveTabState,
+      deleteTabState: vi.fn(async () => undefined),
+      listTabStates: vi.fn(async () => []),
+    } as unknown as DragonIpc;
+    const store = tabsWithResults(ipc, [baseTab({ id: "T" })], "T");
+    const gen = store.getState().beginRun("T");
+    await store
+      .getState()
+      .applyRunSuccess("T", { columns: ["c"], rows: [["stale"]], durationMs: 1 }, (gen ?? 0) - 1);
+    const tab = store.getState().tabs.find((t) => t.id === "T");
+    expect(tab?.status).toEqual({ kind: "running" });
+    expect(tab?.raw).toBeNull();
+    expect(saveTabState).not.toHaveBeenCalled();
+  });
+
+  it("applyRunFailure ignores mismatched generation", () => {
+    const ipc = mockTabsIpc();
+    const store = tabsWithResults(ipc, [baseTab({ id: "T" })], "T");
+    const gen = store.getState().beginRun("T");
+    store.getState().applyRunFailure("T", "stale boom", (gen ?? 0) - 1);
+    const tab = store.getState().tabs.find((t) => t.id === "T");
+    expect(tab?.status).toEqual({ kind: "running" });
+    expect(tab?.raw).toBeNull();
+  });
+
+  it("clearTabResults sets idle and makes prior generation apply no-op", async () => {
+    const ipc = mockTabsIpc();
+    const store = tabsWithResults(ipc, [baseTab({ id: "T" })], "T");
+    const gen = store.getState().beginRun("T");
+    expect(gen).toEqual(expect.any(Number));
+    if (gen === null) throw new Error("expected generation");
+    store.getState().clearTabResults("T");
+    const tab = store.getState().tabs.find((t) => t.id === "T");
+    expect(tab?.raw).toBeNull();
+    expect(tab?.compact).toBeNull();
+    expect(tab?.status).toEqual({ kind: "idle" });
+    await store
+      .getState()
+      .applyRunSuccess("T", { columns: ["c"], rows: [[1]], durationMs: 1 }, gen);
+    expect(store.getState().tabs.find((t) => t.id === "T")?.status).toEqual({ kind: "idle" });
+  });
+
+  it("clearInMemoryResults clears all tabs without wiping sqlite via deleteTabState", () => {
+    const deleteTabState = vi.fn(async () => undefined);
+    const ipc = {
+      saveTabState: vi.fn(async () => undefined),
+      deleteTabState,
+      listTabStates: vi.fn(async () => []),
+    } as unknown as DragonIpc;
+    const store = tabsWithResults(
+      ipc,
+      [baseTab({ id: "T1", isActive: true }), baseTab({ id: "T2", isActive: false, order: 1 })],
+      "T1",
+    );
+    store.getState().clearInMemoryResults();
+    for (const tab of store.getState().tabs) {
+      expect(tab.raw).toBeNull();
+      expect(tab.compact).toBeNull();
+      expect(tab.status).toEqual({ kind: "idle" });
+    }
+    expect(deleteTabState).not.toHaveBeenCalled();
+  });
 });

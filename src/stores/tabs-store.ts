@@ -34,6 +34,12 @@ export type TabsSessionGetters = {
   getDatabaseName: () => string | null;
 };
 
+export type TabRunResult = {
+  columns: string[];
+  rows: unknown[][];
+  durationMs: number;
+};
+
 export type TabsState = {
   tabs: TabState[];
   activeTabId: string | null;
@@ -44,6 +50,11 @@ export type TabsState = {
   persistTab: (dto: TabStateDto, opts?: { includeCachedResults?: boolean }) => Promise<void>;
   hydrateFromDto: (dto: TabStateDto) => void;
   refresh: () => Promise<void>;
+  beginRun: (tabId: string) => number | null;
+  applyRunSuccess: (tabId: string, result: TabRunResult, generation?: number) => Promise<void>;
+  applyRunFailure: (tabId: string, message: string, generation?: number) => void;
+  clearTabResults: (tabId: string) => void;
+  clearInMemoryResults: () => void;
 };
 
 function nowMillis(): string {
@@ -129,98 +140,194 @@ function mruId(tabs: TabState[]): string | null {
   return best.id;
 }
 
+function toTabStateDto(tab: TabState): TabStateDto {
+  const { raw: _raw, compact: _compact, status: _status, ...dto } = tab;
+  return dto;
+}
+
 export function createTabsStore(ipc: DragonIpc, getters: TabsSessionGetters): StoreApi<TabsState> {
-  return createStore<TabsState>((set, get) => ({
-    tabs: [],
-    activeTabId: null,
-    pendingDeletedIds: new Set(),
+  /** Per-tab run generation — module-private; never on TabState / never persisted. */
+  const runGenerations = new Map<string, number>();
 
-    createTab() {
-      const order = maxOrder(get().tabs) + 1;
-      const created = emptyTab(getters.getConnectionId(), getters.getDatabaseName(), order);
+  function bumpRunGeneration(tabId: string): number {
+    const next = (runGenerations.get(tabId) ?? 0) + 1;
+    runGenerations.set(tabId, next);
+    return next;
+  }
+
+  return createStore<TabsState>((set, get) => {
+    function canApplyRun(tabId: string, generation?: number): boolean {
+      const { tabs, pendingDeletedIds } = get();
+      if (pendingDeletedIds.has(tabId)) return false;
+      if (!tabs.some((t) => t.id === tabId)) return false;
+      if (generation !== undefined && generation !== runGenerations.get(tabId)) return false;
+      return true;
+    }
+
+    function patchTab(tabId: string, patch: Partial<TabState>): void {
       set((state) => ({
-        tabs: [...state.tabs.map((t) => ({ ...t, isActive: false })), created],
-        activeTabId: created.id,
+        tabs: state.tabs.map((t) => (t.id === tabId ? { ...t, ...patch } : t)),
       }));
-      return created;
-    },
+    }
 
-    switchTab(id) {
-      const ts = nowMillis();
-      set((state) => ({
-        tabs: state.tabs.map((t) =>
-          t.id === id ? { ...t, isActive: true, lastAccessedAt: ts } : { ...t, isActive: false },
-        ),
-        activeTabId: id,
-      }));
-    },
+    return {
+      tabs: [],
+      activeTabId: null,
+      pendingDeletedIds: new Set(),
 
-    closeTab(id) {
-      const { tabs, activeTabId } = get();
-      const remaining = tabs.filter((t) => t.id !== id);
+      createTab() {
+        const order = maxOrder(get().tabs) + 1;
+        const created = emptyTab(getters.getConnectionId(), getters.getDatabaseName(), order);
+        set((state) => ({
+          tabs: [...state.tabs.map((t) => ({ ...t, isActive: false })), created],
+          activeTabId: created.id,
+        }));
+        return created;
+      },
 
-      set((state) => {
-        const pending = new Set(state.pendingDeletedIds);
-        pending.add(id);
-        return { pendingDeletedIds: pending };
-      });
+      switchTab(id) {
+        const ts = nowMillis();
+        set((state) => ({
+          tabs: state.tabs.map((t) =>
+            t.id === id ? { ...t, isActive: true, lastAccessedAt: ts } : { ...t, isActive: false },
+          ),
+          activeTabId: id,
+        }));
+      },
 
-      void ipc.deleteTabState(id).catch(() => {
-        /* best-effort persist delete */
-      });
+      closeTab(id) {
+        const { tabs, activeTabId } = get();
+        const remaining = tabs.filter((t) => t.id !== id);
 
-      if (remaining.length === 0) {
-        const next = emptyTab(getters.getConnectionId(), getters.getDatabaseName(), 0);
-        set({ tabs: [next], activeTabId: next.id });
-        return;
-      }
+        set((state) => {
+          const pending = new Set(state.pendingDeletedIds);
+          pending.add(id);
+          return { pendingDeletedIds: pending };
+        });
 
-      let nextActive = activeTabId;
-      if (activeTabId === id) {
-        nextActive = mruId(remaining);
-      }
-      set({
-        tabs: remaining.map((t) => ({
-          ...t,
-          isActive: t.id === nextActive,
-        })),
-        activeTabId: nextActive,
-      });
-    },
+        void ipc.deleteTabState(id).catch(() => {
+          /* best-effort persist delete */
+        });
 
-    async persistTab(dto, opts) {
-      if (get().pendingDeletedIds.has(dto.id)) return;
-      await ipc.saveTabState(dto, opts);
-    },
-
-    hydrateFromDto(dto) {
-      const raw = parseCachedResults(dto.cachedResultsData);
-      const compact = raw ? compactGrid(raw) : null;
-      const hydrated = toTabState(dto, raw, compact);
-      set((state) => {
-        const idx = state.tabs.findIndex((t) => t.id === dto.id);
-        if (idx >= 0) {
-          const tabs = state.tabs.slice();
-          tabs[idx] = { ...hydrated, status: tabs[idx]?.status };
-          return { tabs };
+        if (remaining.length === 0) {
+          const next = emptyTab(getters.getConnectionId(), getters.getDatabaseName(), 0);
+          set({ tabs: [next], activeTabId: next.id });
+          return;
         }
-        return {
-          tabs: [...state.tabs, hydrated],
-          activeTabId: state.activeTabId ?? (dto.isActive ? dto.id : state.activeTabId),
-        };
-      });
-    },
 
-    async refresh() {
-      const dtos = await ipc.listTabStates();
-      for (const dto of dtos) {
-        get().hydrateFromDto(dto);
-      }
-      const { tabs } = get();
-      const active = tabs.find((t) => t.isActive) ?? tabs[0];
-      if (active) {
-        set({ activeTabId: active.id });
-      }
-    },
-  }));
+        let nextActive = activeTabId;
+        if (activeTabId === id) {
+          nextActive = mruId(remaining);
+        }
+        set({
+          tabs: remaining.map((t) => ({
+            ...t,
+            isActive: t.id === nextActive,
+          })),
+          activeTabId: nextActive,
+        });
+      },
+
+      async persistTab(dto, opts) {
+        if (get().pendingDeletedIds.has(dto.id)) return;
+        await ipc.saveTabState(dto, opts);
+      },
+
+      hydrateFromDto(dto) {
+        const raw = parseCachedResults(dto.cachedResultsData);
+        const compact = raw ? compactGrid(raw) : null;
+        const hydrated = toTabState(dto, raw, compact);
+        set((state) => {
+          const idx = state.tabs.findIndex((t) => t.id === dto.id);
+          if (idx >= 0) {
+            const tabs = state.tabs.slice();
+            tabs[idx] = { ...hydrated, status: tabs[idx]?.status };
+            return { tabs };
+          }
+          return {
+            tabs: [...state.tabs, hydrated],
+            activeTabId: state.activeTabId ?? (dto.isActive ? dto.id : state.activeTabId),
+          };
+        });
+      },
+
+      async refresh() {
+        const dtos = await ipc.listTabStates();
+        for (const dto of dtos) {
+          get().hydrateFromDto(dto);
+        }
+        const { tabs } = get();
+        const active = tabs.find((t) => t.isActive) ?? tabs[0];
+        if (active) {
+          set({ activeTabId: active.id });
+        }
+      },
+
+      beginRun(tabId) {
+        const { tabs, pendingDeletedIds } = get();
+        if (pendingDeletedIds.has(tabId)) return null;
+        if (!tabs.some((t) => t.id === tabId)) return null;
+        const generation = bumpRunGeneration(tabId);
+        patchTab(tabId, {
+          raw: null,
+          compact: null,
+          status: { kind: "running" },
+        });
+        return generation;
+      },
+
+      async applyRunSuccess(tabId, result, generation) {
+        if (!canApplyRun(tabId, generation)) return;
+        const raw: TabResultGrid = { columns: result.columns, rows: result.rows };
+        const compact = compactGrid(raw);
+        patchTab(tabId, {
+          raw,
+          compact,
+          status: {
+            kind: "ok",
+            rowCount: result.rows.length,
+            durationMs: result.durationMs,
+          },
+          cachedResultsData: JSON.stringify(raw),
+          cachedColumnNames: result.columns,
+        });
+        const tab = get().tabs.find((t) => t.id === tabId);
+        if (!tab) return;
+        await get().persistTab(toTabStateDto(tab), { includeCachedResults: true });
+      },
+
+      applyRunFailure(tabId, message, generation) {
+        if (!canApplyRun(tabId, generation)) return;
+        patchTab(tabId, {
+          raw: null,
+          compact: null,
+          status: { kind: "error", message },
+        });
+      },
+
+      clearTabResults(tabId) {
+        if (!get().tabs.some((t) => t.id === tabId)) return;
+        bumpRunGeneration(tabId);
+        patchTab(tabId, {
+          raw: null,
+          compact: null,
+          status: { kind: "idle" },
+        });
+      },
+
+      clearInMemoryResults() {
+        for (const tab of get().tabs) {
+          bumpRunGeneration(tab.id);
+        }
+        set((state) => ({
+          tabs: state.tabs.map((t) => ({
+            ...t,
+            raw: null,
+            compact: null,
+            status: { kind: "idle" as const },
+          })),
+        }));
+      },
+    };
+  });
 }
