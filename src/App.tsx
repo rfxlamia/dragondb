@@ -55,6 +55,12 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
     }
   }, [isConnected, profileId]);
 
+  useEffect(() => {
+    void stores.tabs.getState().refresh().catch(() => {
+      /* best-effort hydrate on start */
+    });
+  }, [stores]);
+
   const tables = tableRefs.map(tableRefToCore);
   const metadataErrorMessage = mapSchemaError(metadataErrorCode);
 

@@ -164,7 +164,7 @@ describe("SP-3 audit — pending-deleted TOCTOU (AC Tabs)", () => {
 });
 
 describe("SP-3 audit — App hydrates tabs on start (AC Tabs)", () => {
-  it.fails("App.tsx calls tabs.refresh / listTabStates on mount", () => {
+  it("App.tsx calls tabs.refresh / listTabStates on mount", () => {
     // Spec: Persist round-trip all TabState fields — When app restarts
     const src = readFileSync(join(process.cwd(), "src/App.tsx"), "utf8");
     expect(src).toMatch(/\.refresh\s*\(/);
