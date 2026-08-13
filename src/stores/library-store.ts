@@ -13,6 +13,12 @@ export type LibraryState = {
   refresh: () => Promise<void>;
   saveSavedQuery: (query: SavedQueryDto) => Promise<void>;
   deleteFolder: (id: string, deleteQueries: boolean) => Promise<void>;
+  deleteSavedQueries: (ids: string[]) => Promise<void>;
+  duplicateSavedQuery: (id: string) => Promise<SavedQueryDto>;
+  moveSavedQuery: (id: string, folderId: string | null) => Promise<void>;
+  createQueryFolder: (name: string) => Promise<QueryFolderDto>;
+  renameQueryFolder: (id: string, name: string) => Promise<void>;
+  getSavedQuery: (id: string) => Promise<SavedQueryDto | null>;
 };
 
 export function createLibraryStore(ipc: DragonIpc): StoreApi<LibraryState> {
@@ -36,6 +42,37 @@ export function createLibraryStore(ipc: DragonIpc): StoreApi<LibraryState> {
     async deleteFolder(id: string, deleteQueries: boolean) {
       await ipc.deleteFolder(id, deleteQueries);
       await get().refresh();
+    },
+
+    async deleteSavedQueries(ids: string[]) {
+      await ipc.deleteSavedQueries(ids);
+      await get().refresh();
+    },
+
+    async duplicateSavedQuery(id: string) {
+      const duplicated = await ipc.duplicateSavedQuery(id);
+      await get().refresh();
+      return duplicated;
+    },
+
+    async moveSavedQuery(id: string, folderId: string | null) {
+      await ipc.moveSavedQuery(id, folderId);
+      await get().refresh();
+    },
+
+    async createQueryFolder(name: string) {
+      const folder = await ipc.createQueryFolder(name);
+      await get().refresh();
+      return folder;
+    },
+
+    async renameQueryFolder(id: string, name: string) {
+      await ipc.renameQueryFolder(id, name);
+      await get().refresh();
+    },
+
+    async getSavedQuery(id: string) {
+      return ipc.getSavedQuery(id);
     },
   }));
 }

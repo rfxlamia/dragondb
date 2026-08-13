@@ -217,7 +217,7 @@ describe("SP-3 audit — disconnect during in-flight connect (AC Session)", () =
 });
 
 describe("SP-3 audit — library store matrix (AC Library)", () => {
-  it.fails("library store exposes full SavedQuery/QueryFolder API matrix", () => {
+  it("library store exposes full SavedQuery/QueryFolder API matrix", () => {
     // Spec: library store with full API matrix (not IPC-only)
     const store = createLibraryStore(stubIpc());
     const state = store.getState() as Record<string, unknown>;
