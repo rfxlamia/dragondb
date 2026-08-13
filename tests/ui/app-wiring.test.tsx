@@ -290,6 +290,55 @@ describe("App session connect / disconnect / switch", () => {
     expect(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock)).toBeDisabled();
   });
 
+  it.fails("after failed switch to B, connecting to B remounts canvas empty (AC Session)", async () => {
+    // Spec: Switch fail keeps A cards as snapshot; later connect to different profile B
+    // must remount empty — same as disconnect→connect different profile.
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    const b = await ipc.saveProfile({
+      profile: {
+        name: "B",
+        host: "db-b",
+        port: 5432,
+        username: "postgres",
+        database: "app",
+        isFavorite: false,
+        sslMode: "prefer",
+        sshEnabled: false,
+        sshHost: null,
+        sshPort: null,
+        sshUsername: null,
+        sshAuthMethod: null,
+        sshPrivateKeyPath: null,
+      },
+      secrets: { password: "pw" },
+    });
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
+    await user.click(await screen.findByTestId(VisualQueryAccessibility.initialAddBlock));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("select")));
+    expect(screen.getByTestId(VisualQueryAccessibility.clauseCard("select"))).toBeInTheDocument();
+
+    const realConnect = ipc.connectProfile.bind(ipc);
+    let failB = true;
+    ipc.connectProfile = async (id) => {
+      if (failB && id === b.id) throw { kind: "auth", message: "Authentication failed" };
+      return realConnect(id);
+    };
+
+    await user.click(screen.getByRole("button", { name: /^B$/i }));
+    await user.click(screen.getByRole("button", { name: /confirm switch/i }));
+    await waitFor(() => expect(screen.getByText(/Authentication failed/i)).toBeInTheDocument());
+    expect(screen.getByTestId(VisualQueryAccessibility.clauseCard("select"))).toBeInTheDocument();
+
+    failB = false;
+    await user.click(screen.getByRole("button", { name: /^B$/i }));
+    await user.click(await screen.findByRole("button", { name: /connect/i }));
+    await waitFor(() =>
+      expect(screen.getByText(VisualQueryCopy.emptyCanvasTitle)).toBeInTheDocument(),
+    );
+  });
+
   it("disconnect after Run preserves clause cards (store clear covered by unit oracle)", async () => {
     const user = userEvent.setup();
     const ipc = createMockDragonIpc("happy");
