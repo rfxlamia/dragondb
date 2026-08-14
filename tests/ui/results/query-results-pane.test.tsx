@@ -88,4 +88,19 @@ describe("QueryResultsPane", () => {
     expect(css).toMatch(/white-space:\s*nowrap/);
     expect(css).toMatch(/overflow-x:\s*auto/);
   });
+
+  it("draws full cell borders with --neutral-300 in query-results.css", () => {
+    const css = readFileSync(join(process.cwd(), "src/ui/results/query-results.css"), "utf8");
+    const cellBlock = css.match(/\.query-results__table th[\s\S]*?\{[^}]*\}/);
+    expect(cellBlock).not.toBeNull();
+    expect(cellBlock?.[0]).toMatch(/border:\s*1px solid var\(--neutral-300\)/);
+    expect(cellBlock?.[0]).not.toMatch(/border-bottom:\s*1px solid var\(--neutral-200\)/);
+  });
+
+  it("boxes the pane including empty state with --neutral-300 in query-results.css", () => {
+    const css = readFileSync(join(process.cwd(), "src/ui/results/query-results.css"), "utf8");
+    const paneBlock = css.match(/\.query-results\s*\{[^}]*\}/);
+    expect(paneBlock).not.toBeNull();
+    expect(paneBlock?.[0]).toMatch(/border:\s*1px solid var\(--neutral-300\)/);
+  });
 });
