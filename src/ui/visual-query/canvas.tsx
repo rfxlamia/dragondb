@@ -3,11 +3,10 @@ import type { ClauseKind, ExecutableSQL, StatementKind, TableReference } from ".
 import { CanvasPresentation, canRun, generateSQL, QueryDocument } from "../../core";
 import type { QueryResult } from "../../ipc/contract";
 import { sameTable } from "../../ipc/table-ref";
-import { QUERY_FAILED_MESSAGE, unknownErrorMessage } from "../../lib/unknown-error-message";
 import { VisualQueryAccessibility } from "./accessibility";
 import { ClauseCard } from "./clause-card";
 import { VisualQueryCopy } from "./copy";
-import { GeneratedSQLPreview } from "./generated-sql-preview";
+import { GeneratedSQLDialog } from "./generated-sql-dialog";
 import { StatementPicker } from "./statement-picker";
 import { StatementRootCard } from "./statement-root-card";
 import { VisualQueryToolbar } from "./toolbar";
@@ -64,14 +63,13 @@ export function VisualQueryCanvas(props: VisualQueryCanvasProps): React.JSX.Elem
 
   const [showStatementPicker, setShowStatementPicker] = useState(false);
   const [showClauseMenu, setShowClauseMenu] = useState(false);
-  const [runOutcome, setRunOutcome] = useState<string | null>(null);
+  const [sqlDialogOpen, setSqlDialogOpen] = useState(false);
   const [runInFlight, setRunInFlight] = useState(false);
   const runGeneration = useRef(0);
 
   useEffect(() => {
     if (!isConnected) {
       runGeneration.current += 1;
-      setRunOutcome(null);
       setRunInFlight(false);
     }
   }, [isConnected]);
@@ -80,13 +78,17 @@ export function VisualQueryCanvas(props: VisualQueryCanvasProps): React.JSX.Elem
   const eligibility = canRun(doc, isConnected);
   const sql = previewSQL(doc);
   const interactionLocked = !isConnected;
-  const statusMessage = runOutcome ?? (!eligibility.isRunnable ? eligibility.helpMessage : null);
+  const canRunQuery =
+    isConnected && doc.statementKind === "select" && eligibility.isRunnable && !runInFlight;
+  const runHelpMessage =
+    isConnected && doc.statementKind === "select" && !eligibility.isRunnable
+      ? eligibility.helpMessage
+      : null;
 
   function mutate(fn: (d: QueryDocument) => void): void {
     const before = doc.committedFromTable;
     fn(doc);
     const after = doc.committedFromTable;
-    setRunOutcome(null);
     setRevision((r) => r + 1);
     onDocumentChange?.(doc);
     if (!sameTable(before, after)) {
@@ -112,6 +114,8 @@ export function VisualQueryCanvas(props: VisualQueryCanvasProps): React.JSX.Elem
 
   function handleStartOver(): void {
     if (interactionLocked) return;
+    runGeneration.current += 1;
+    setRunInFlight(false);
     mutate((d) => {
       d.startOver();
     });
@@ -132,10 +136,7 @@ export function VisualQueryCanvas(props: VisualQueryCanvasProps): React.JSX.Elem
   }
 
   async function handleRunQuery(): Promise<void> {
-    if (!isConnected || !eligibility.isRunnable || runInFlight) return;
-
-    if (doc.statementKind !== "select") {
-      setRunOutcome(VisualQueryCopy.runSelectOnlyMessage);
+    if (!isConnected || doc.statementKind !== "select" || !eligibility.isRunnable || runInFlight) {
       return;
     }
 
@@ -145,12 +146,10 @@ export function VisualQueryCanvas(props: VisualQueryCanvasProps): React.JSX.Elem
     const generation = ++runGeneration.current;
     setRunInFlight(true);
     try {
-      const result = await onRunQuery(generated.exec);
+      await onRunQuery(generated.exec);
       if (generation !== runGeneration.current) return;
-      setRunOutcome(VisualQueryCopy.runSuccessStatus(result.rows.length, result.durationMs));
-    } catch (error) {
+    } catch {
       if (generation !== runGeneration.current) return;
-      setRunOutcome(unknownErrorMessage(error, QUERY_FAILED_MESSAGE));
     } finally {
       if (generation === runGeneration.current) {
         setRunInFlight(false);
@@ -251,17 +250,19 @@ export function VisualQueryCanvas(props: VisualQueryCanvasProps): React.JSX.Elem
         canStartOver={doc.statementKind !== null}
         onStartOver={handleStartOver}
         isConnected={isConnected}
-        canRunQuery={eligibility.isRunnable && !runInFlight}
+        canRunQuery={canRunQuery}
         onRunQuery={() => {
           void handleRunQuery();
         }}
+        onViewGeneratedSQL={() => {
+          setSqlDialogOpen(true);
+        }}
+        runHelpMessage={runHelpMessage}
       />
 
       {metadataErrorMessage ? (
         <div className="vq-canvas__metadata-error">{metadataErrorMessage}</div>
       ) : null}
-
-      {statusMessage !== null ? <div className="vq-canvas__status">{statusMessage}</div> : null}
 
       <div className="vq-canvas__body">
         <div className="vq-canvas__stage">
@@ -334,9 +335,11 @@ export function VisualQueryCanvas(props: VisualQueryCanvasProps): React.JSX.Elem
             )}
           </fieldset>
         </div>
-
-        <GeneratedSQLPreview sql={sql} />
       </div>
+
+      {sqlDialogOpen ? (
+        <GeneratedSQLDialog sql={sql} onDismiss={() => setSqlDialogOpen(false)} />
+      ) : null}
     </div>
   );
 }

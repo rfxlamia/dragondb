@@ -19,6 +19,8 @@ describe("VisualQueryToolbar", () => {
         isConnected={true}
         canRunQuery={false}
         onRunQuery={() => {}}
+        onViewGeneratedSQL={() => {}}
+        runHelpMessage={null}
       />,
     );
     expect(screen.queryByTestId(VisualQueryAccessibility.startOver)).not.toBeInTheDocument();
@@ -34,6 +36,8 @@ describe("VisualQueryToolbar", () => {
         isConnected={true}
         canRunQuery={false}
         onRunQuery={() => {}}
+        onViewGeneratedSQL={() => {}}
+        runHelpMessage={null}
       />,
     );
     await user.click(screen.getByRole("button", { name: VisualQueryCopy.startOverTitle }));
@@ -50,6 +54,8 @@ describe("VisualQueryToolbar Run control (SP-2)", () => {
         isConnected={false}
         canRunQuery={false}
         onRunQuery={() => {}}
+        onViewGeneratedSQL={() => {}}
+        runHelpMessage={null}
       />,
     );
     const run = screen.queryByTestId(VisualQueryAccessibility.runQuery);
@@ -70,6 +76,8 @@ describe("VisualQueryToolbar Run control (SP-2)", () => {
         isConnected={true}
         canRunQuery={true}
         onRunQuery={onRunQuery}
+        onViewGeneratedSQL={() => {}}
+        runHelpMessage={null}
       />,
     );
     const run = screen.getByTestId(VisualQueryAccessibility.runQuery);
@@ -78,5 +86,59 @@ describe("VisualQueryToolbar Run control (SP-2)", () => {
     expect(run).not.toBeDisabled();
     await user.click(run);
     expect(onRunQuery).toHaveBeenCalledOnce();
+  });
+});
+
+describe("VisualQueryToolbar View generated SQL (SP-4b)", () => {
+  it("renders View generated SQL with a11y id and copy title", async () => {
+    const user = userEvent.setup();
+    const onViewGeneratedSQL = vi.fn();
+    render(
+      <VisualQueryToolbar
+        canStartOver={true}
+        onStartOver={() => {}}
+        isConnected={true}
+        canRunQuery={true}
+        onRunQuery={() => {}}
+        onViewGeneratedSQL={onViewGeneratedSQL}
+        runHelpMessage={null}
+      />,
+    );
+    const button = screen.getByTestId(VisualQueryAccessibility.viewGeneratedSQL);
+    expect(button).toHaveAccessibleName(VisualQueryCopy.viewGeneratedSQLTitle);
+    expect(button).not.toBeDisabled();
+    await user.click(button);
+    expect(onViewGeneratedSQL).toHaveBeenCalledOnce();
+  });
+
+  it("disables View generated SQL when disconnected", () => {
+    render(
+      <VisualQueryToolbar
+        canStartOver={true}
+        onStartOver={() => {}}
+        isConnected={false}
+        canRunQuery={false}
+        onRunQuery={() => {}}
+        onViewGeneratedSQL={() => {}}
+        runHelpMessage={null}
+      />,
+    );
+    expect(screen.getByTestId(VisualQueryAccessibility.viewGeneratedSQL)).toBeDisabled();
+  });
+
+  it("shows runHelpMessage when Run is disabled for incomplete SELECT", () => {
+    render(
+      <VisualQueryToolbar
+        canStartOver={true}
+        onStartOver={() => {}}
+        isConnected={true}
+        canRunQuery={false}
+        onRunQuery={() => {}}
+        onViewGeneratedSQL={() => {}}
+        runHelpMessage="Choose a table in FROM"
+      />,
+    );
+    expect(screen.getByTestId(VisualQueryAccessibility.runQuery)).toBeDisabled();
+    expect(screen.getByText("Choose a table in FROM")).toBeInTheDocument();
   });
 });
