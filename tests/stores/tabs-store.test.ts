@@ -190,6 +190,126 @@ describe("tabs-store", () => {
     return store;
   }
 
+  it("hydrateFromDto keeps this-session ok compact when cache differs", () => {
+    const ipc = mockTabsIpc();
+    const store = createTabsStore(ipc, {
+      getConnectionId: () => "c1",
+      getDatabaseName: () => "app",
+    });
+    store.setState({
+      tabs: [
+        {
+          ...baseTab({ id: "T" }),
+          raw: { columns: ["c"], rows: [["live"]] },
+          compact: { columns: ["c"], rows: [["live"]] },
+          status: { kind: "ok", rowCount: 1, durationMs: 5 },
+        },
+      ],
+      activeTabId: "T",
+    });
+    store.getState().hydrateFromDto(
+      baseTab({
+        id: "T",
+        cachedResultsData: JSON.stringify({ columns: ["c"], rows: [["cached"]] }),
+        cachedColumnNames: ["c"],
+      }),
+    );
+    const tab = store.getState().tabs.find((t) => t.id === "T");
+    expect(tab?.compact?.rows).toEqual([["live"]]);
+    expect(tab?.raw?.rows).toEqual([["live"]]);
+    expect(tab?.status).toEqual({ kind: "ok", rowCount: 1, durationMs: 5 });
+  });
+
+  it("hydrateFromDto keeps running compact/raw/status when cache differs", () => {
+    const ipc = mockTabsIpc();
+    const store = createTabsStore(ipc, {
+      getConnectionId: () => "c1",
+      getDatabaseName: () => "app",
+    });
+    store.setState({
+      tabs: [
+        {
+          ...baseTab({ id: "T" }),
+          raw: { columns: ["c"], rows: [["inflight"]] },
+          compact: { columns: ["c"], rows: [["inflight"]] },
+          status: { kind: "running" },
+        },
+      ],
+      activeTabId: "T",
+    });
+    store.getState().hydrateFromDto(
+      baseTab({
+        id: "T",
+        cachedResultsData: JSON.stringify({ columns: ["c"], rows: [["cached"]] }),
+        cachedColumnNames: ["c"],
+      }),
+    );
+    const tab = store.getState().tabs.find((t) => t.id === "T");
+    expect(tab?.compact?.rows).toEqual([["inflight"]]);
+    expect(tab?.raw?.rows).toEqual([["inflight"]]);
+    expect(tab?.status).toEqual({ kind: "running" });
+  });
+
+  it("hydrateFromDto keeps error compact/raw/status when cache differs", () => {
+    const ipc = mockTabsIpc();
+    const store = createTabsStore(ipc, {
+      getConnectionId: () => "c1",
+      getDatabaseName: () => "app",
+    });
+    store.setState({
+      tabs: [
+        {
+          ...baseTab({ id: "T" }),
+          raw: { columns: ["c"], rows: [["old"]] },
+          compact: { columns: ["c"], rows: [["old"]] },
+          status: { kind: "error", message: "boom" },
+        },
+      ],
+      activeTabId: "T",
+    });
+    store.getState().hydrateFromDto(
+      baseTab({
+        id: "T",
+        cachedResultsData: JSON.stringify({ columns: ["c"], rows: [["cached"]] }),
+        cachedColumnNames: ["c"],
+      }),
+    );
+    const tab = store.getState().tabs.find((t) => t.id === "T");
+    expect(tab?.compact?.rows).toEqual([["old"]]);
+    expect(tab?.raw?.rows).toEqual([["old"]]);
+    expect(tab?.status).toEqual({ kind: "error", message: "boom" });
+  });
+
+  it("hydrateFromDto applies cache compact when status is idle", () => {
+    const ipc = mockTabsIpc();
+    const store = createTabsStore(ipc, {
+      getConnectionId: () => "c1",
+      getDatabaseName: () => "app",
+    });
+    store.setState({
+      tabs: [
+        {
+          ...baseTab({ id: "T" }),
+          raw: null,
+          compact: null,
+          status: { kind: "idle" },
+        },
+      ],
+      activeTabId: "T",
+    });
+    store.getState().hydrateFromDto(
+      baseTab({
+        id: "T",
+        cachedResultsData: JSON.stringify({ columns: ["id"], rows: [["cached"]] }),
+        cachedColumnNames: ["id"],
+      }),
+    );
+    const tab = store.getState().tabs.find((t) => t.id === "T");
+    expect(tab?.compact?.columns).toEqual(["id"]);
+    expect(tab?.compact?.rows).toEqual([["cached"]]);
+    expect(tab?.status).toEqual({ kind: "idle" });
+  });
+
   it("beginRun clears prior result, sets status=running, returns generation", () => {
     const ipc = mockTabsIpc();
     const store = tabsWithResults(ipc, [baseTab({ id: "T" })], "T");
