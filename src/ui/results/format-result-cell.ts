@@ -1,0 +1,18 @@
+import { ResultsCopy } from "./results-copy";
+
+/** Format a compact-grid cell for display. SQL null is the NULL token; false/0/"" stay themselves. */
+export function formatResultCell(value: unknown): string {
+  if (value === null || value === undefined) {
+    return ResultsCopy.nullToken;
+  }
+  if (typeof value === "boolean") {
+    return value ? "true" : "false";
+  }
+  if (typeof value === "number") {
+    return String(value);
+  }
+  if (typeof value === "string") {
+    return value;
+  }
+  return String(value);
+}
