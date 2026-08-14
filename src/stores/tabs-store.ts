@@ -125,6 +125,11 @@ function compactGrid(raw: TabResultGrid): TabResultGrid {
   };
 }
 
+function isThisSessionResultStatus(status: TabRunStatus | undefined): boolean {
+  const kind = status?.kind ?? "idle";
+  return kind === "ok" || kind === "running" || kind === "error";
+}
+
 function maxOrder(tabs: TabState[]): number {
   if (tabs.length === 0) return -1;
   return Math.max(...tabs.map((t) => t.order));
@@ -276,8 +281,18 @@ export function createTabsStore(ipc: DragonIpc, getters: TabsSessionGetters): St
         set((state) => {
           const idx = state.tabs.findIndex((t) => t.id === dto.id);
           if (idx >= 0) {
+            const existing = state.tabs[idx];
             const tabs = state.tabs.slice();
-            tabs[idx] = { ...hydrated, status: tabs[idx]?.status };
+            if (existing && isThisSessionResultStatus(existing.status)) {
+              tabs[idx] = {
+                ...hydrated,
+                raw: existing.raw,
+                compact: existing.compact,
+                status: existing.status,
+              };
+            } else {
+              tabs[idx] = { ...hydrated, status: existing?.status };
+            }
             return { tabs };
           }
           return {
