@@ -15,6 +15,8 @@ import type { UserEvent } from "@testing-library/user-event";
 import App from "../../src/App";
 import type { DragonIpc } from "../../src/ipc/contract";
 import { createMockDragonIpc, FIXTURE_CONNECTION_ID } from "../../src/ipc/mock";
+import { ResultsAccessibility } from "../../src/ui/results/results-accessibility";
+import { ResultsCopy } from "../../src/ui/results/results-copy";
 import { VisualQueryAccessibility } from "../../src/ui/visual-query/accessibility";
 import { VisualQueryCopy } from "../../src/ui/visual-query/copy";
 
@@ -92,7 +94,7 @@ describe("App session connect / disconnect / switch", () => {
     expect(listColumns.mock.calls[0]?.[0]).not.toBe(FIXTURE_CONNECTION_ID);
   });
 
-  it("disconnect locks canvas while preserving SQL preview readability", async () => {
+  it("disconnect locks canvas and hides generated SQL unless the dialog is opened", async () => {
     const user = userEvent.setup();
     const ipc = createMockDragonIpc("happy");
     render(<App ipc={ipc} />);
@@ -103,8 +105,9 @@ describe("App session connect / disconnect / switch", () => {
     await user.click(screen.getByRole("button", { name: /disconnect/i }));
 
     expect(screen.getByTestId(VisualQueryAccessibility.clauseCard("select"))).toBeInTheDocument();
-    expect(screen.getByTestId(VisualQueryAccessibility.generatedSQLText)).toBeInTheDocument();
+    expect(screen.queryByTestId(VisualQueryAccessibility.generatedSQLText)).toBeNull();
     expect(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock)).toBeDisabled();
+    expect(screen.getByTestId(VisualQueryAccessibility.viewGeneratedSQL)).toBeDisabled();
   });
 
   it("disconnect then connect a different profile remounts canvas empty for B", async () => {
@@ -357,12 +360,13 @@ describe("App session connect / disconnect / switch", () => {
     await user.click(screen.getByTestId(VisualQueryAccessibility.fromTablePicker));
     await user.click(await screen.findByRole("button", { name: "users" }));
     await user.click(screen.getByTestId(VisualQueryAccessibility.runQuery));
-    await waitFor(() =>
-      expect(document.querySelector(".vq-canvas__status")).toHaveTextContent(
-        /OK\s*\/\s*1 rows\s*\/\s*9 ms/i,
-      ),
-    );
+    await waitFor(() => expect(screen.getByTestId(ResultsAccessibility.grid)).toBeInTheDocument());
+    expect(document.querySelector(".vq-canvas__status")?.textContent ?? "").not.toMatch(/OK\s*\//i);
     await user.click(screen.getByRole("button", { name: /disconnect/i }));
+    expect(screen.getByTestId(ResultsAccessibility.empty)).toHaveTextContent(
+      ResultsCopy.runQueryEmpty,
+    );
+    expect(screen.queryByTestId(ResultsAccessibility.grid)).toBeNull();
     // Cards preserved as locked snapshot (SP-2 dual-exit)
     expect(screen.getByTestId(VisualQueryAccessibility.clauseCard("select"))).toBeInTheDocument();
     expect(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock)).toBeDisabled();
@@ -408,9 +412,8 @@ describe("App session connect / disconnect / switch", () => {
     await user.click(screen.getByTestId(VisualQueryAccessibility.fromTablePicker));
     await user.click(await screen.findByRole("button", { name: "users" }));
     await user.click(screen.getByTestId(VisualQueryAccessibility.runQuery));
-    await waitFor(() =>
-      expect(document.querySelector(".vq-canvas__status")).toHaveTextContent(/OK\s*\//i),
-    );
+    await waitFor(() => expect(screen.getByTestId(ResultsAccessibility.grid)).toBeInTheDocument());
+    expect(document.querySelector(".vq-canvas__status")?.textContent ?? "").not.toMatch(/OK\s*\//i);
 
     const realConnect = ipc.connectProfile.bind(ipc);
     ipc.connectProfile = async (id) => {
@@ -422,6 +425,9 @@ describe("App session connect / disconnect / switch", () => {
     await waitFor(() => expect(screen.getByText(/Authentication failed/i)).toBeInTheDocument());
     expect(screen.getByTestId(VisualQueryAccessibility.clauseCard("select"))).toBeInTheDocument();
     expect(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock)).toBeDisabled();
+    expect(screen.getByTestId(ResultsAccessibility.empty)).toHaveTextContent(
+      ResultsCopy.runQueryEmpty,
+    );
     expect(document.querySelector(".vq-canvas__status")?.textContent ?? "").not.toMatch(/OK\s*\//i);
   });
 });
@@ -503,11 +509,18 @@ describe("App wiring regressions after connect (SP-4a)", () => {
   it("wires onRunQuery to ipc.runQuery with live connectionId on SELECT Run", async () => {
     const user = userEvent.setup();
     const ipc = createMockDragonIpc("happy");
-    const runQuery = vi.spyOn(ipc, "runQuery").mockResolvedValue({
-      columns: ["id"],
-      rows: [[1]],
-      rowsAffected: null,
-      durationMs: 9,
+    let release!: () => void;
+    const gate = new Promise<void>((r) => {
+      release = r;
+    });
+    const runQuery = vi.spyOn(ipc, "runQuery").mockImplementation(async () => {
+      await gate;
+      return {
+        columns: ["id"],
+        rows: [[1]],
+        rowsAffected: null,
+        durationMs: 9,
+      };
     });
     const listTables = vi.spyOn(ipc, "listTables");
     render(<App ipc={ipc} />);
@@ -533,7 +546,12 @@ describe("App wiring regressions after connect (SP-4a)", () => {
         params: expect.any(Array),
       }),
     );
-    expect(document.querySelector(".vq-canvas__status")).toHaveTextContent(
+    await waitFor(() =>
+      expect(screen.getByTestId(ResultsAccessibility.loading)).toBeInTheDocument(),
+    );
+    release();
+    await waitFor(() => expect(screen.getByTestId(ResultsAccessibility.grid)).toBeInTheDocument());
+    expect(document.querySelector(".vq-canvas__status")?.textContent ?? "").not.toMatch(
       /OK\s*\/\s*1 rows\s*\/\s*9 ms/i,
     );
   });
@@ -730,5 +748,215 @@ describe("App wiring regressions after connect (SP-4a)", () => {
 
     window.removeEventListener("unhandledrejection", onUnhandled);
     consoleError.mockRestore();
+  });
+});
+
+async function addSelectFromUsers(user: UserEvent): Promise<void> {
+  await user.click(await screen.findByTestId(VisualQueryAccessibility.initialAddBlock));
+  await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("select")));
+  await user.click(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock));
+  await user.click(screen.getByTestId(VisualQueryAccessibility.clauseMenuItem("from")));
+  await user.click(screen.getByTestId(VisualQueryAccessibility.fromTablePicker));
+  await user.click(await screen.findByRole("button", { name: "users" }));
+}
+
+describe("App results pane (SP-4b first slice)", () => {
+  it("idle launch with hydrated cachedResultsData shows empty copy, not the grid", async () => {
+    const ipc = createMockDragonIpc("happy");
+    vi.spyOn(ipc, "listTabStates").mockResolvedValue([
+      {
+        id: "cached-tab",
+        connectionId: null,
+        databaseName: null,
+        queryText: "",
+        savedQueryId: null,
+        isActive: true,
+        order: 0,
+        createdAt: "1",
+        lastAccessedAt: "1",
+        selectedTableSchema: null,
+        selectedTableName: null,
+        selectedSchemaFilter: null,
+        cachedResultsData: JSON.stringify({ columns: ["id"], rows: [["cached"]] }),
+        cachedColumnNames: ["id"],
+      },
+    ]);
+    render(<App ipc={ipc} />);
+    expect(await screen.findByTestId(ResultsAccessibility.empty)).toHaveTextContent(
+      ResultsCopy.runQueryEmpty,
+    );
+    expect(screen.queryByTestId(ResultsAccessibility.grid)).toBeNull();
+    expect(screen.queryByText("cached")).toBeNull();
+  });
+
+  it("failed runQuery shows Query Failed in the results pane and clears prior rows", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    const runQuery = vi.spyOn(ipc, "runQuery");
+    runQuery.mockResolvedValueOnce({
+      columns: ["id"],
+      rows: [[1]],
+      rowsAffected: null,
+      durationMs: 9,
+    });
+    runQuery.mockRejectedValueOnce({ kind: "syntax", message: "syntax near x" });
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
+    await user.click(await screen.findByTestId(VisualQueryAccessibility.initialAddBlock));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("select")));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.clauseMenuItem("from")));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.fromTablePicker));
+    await user.click(await screen.findByRole("button", { name: "users" }));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.runQuery));
+    await waitFor(() => expect(screen.getByTestId(ResultsAccessibility.grid)).toBeInTheDocument());
+    await user.click(screen.getByTestId(VisualQueryAccessibility.runQuery));
+    await waitFor(() => expect(screen.getByTestId(ResultsAccessibility.error)).toBeInTheDocument());
+    expect(screen.getByText(ResultsCopy.queryFailedTitle)).toBeInTheDocument();
+    expect(screen.getByText("syntax near x")).toBeInTheDocument();
+    expect(screen.queryByTestId(ResultsAccessibility.grid)).toBeNull();
+  });
+
+  it("Start over after results shows empty copy and does not call history deletes", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    const deleteHistory = vi.spyOn(ipc, "deleteHistory");
+    const clearHistory = vi.spyOn(ipc, "clearHistory");
+    vi.spyOn(ipc, "runQuery").mockResolvedValue({
+      columns: ["id"],
+      rows: [[1]],
+      rowsAffected: null,
+      durationMs: 9,
+    });
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
+    await user.click(await screen.findByTestId(VisualQueryAccessibility.initialAddBlock));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("select")));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.clauseMenuItem("from")));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.fromTablePicker));
+    await user.click(await screen.findByRole("button", { name: "users" }));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.runQuery));
+    await waitFor(() => expect(screen.getByTestId(ResultsAccessibility.grid)).toBeInTheDocument());
+    await user.click(screen.getByTestId(VisualQueryAccessibility.startOver));
+    expect(await screen.findByTestId(ResultsAccessibility.empty)).toHaveTextContent(
+      ResultsCopy.runQueryEmpty,
+    );
+    expect(screen.queryByTestId(ResultsAccessibility.grid)).toBeNull();
+    expect(deleteHistory).not.toHaveBeenCalled();
+    expect(clearHistory).not.toHaveBeenCalled();
+  });
+
+  it("CREATE disables Run in App so runQuery is not called", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    const runQuery = vi.spyOn(ipc, "runQuery");
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
+    await user.click(await screen.findByTestId(VisualQueryAccessibility.initialAddBlock));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("createTable")));
+    await user.type(screen.getByTestId(VisualQueryAccessibility.createTableNameField), "orders");
+    await user.type(screen.getByTestId(VisualQueryAccessibility.createColumnNameField(0)), "id");
+    expect(screen.getByTestId(VisualQueryAccessibility.runQuery)).toBeDisabled();
+    await user.click(screen.getByTestId(VisualQueryAccessibility.runQuery));
+    expect(runQuery).not.toHaveBeenCalled();
+  });
+
+  it("App.tsx puts className app-main-column on the main column and keys only VisualQueryCanvas", () => {
+    const src = readFileSync(join(process.cwd(), "src/App.tsx"), "utf8");
+    expect(src).toMatch(/className=["']app-main-column["']/);
+    expect(src).toMatch(/<VisualQueryCanvas\b/);
+    expect(src).toMatch(/key=\{canvasEpoch\}/);
+    expect(src).not.toMatch(/<WorkspaceSplit[^>]*\bkey=\{canvasEpoch\}/);
+  });
+
+  it("Start over during loading ignores a late runQuery success", async () => {
+    const user = userEvent.setup();
+    let release!: () => void;
+    const gate = new Promise<void>((r) => {
+      release = r;
+    });
+    const ipc = createMockDragonIpc("happy");
+    vi.spyOn(ipc, "runQuery").mockImplementation(async () => {
+      await gate;
+      return { columns: ["id"], rows: [[1]], rowsAffected: null, durationMs: 9 };
+    });
+    render(
+      <div style={{ overflow: "auto", height: "400px" }}>
+        <App ipc={ipc} />
+      </div>,
+    );
+    await connectFirst(user, ipc);
+    await addSelectFromUsers(user);
+    await user.click(screen.getByTestId(VisualQueryAccessibility.runQuery));
+    await waitFor(() =>
+      expect(screen.getByTestId(ResultsAccessibility.loading)).toBeInTheDocument(),
+    );
+    await user.click(screen.getByTestId(VisualQueryAccessibility.startOver));
+    expect(await screen.findByTestId(ResultsAccessibility.empty)).toHaveTextContent(
+      ResultsCopy.runQueryEmpty,
+    );
+    expect(screen.queryByTestId(ResultsAccessibility.grid)).toBeNull();
+    release();
+    await waitFor(() => {
+      expect(screen.getByTestId(ResultsAccessibility.empty)).toHaveTextContent(
+        ResultsCopy.runQueryEmpty,
+      );
+    });
+    expect(screen.queryByTestId(ResultsAccessibility.grid)).toBeNull();
+  });
+
+  it("late first run does not replace a newer in-flight Run after Start over", async () => {
+    const user = userEvent.setup();
+    let releaseFirst!: () => void;
+    const firstGate = new Promise<void>((r) => {
+      releaseFirst = r;
+    });
+    let releaseSecond!: () => void;
+    const secondGate = new Promise<void>((r) => {
+      releaseSecond = r;
+    });
+    const ipc = createMockDragonIpc("happy");
+    let call = 0;
+    vi.spyOn(ipc, "runQuery").mockImplementation(async () => {
+      call += 1;
+      if (call === 1) {
+        await firstGate;
+        return { columns: ["id"], rows: [["first"]], rowsAffected: null, durationMs: 1 };
+      }
+      await secondGate;
+      return { columns: ["id"], rows: [["second"]], rowsAffected: null, durationMs: 2 };
+    });
+    render(
+      <div style={{ overflow: "auto", height: "400px" }}>
+        <App ipc={ipc} />
+      </div>,
+    );
+    await connectFirst(user, ipc);
+    await addSelectFromUsers(user);
+    await user.click(screen.getByTestId(VisualQueryAccessibility.runQuery));
+    await waitFor(() =>
+      expect(screen.getByTestId(ResultsAccessibility.loading)).toBeInTheDocument(),
+    );
+    await user.click(screen.getByTestId(VisualQueryAccessibility.startOver));
+    expect(await screen.findByTestId(ResultsAccessibility.empty)).toHaveTextContent(
+      ResultsCopy.runQueryEmpty,
+    );
+    await addSelectFromUsers(user);
+    await user.click(screen.getByTestId(VisualQueryAccessibility.runQuery));
+    await waitFor(() => expect(call).toBe(2));
+    await waitFor(() =>
+      expect(screen.getByTestId(ResultsAccessibility.loading)).toBeInTheDocument(),
+    );
+    releaseFirst();
+    await waitFor(() =>
+      expect(screen.getByTestId(ResultsAccessibility.loading)).toBeInTheDocument(),
+    );
+    expect(screen.queryByText("first")).toBeNull();
+    expect(screen.queryByTestId(ResultsAccessibility.grid)).toBeNull();
+    releaseSecond();
+    await waitFor(() => expect(screen.getByTestId(ResultsAccessibility.grid)).toBeInTheDocument());
+    expect(screen.getByText("second")).toBeInTheDocument();
+    expect(screen.queryByText("first")).toBeNull();
   });
 });

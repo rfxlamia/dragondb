@@ -108,6 +108,30 @@ describe("run → executing tab orchestration", () => {
     });
   });
 
+  it("clearTabResults during in-flight run ignores late apply (generation)", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => {
+      release = r;
+    });
+    const ipc = composeIpc({
+      runQuery: vi.fn(async () => {
+        await gate;
+        return { columns: ["id"], rows: [[1]], rowsAffected: null, durationMs: 5 };
+      }),
+    });
+    const stores = composeAppStores(ipc);
+    await stores.session.getState().connect("P");
+    const tab = stores.tabs.getState().createTab();
+    const pending = runSelectOnActiveTab(stores, ipc, FIXTURE_SQL);
+    stores.tabs.getState().clearTabResults(tab.id);
+    release();
+    await pending;
+    const after = stores.tabs.getState().tabs.find((t) => t.id === tab.id);
+    expect(after?.status).toEqual({ kind: "idle" });
+    expect(after?.raw).toBeNull();
+    expect(after?.compact).toBeNull();
+  });
+
   it("Run failure applies error status then rethrows", async () => {
     const ipc = composeIpc({
       runQuery: vi.fn(async () => {

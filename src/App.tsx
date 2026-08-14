@@ -7,11 +7,15 @@ import { createTauriDragonIpc } from "./ipc/tauri-client";
 import { type AppStores, composeAppStores } from "./stores/compose-app-stores";
 import { runSelectOnActiveTab } from "./stores/run-select-on-active-tab";
 import { ConnectionPanel } from "./ui/connection/connection-panel";
+import { QueryResultsPane } from "./ui/results/query-results-pane";
+import { WorkspaceSplit } from "./ui/shell/workspace-split";
 import { VisualQueryCanvas } from "./ui/visual-query/canvas";
 import { VisualQueryCopy } from "./ui/visual-query/copy";
 import "./App.css";
 
 export type AppProps = { ipc?: DragonIpc };
+
+const IDLE_STATUS = { kind: "idle" } as const;
 
 function ensureDefaultIpc(ref: { current: DragonIpc | null }): DragonIpc {
   const existing = ref.current;
@@ -46,6 +50,14 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
   const columnNames = useStore(stores.schema, (s) => s.columnNames);
   const metadataErrorCode = useStore(stores.schema, (s) => s.metadataErrorMessage);
   const canvasEpoch = useSyncExternalStore(stores.subscribeCanvasEpoch, stores.getCanvasEpoch);
+  const status = useStore(
+    stores.tabs,
+    (s) => s.tabs.find((t) => t.id === s.activeTabId)?.status ?? IDLE_STATUS,
+  );
+  const compact = useStore(
+    stores.tabs,
+    (s) => s.tabs.find((t) => t.id === s.activeTabId)?.compact ?? null,
+  );
 
   /** Last live profile id — store clears before panel calls onDisconnected. */
   const lastProfileIdRef = useRef<ProfileId | null>(null);
@@ -109,6 +121,19 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
     stores.tabs.getState().clearTabResults(activeTabId);
   }
 
+  const canvas = (
+    <VisualQueryCanvas
+      key={canvasEpoch}
+      tables={tables}
+      columnNames={columnNames}
+      metadataErrorMessage={metadataErrorMessage}
+      isConnected={isConnected}
+      onRunQuery={onRunQuery}
+      onClearTabResults={handleClearTabResults}
+      onCommittedFromChange={handleCommittedFromChange}
+    />
+  );
+
   return (
     <main className="app-shell">
       <ConnectionPanel
@@ -122,16 +147,12 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
         onSwitchSuccess={handleSwitchSuccess}
         onSwitchFailure={handleSwitchFailure}
       />
-      <VisualQueryCanvas
-        key={canvasEpoch}
-        tables={tables}
-        columnNames={columnNames}
-        metadataErrorMessage={metadataErrorMessage}
-        isConnected={isConnected}
-        onRunQuery={onRunQuery}
-        onClearTabResults={handleClearTabResults}
-        onCommittedFromChange={handleCommittedFromChange}
-      />
+      <div className="app-main-column">
+        <WorkspaceSplit
+          canvas={canvas}
+          results={<QueryResultsPane status={status} compact={compact} />}
+        />
+      </div>
     </main>
   );
 }

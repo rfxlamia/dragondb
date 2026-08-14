@@ -4,7 +4,9 @@
   display: grid;
   font-family: var(--font-sans);
   grid-template-columns: minmax(16rem, 22rem) minmax(0, 1fr);
+  height: 100vh;
   min-height: 100vh;
+  overflow: auto;
 }
 
 .app-shell .connection-panel {
@@ -14,8 +16,41 @@
   padding: 1rem;
 }
 
-.app-shell .vq-canvas {
+.app-main-column {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 550px;
   min-width: 0;
+}
+
+.app-main-column .vq-canvas {
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+}
+
+.workspace-split {
+  flex: 1;
+  height: 100%;
+  min-height: 0;
+  width: 100%;
+}
+
+.workspace-split__canvas,
+.workspace-split__results {
+  min-height: 0;
+  overflow: auto;
+}
+
+.workspace-split__separator {
+  background: var(--neutral-300);
+}
+
+.app-main-column .query-results {
+  box-sizing: border-box;
+  height: 100%;
+  overflow: auto;
 }
 
 html,
