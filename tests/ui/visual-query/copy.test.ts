@@ -49,11 +49,11 @@ describe("VisualQueryCopy", () => {
     expect(afterFrom).not.toContain("join");
   });
 
-  it("generated SQL preview is read-only copy model", () => {
-    const preview = VisualQueryCopy.generatedSQLPreviewModel('SELECT * FROM "orders"');
-    expect(preview.isEditable).toBe(false);
-    expect(preview.allowsCopy).toBe(true);
-    expect(preview.sql).toBe('SELECT * FROM "orders"');
+  it("generated SQL dialog copy is Copy, Done, and empty em dash", () => {
+    expect(VisualQueryCopy.viewGeneratedSQLTitle).toBe("View generated SQL");
+    expect(VisualQueryCopy.copySQLTitle).toBe("Copy");
+    expect(VisualQueryCopy.generatedSQLDoneTitle).toBe("Done");
+    expect(VisualQueryCopy.sqlPreviewEmpty).toBe("—");
   });
 
   it("includes extra canvas copy keys from spec", () => {
@@ -61,6 +61,6 @@ describe("VisualQueryCopy", () => {
     expect(VisualQueryCopy.noMatchesTitle).toBe("No matches");
     expect(VisualQueryCopy.columnsLoadError).toContain("Could not load columns");
     expect(VisualQueryCopy.tablesLoadError).toContain("Could not load tables");
-    expect(VisualQueryCopy.copySQLDoneTitle).toBe("Done");
+    expect(VisualQueryCopy.generatedSQLDoneTitle).toBe("Done");
   });
 });

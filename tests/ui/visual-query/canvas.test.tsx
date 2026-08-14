@@ -5,6 +5,7 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { QueryDocument } from "../../../src/core";
+import type { QueryResult } from "../../../src/ipc/contract";
 import { VisualQueryAccessibility } from "../../../src/ui/visual-query/accessibility";
 import { VisualQueryCanvas } from "../../../src/ui/visual-query/canvas";
 import { VisualQueryCopy } from "../../../src/ui/visual-query/copy";
@@ -18,8 +19,12 @@ const tables = [
   { name: "events", schema: "analytics" },
 ];
 
+async function openGeneratedSqlDialog(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByTestId(VisualQueryAccessibility.viewGeneratedSQL));
+}
+
 describe("VisualQueryCanvas layout chrome", () => {
-  it("places stage and SQL preview as siblings under the canvas body", async () => {
+  it("does not place .vq-sql-preview as a sibling under the canvas body", async () => {
     const user = userEvent.setup();
     const { container } = render(
       <VisualQueryCanvas
@@ -31,13 +36,21 @@ describe("VisualQueryCanvas layout chrome", () => {
     );
     await user.click(screen.getByTestId(VisualQueryAccessibility.initialAddBlock));
     await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("select")));
-
     const body = container.querySelector(".vq-canvas__body");
     expect(body).not.toBeNull();
-    const stage = body?.querySelector(":scope > .vq-canvas__stage");
-    const preview = body?.querySelector(":scope > .vq-sql-preview");
-    expect(stage).not.toBeNull();
-    expect(preview).not.toBeNull();
+    expect(body?.querySelector(":scope > .vq-canvas__stage")).not.toBeNull();
+    expect(body?.querySelector(":scope > .vq-sql-preview")).toBeNull();
+    expect(container.querySelector(".vq-sql-preview")).toBeNull();
+    expect(screen.queryByTestId(VisualQueryAccessibility.generatedSQLText)).toBeNull();
+  });
+
+  it("canvas.tsx and toolbar.tsx never mention deleteHistory or clearHistory", () => {
+    const canvas = readFileSync(join(process.cwd(), "src/ui/visual-query/canvas.tsx"), "utf8");
+    const toolbar = readFileSync(join(process.cwd(), "src/ui/visual-query/toolbar.tsx"), "utf8");
+    expect(canvas).not.toMatch(/\bdeleteHistory\b/);
+    expect(canvas).not.toMatch(/\bclearHistory\b/);
+    expect(toolbar).not.toMatch(/\bdeleteHistory\b/);
+    expect(toolbar).not.toMatch(/\bclearHistory\b/);
   });
 
   it("keeps open clause menu in-flow under the trailing control", async () => {
@@ -93,10 +106,9 @@ describe("visual-query.css layout contracts", () => {
     expect(menuBlock?.[0]).not.toMatch(/\btop:/);
   });
 
-  it("docks SQL preview without stealing stage flex growth", () => {
+  it("does not dock an always-on SQL preview under the canvas body", () => {
     expect(css).toMatch(/\.vq-canvas__stage\s*\{[^}]*flex:\s*1/);
-    expect(css).toMatch(/\.vq-sql-preview\s*\{[^}]*flex:\s*0\s+0\s+auto/);
-    expect(css).toMatch(/\.vq-sql-preview\s*\{[^}]*max-height:\s*40vh/);
+    expect(css).not.toMatch(/\.vq-canvas__body[^{]*\{[^}]*\.vq-sql-preview/);
   });
 
   it("keeps chain connectors pinned to a stable top offset", () => {
@@ -132,7 +144,7 @@ describe("VisualQueryCanvas", () => {
     expect(onDocumentChange.mock.calls[onDocumentChange.mock.calls.length - 1]?.[0]).toBe(doc);
   });
 
-  it("shows canRun help on status strip when SELECT incomplete", async () => {
+  it("shows canRun help on the toolbar when SELECT incomplete", async () => {
     const user = userEvent.setup();
     render(
       <VisualQueryCanvas
@@ -144,7 +156,9 @@ describe("VisualQueryCanvas", () => {
     );
     await user.click(screen.getByTestId(VisualQueryAccessibility.initialAddBlock));
     await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("select")));
-    expect(screen.getByText(/table/i)).toBeInTheDocument();
+    expect(screen.getByTestId(VisualQueryAccessibility.runQuery)).toBeDisabled();
+    expect(screen.getByText("Choose a table in FROM")).toBeInTheDocument();
+    expect(document.querySelector(".vq-canvas__status")).toBeNull();
   });
 
   it("shows empty SQL preview when named projection columns are blank", async () => {
@@ -164,8 +178,10 @@ describe("VisualQueryCanvas", () => {
     await user.click(screen.getByTestId(VisualQueryAccessibility.fromTablePicker));
     await user.click(screen.getByRole("button", { name: "users" }));
     await user.click(screen.getByTestId(VisualQueryAccessibility.allColumnsToggle));
+    await openGeneratedSqlDialog(user);
     expect(screen.getByTestId(VisualQueryAccessibility.generatedSQLText)).toHaveTextContent("—");
     expect(screen.getByText(/Choose at least one column/i)).toBeInTheDocument();
+    expect(document.querySelector(".vq-sql-preview")).toBeNull();
   });
 
   it("notifies onCommittedFromChange on select, clear via delete FROM, and start over", async () => {
@@ -251,38 +267,52 @@ describe("VisualQueryCanvas", () => {
     expect(onCommittedFromChange).toHaveBeenCalledWith({ schema: null, name: "users" });
   });
 
-  it("CREATE path updates live preview text", async () => {
+  it("CREATE disables Run, does not call onRunQuery, and SQL is in the dialog", async () => {
     const user = userEvent.setup();
+    const onRunQuery = vi.fn();
     render(
       <VisualQueryCanvas
         tables={tables}
         columnNames={[]}
         metadataErrorMessage={null}
         isConnected={true}
+        onRunQuery={onRunQuery}
       />,
     );
     await user.click(screen.getByTestId(VisualQueryAccessibility.initialAddBlock));
     await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("createTable")));
     await user.type(screen.getByTestId(VisualQueryAccessibility.createTableNameField), "orders");
+    await user.type(screen.getByTestId(VisualQueryAccessibility.createColumnNameField(0)), "id");
+    expect(screen.getByTestId(VisualQueryAccessibility.runQuery)).toBeDisabled();
+    await user.click(screen.getByTestId(VisualQueryAccessibility.runQuery));
+    expect(onRunQuery).not.toHaveBeenCalled();
+    expect(screen.queryByText(/only select queries can run/i)).toBeNull();
+    expect(document.querySelector(".vq-canvas__status")).toBeNull();
+    await openGeneratedSqlDialog(user);
     expect(screen.getByTestId(VisualQueryAccessibility.generatedSQLText).textContent).toMatch(
       /orders/i,
     );
   });
 
-  it("UPDATE shows Coming soon and preview em dash", async () => {
+  it("UPDATE disables Run; dialog shows em dash", async () => {
     const user = userEvent.setup();
+    const onRunQuery = vi.fn();
     render(
       <VisualQueryCanvas
         tables={tables}
         columnNames={[]}
         metadataErrorMessage={null}
         isConnected={true}
+        onRunQuery={onRunQuery}
       />,
     );
     await user.click(screen.getByTestId(VisualQueryAccessibility.initialAddBlock));
     await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("update")));
     expect(screen.getAllByText(/coming soon/i).length).toBeGreaterThanOrEqual(1);
-    expect(document.querySelector(".vq-canvas__status")).toHaveTextContent("Coming soon");
+    expect(screen.getByTestId(VisualQueryAccessibility.runQuery)).toBeDisabled();
+    await user.click(screen.getByTestId(VisualQueryAccessibility.runQuery));
+    expect(onRunQuery).not.toHaveBeenCalled();
+    await openGeneratedSqlDialog(user);
     expect(screen.getByTestId(VisualQueryAccessibility.generatedSQLText)).toHaveTextContent(
       VisualQueryCopy.sqlPreviewEmpty,
     );
@@ -316,16 +346,20 @@ describe("VisualQueryCanvas", () => {
     );
 
     expect(screen.getByText(VisualQueryCopy.emptyCanvasTitle)).toBeInTheDocument();
+    await openGeneratedSqlDialog(user);
     const initialPreview = screen.getByTestId(
       VisualQueryAccessibility.generatedSQLText,
     ).textContent;
+    await user.click(screen.getByTestId(VisualQueryAccessibility.generatedSQLDone));
 
     await user.click(screen.getByTestId(VisualQueryAccessibility.initialAddBlock));
     await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("select")));
     expect(screen.getByTestId(VisualQueryAccessibility.clauseCard("select"))).toBeInTheDocument();
+    await openGeneratedSqlDialog(user);
     expect(screen.getByTestId(VisualQueryAccessibility.generatedSQLText).textContent).not.toBe(
       initialPreview,
     );
+    await user.click(screen.getByTestId(VisualQueryAccessibility.generatedSQLDone));
 
     await user.click(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock));
     await user.click(screen.getByTestId(VisualQueryAccessibility.clauseMenuItem("from")));
@@ -334,6 +368,7 @@ describe("VisualQueryCanvas", () => {
     const fromField = screen.getByTestId(VisualQueryAccessibility.fromTableField);
     await user.type(fromField, "users");
     await user.keyboard("{Enter}");
+    await openGeneratedSqlDialog(user);
     expect(screen.getByTestId(VisualQueryAccessibility.generatedSQLText).textContent).toMatch(
       /users/i,
     );
@@ -371,6 +406,7 @@ describe("VisualQueryCanvas", () => {
     );
     await user.type(screen.getByTestId(VisualQueryAccessibility.whereValueField), "42");
 
+    await openGeneratedSqlDialog(user);
     const sql = screen.getByTestId(VisualQueryAccessibility.generatedSQLText).textContent ?? "";
     expect(sql).toMatch(/WHERE/i);
     expect(sql).toContain("42");
@@ -378,7 +414,7 @@ describe("VisualQueryCanvas", () => {
 });
 
 describe("VisualQueryCanvas full lock + Run (SP-2)", () => {
-  it("disables mutate/statement/Run while disconnected but keeps SQL preview readable", async () => {
+  it("disables mutate/statement/Run while disconnected and does not show generated SQL unless dialog opened", async () => {
     const user = userEvent.setup();
     render(
       <VisualQueryCanvas
@@ -392,7 +428,8 @@ describe("VisualQueryCanvas full lock + Run (SP-2)", () => {
     expect(screen.getByTestId(VisualQueryAccessibility.initialAddBlock)).toBeDisabled();
     const run = screen.queryByTestId(VisualQueryAccessibility.runQuery);
     if (run) expect(run).toBeDisabled();
-    expect(screen.getByTestId(VisualQueryAccessibility.generatedSQLText)).toBeInTheDocument();
+    expect(screen.getByTestId(VisualQueryAccessibility.viewGeneratedSQL)).toBeDisabled();
+    expect(screen.queryByTestId(VisualQueryAccessibility.generatedSQLText)).toBeNull();
     await user.click(screen.getByTestId(VisualQueryAccessibility.initialAddBlock));
     expect(screen.queryByTestId(VisualQueryAccessibility.statementMenu)).toBeNull();
   });
@@ -447,9 +484,8 @@ describe("VisualQueryCanvas full lock + Run (SP-2)", () => {
         params: expect.any(Array),
       }),
     );
-    expect(document.querySelector(".vq-canvas__status")).toHaveTextContent(
-      /OK\s*\/\s*2 rows\s*\/\s*17 ms/i,
-    );
+    expect(document.querySelector(".vq-canvas__status")).toBeNull();
+    expect(document.querySelector(".vq-canvas__status")?.textContent ?? "").not.toMatch(/OK\s*\//i);
     expect(document.querySelector(".vq-results-grid")).toBeNull();
     expect(screen.queryByRole("table")).toBeNull();
   });
@@ -478,11 +514,10 @@ describe("VisualQueryCanvas full lock + Run (SP-2)", () => {
     await user.click(screen.getByTestId(VisualQueryAccessibility.fromTablePicker));
     await user.click(screen.getByRole("button", { name: "users" }));
     await user.click(screen.getByTestId(VisualQueryAccessibility.runQuery));
-    await waitFor(() =>
-      expect(document.querySelector(".vq-canvas__status")).toHaveTextContent(
-        /OK\s*\/\s*0 rows\s*\/\s*4 ms/i,
-      ),
-    );
+    await waitFor(() => expect(onRunQuery).toHaveBeenCalledTimes(1));
+    expect(document.querySelector(".vq-canvas__status")).toBeNull();
+    expect(document.querySelector(".vq-canvas__status")?.textContent ?? "").not.toMatch(/OK\s*\//i);
+    expect(screen.queryByRole("table")).toBeNull();
   });
 
   it("clears stale Run success status when disconnected", async () => {
@@ -509,11 +544,9 @@ describe("VisualQueryCanvas full lock + Run (SP-2)", () => {
     await user.click(screen.getByTestId(VisualQueryAccessibility.fromTablePicker));
     await user.click(screen.getByRole("button", { name: "users" }));
     await user.click(screen.getByTestId(VisualQueryAccessibility.runQuery));
-    await waitFor(() =>
-      expect(document.querySelector(".vq-canvas__status")).toHaveTextContent(
-        /OK\s*\/\s*1 rows\s*\/\s*9 ms/i,
-      ),
-    );
+    await waitFor(() => expect(onRunQuery).toHaveBeenCalledTimes(1));
+    expect(document.querySelector(".vq-canvas__status")).toBeNull();
+    expect(document.querySelector(".vq-canvas__status")?.textContent ?? "").not.toMatch(/OK\s*\//i);
 
     rerender(
       <VisualQueryCanvas
@@ -531,7 +564,7 @@ describe("VisualQueryCanvas full lock + Run (SP-2)", () => {
     );
   });
 
-  it("Run CREATE is gated in UI — does not call onRunQuery and shows SELECT-only message", async () => {
+  it("Run CREATE is gated in UI — Run is disabled and does not call onRunQuery", async () => {
     const user = userEvent.setup();
     const onRunQuery = vi.fn();
     render(
@@ -547,11 +580,11 @@ describe("VisualQueryCanvas full lock + Run (SP-2)", () => {
     await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("createTable")));
     await user.type(screen.getByTestId(VisualQueryAccessibility.createTableNameField), "orders");
     await user.type(screen.getByTestId(VisualQueryAccessibility.createColumnNameField(0)), "id");
+    expect(screen.getByTestId(VisualQueryAccessibility.runQuery)).toBeDisabled();
     await user.click(screen.getByTestId(VisualQueryAccessibility.runQuery));
     expect(onRunQuery).not.toHaveBeenCalled();
-    expect(document.querySelector(".vq-canvas__status")).toHaveTextContent(
-      /select.?only|only select/i,
-    );
+    expect(screen.queryByText(/only select queries can run/i)).toBeNull();
+    expect(document.querySelector(".vq-canvas__status")).toBeNull();
   });
 
   it("Run failure shows IpcError.message and keeps canvas unlocked", async () => {
@@ -575,11 +608,57 @@ describe("VisualQueryCanvas full lock + Run (SP-2)", () => {
     await user.click(screen.getByTestId(VisualQueryAccessibility.fromTablePicker));
     await user.click(screen.getByRole("button", { name: "users" }));
     await user.click(screen.getByTestId(VisualQueryAccessibility.runQuery));
+    await waitFor(() => expect(onRunQuery).toHaveBeenCalledTimes(1));
+    expect(document.querySelector(".vq-canvas__status")).toBeNull();
+    expect(document.querySelector(".vq-canvas__status")?.textContent ?? "").not.toMatch(/OK\s*\//i);
+    expect(screen.queryByRole("table")).toBeNull();
+    expect(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock)).not.toBeDisabled();
+  });
+
+  it("Start over during hanging onRunQuery clears results and ignores late OK strip", async () => {
+    const user = userEvent.setup();
+    let resolveRun!: (value: QueryResult) => void;
+    const onRunQuery = vi.fn(
+      () =>
+        new Promise<QueryResult>((resolve) => {
+          resolveRun = resolve;
+        }),
+    );
+    const onClearTabResults = vi.fn();
+    render(
+      <VisualQueryCanvas
+        tables={tables}
+        columnNames={["id"]}
+        metadataErrorMessage={null}
+        isConnected={true}
+        onRunQuery={onRunQuery}
+        onClearTabResults={onClearTabResults}
+      />,
+    );
+    await user.click(screen.getByTestId(VisualQueryAccessibility.initialAddBlock));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("select")));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.clauseMenuItem("from")));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.fromTablePicker));
+    await user.click(screen.getByRole("button", { name: "users" }));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.runQuery));
+    await waitFor(() => expect(onRunQuery).toHaveBeenCalledTimes(1));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.startOver));
+    expect(onClearTabResults).toHaveBeenCalled();
+    resolveRun({ columns: ["id"], rows: [[1]], rowsAffected: null, durationMs: 9 });
     await waitFor(() =>
-      expect(document.querySelector(".vq-canvas__status")).toHaveTextContent(
-        /syntax error near SELECT/i,
+      expect(document.querySelector(".vq-canvas__status")?.textContent ?? "").not.toMatch(
+        /OK\s*\//i,
       ),
     );
-    expect(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock)).not.toBeDisabled();
+    await user.click(screen.getByTestId(VisualQueryAccessibility.initialAddBlock));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("select")));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.clauseMenuItem("from")));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.fromTablePicker));
+    await user.click(screen.getByRole("button", { name: "users" }));
+    expect(screen.getByTestId(VisualQueryAccessibility.runQuery)).not.toBeDisabled();
+    await user.click(screen.getByTestId(VisualQueryAccessibility.runQuery));
+    await waitFor(() => expect(onRunQuery).toHaveBeenCalledTimes(2));
   });
 });

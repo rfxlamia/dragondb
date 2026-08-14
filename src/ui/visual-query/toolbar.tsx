@@ -8,8 +8,18 @@ export function VisualQueryToolbar(props: {
   isConnected: boolean;
   canRunQuery: boolean;
   onRunQuery: () => void;
+  onViewGeneratedSQL: () => void;
+  runHelpMessage: string | null;
 }): React.JSX.Element {
-  const { canStartOver, onStartOver, isConnected, canRunQuery, onRunQuery } = props;
+  const {
+    canStartOver,
+    onStartOver,
+    isConnected,
+    canRunQuery,
+    onRunQuery,
+    onViewGeneratedSQL,
+    runHelpMessage,
+  } = props;
   const runDisabled = !isConnected || !canRunQuery;
 
   return (
@@ -25,6 +35,16 @@ export function VisualQueryToolbar(props: {
           {VisualQueryCopy.startOverTitle}
         </button>
       ) : null}
+      {runHelpMessage ? <span className="vq-toolbar__help">{runHelpMessage}</span> : null}
+      <button
+        type="button"
+        className="vq-toolbar__view-sql"
+        onClick={onViewGeneratedSQL}
+        disabled={!isConnected}
+        data-testid={VisualQueryAccessibility.viewGeneratedSQL}
+      >
+        {VisualQueryCopy.viewGeneratedSQLTitle}
+      </button>
       <button
         type="button"
         className="vq-toolbar__run"

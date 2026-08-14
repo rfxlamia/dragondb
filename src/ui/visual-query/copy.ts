@@ -15,12 +15,6 @@ export interface StatementMenuItem {
   badge: string | null;
 }
 
-export interface GeneratedSQLPreviewModel {
-  sql: string;
-  isEditable: boolean;
-  allowsCopy: boolean;
-}
-
 export interface ClauseMenuItem {
   kind: ClauseKind;
   title: string;
@@ -171,10 +165,6 @@ function createColumnTypeTitle(type: CreateColumnType): string {
   }
 }
 
-function generatedSQLPreviewModel(sql: string): GeneratedSQLPreviewModel {
-  return { sql, isEditable: false, allowsCopy: true };
-}
-
 /** English helpers and chrome copy for the visual query canvas. */
 export const VisualQueryCopy = {
   helper: helperForClause,
@@ -190,14 +180,10 @@ export const VisualQueryCopy = {
   columnPopoverNeedsFromMessage: "Choose a table in FROM first.",
   viewGeneratedSQLTitle: "View generated SQL",
   copySQLTitle: "Copy",
-  copySQLDoneTitle: "Done",
+  generatedSQLDoneTitle: "Done",
   allColumnsTitle: "All columns",
   addBlockTitle: "Add block",
   runQueryTitle: "Run query",
-  runSelectOnlyMessage: "Only SELECT queries can run for now.",
-  runSuccessStatus(rowCount: number, durationMs: number): string {
-    return `OK / ${rowCount} rows / ${durationMs} ms`;
-  },
   confirmCreateTitle: "Create this table?",
   confirmCreateContinueTitle: "Continue",
   confirmCreateCancelTitle: "Cancel",
@@ -210,5 +196,4 @@ export const VisualQueryCopy = {
   whereOperatorTitle,
   orderDirectionTitle,
   createColumnTypeTitle,
-  generatedSQLPreviewModel,
 } as const;
