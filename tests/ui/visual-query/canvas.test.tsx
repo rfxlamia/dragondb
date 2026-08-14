@@ -111,6 +111,10 @@ describe("visual-query.css layout contracts", () => {
     expect(css).not.toMatch(/\.vq-canvas__body[^{]*\{[^}]*\.vq-sql-preview/);
   });
 
+  it("does not keep a .vq-canvas__status rule after the runOutcome strip was removed", () => {
+    expect(css).not.toMatch(/\.vq-canvas__status/);
+  });
+
   it("keeps chain connectors pinned to a stable top offset", () => {
     const connectorBlock = css.match(/\.vq-canvas__connector\s*\{[^}]*\}/);
     expect(connectorBlock).not.toBeNull();
@@ -452,7 +456,7 @@ describe("VisualQueryCanvas full lock + Run (SP-2)", () => {
     expect(onClearTabResults).toHaveBeenCalledTimes(1);
   });
 
-  it("Run SELECT calls onRunQuery with exec SQL and shows OK / rows.length / durationMs", async () => {
+  it("Run SELECT calls onRunQuery with exec SQL and does not show OK / N rows / ms", async () => {
     const user = userEvent.setup();
     const onRunQuery = vi.fn(async (_sql: { text: string; params: unknown[] }) => ({
       columns: ["id"],
@@ -490,7 +494,7 @@ describe("VisualQueryCanvas full lock + Run (SP-2)", () => {
     expect(screen.queryByRole("table")).toBeNull();
   });
 
-  it("Run SELECT with 0 rows shows OK / 0 rows / X ms", async () => {
+  it("Run SELECT with 0 rows does not show OK / 0 rows / X ms", async () => {
     const user = userEvent.setup();
     const onRunQuery = vi.fn(async () => ({
       columns: ["id"],
@@ -587,7 +591,7 @@ describe("VisualQueryCanvas full lock + Run (SP-2)", () => {
     expect(document.querySelector(".vq-canvas__status")).toBeNull();
   });
 
-  it("Run failure shows IpcError.message and keeps canvas unlocked", async () => {
+  it("Run failure does not show IpcError.message on the canvas and keeps canvas unlocked", async () => {
     const user = userEvent.setup();
     const onRunQuery = vi.fn(async () => {
       throw { kind: "syntax", message: "syntax error near SELECT", position: 0 };

@@ -501,25 +501,14 @@
   padding: 16px 20px 20px;
 }
 
-.vq-canvas__metadata-error,
-.vq-canvas__status {
-  color: var(--neutral-700);
-  font-family: var(--font-sans);
-  font-size: 13px;
-  line-height: 1.4;
-  padding: 6px 10px;
-}
-
-.vq-canvas__status {
-  background: var(--info-tint);
-  border-radius: var(--radius);
-  color: var(--info-text);
-}
-
 .vq-canvas__metadata-error {
   background: var(--error-tint);
   border-radius: var(--radius);
   color: var(--error-text);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.4;
+  padding: 6px 10px;
 }
 
 .vq-canvas__body {
