@@ -79,9 +79,9 @@ function bodyRows(columns: string[], rows: unknown[][]): React.JSX.Element[] {
   const elements: React.JSX.Element[] = [];
   for (const [rowIndex, row] of rows.entries()) {
     const cells: React.JSX.Element[] = [];
-    for (const [cellIndex, cell] of row.entries()) {
-      const column = columns[cellIndex] ?? `col-${cellIndex}`;
-      cells.push(<td key={`${column}-${cellIndex}`}>{formatResultCell(cell)}</td>);
+    const source = Array.isArray(row) ? row : [];
+    for (const [cellIndex, column] of columns.entries()) {
+      cells.push(<td key={`${column}-${cellIndex}`}>{formatResultCell(source[cellIndex])}</td>);
     }
     elements.push(<tr key={`row-${rowIndex}`}>{cells}</tr>);
   }

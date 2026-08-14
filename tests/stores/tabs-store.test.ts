@@ -510,4 +510,57 @@ describe("tabs-store", () => {
     expect(store.getState().tabs.map((t) => t.id)).toEqual(["local", "db-active"]);
     expect(store.getState().tabs.some((t) => t.id === "gone")).toBe(false);
   });
+
+  it("hydrateFromDto does not throw when cached rows are not arrays, so later tabs still hydrate", () => {
+    const ipc = mockTabsIpc();
+    const store = createTabsStore(ipc, {
+      getConnectionId: () => "c1",
+      getDatabaseName: () => "app",
+    });
+    expect(() => {
+      store.getState().hydrateFromDto(
+        baseTab({
+          id: "bad",
+          cachedResultsData: JSON.stringify({ columns: ["id"], rows: ["not-a-row"] }),
+        }),
+      );
+    }).not.toThrow();
+    store.getState().hydrateFromDto(
+      baseTab({
+        id: "good",
+        isActive: true,
+        cachedResultsData: JSON.stringify({ columns: ["id"], rows: [["ok"]] }),
+      }),
+    );
+    const good = store.getState().tabs.find((t) => t.id === "good");
+    expect(good?.compact?.rows).toEqual([["ok"]]);
+    expect(good?.status).toEqual({ kind: "idle" });
+  });
+
+  it("refresh continues hydrating later tabs when one cachedResultsData row is not an array", async () => {
+    const ipc = {
+      saveTabState: vi.fn(async () => undefined),
+      deleteTabState: vi.fn(async () => undefined),
+      listTabStates: vi.fn(async () => [
+        baseTab({
+          id: "bad",
+          isActive: false,
+          cachedResultsData: JSON.stringify({ columns: ["id"], rows: ["not-a-row"] }),
+        }),
+        baseTab({
+          id: "good",
+          isActive: true,
+          cachedResultsData: JSON.stringify({ columns: ["id"], rows: [["ok"]] }),
+        }),
+      ]),
+    } as unknown as DragonIpc;
+    const store = createTabsStore(ipc, {
+      getConnectionId: () => "c1",
+      getDatabaseName: () => "app",
+    });
+    await expect(store.getState().refresh()).resolves.toBeUndefined();
+    expect(store.getState().tabs.map((t) => t.id)).toEqual(["bad", "good"]);
+    expect(store.getState().activeTabId).toBe("good");
+    expect(store.getState().tabs.find((t) => t.id === "good")?.compact?.rows).toEqual([["ok"]]);
+  });
 });

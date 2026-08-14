@@ -103,4 +103,13 @@ describe("QueryResultsPane", () => {
     expect(paneBlock).not.toBeNull();
     expect(paneBlock?.[0]).toMatch(/border:\s*1px solid var\(--neutral-300\)/);
   });
+
+  it("ok grid renders one cell per column even when a compact row is short", () => {
+    renderPane(
+      { kind: "ok", rowCount: 1, durationMs: 1 },
+      { columns: ["id", "name", "email"], rows: [[1]] },
+    );
+    expect(screen.getAllByRole("columnheader")).toHaveLength(3);
+    expect(screen.getAllByRole("cell")).toHaveLength(3);
+  });
 });

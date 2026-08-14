@@ -959,4 +959,146 @@ describe("App results pane (SP-4b first slice)", () => {
     expect(screen.getByText("second")).toBeInTheDocument();
     expect(screen.queryByText("first")).toBeNull();
   });
+
+  it("Start over during loading ignores a late runQuery failure", async () => {
+    const user = userEvent.setup();
+    let release!: () => void;
+    const gate = new Promise<void>((r) => {
+      release = r;
+    });
+    const ipc = createMockDragonIpc("happy");
+    vi.spyOn(ipc, "runQuery").mockImplementation(async () => {
+      await gate;
+      throw { kind: "syntax", message: "late boom" };
+    });
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
+    await addSelectFromUsers(user);
+    await user.click(screen.getByTestId(VisualQueryAccessibility.runQuery));
+    await waitFor(() =>
+      expect(screen.getByTestId(ResultsAccessibility.loading)).toBeInTheDocument(),
+    );
+    await user.click(screen.getByTestId(VisualQueryAccessibility.startOver));
+    expect(await screen.findByTestId(ResultsAccessibility.empty)).toHaveTextContent(
+      ResultsCopy.runQueryEmpty,
+    );
+    release();
+    await waitFor(() => {
+      expect(screen.getByTestId(ResultsAccessibility.empty)).toHaveTextContent(
+        ResultsCopy.runQueryEmpty,
+      );
+    });
+    expect(screen.queryByTestId(ResultsAccessibility.error)).toBeNull();
+    expect(screen.queryByText("late boom")).toBeNull();
+  });
+
+  it("disconnect then reconnect same profile after a grid keeps empty copy", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    vi.spyOn(ipc, "runQuery").mockResolvedValue({
+      columns: ["id"],
+      rows: [[1]],
+      rowsAffected: null,
+      durationMs: 9,
+    });
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
+    await addSelectFromUsers(user);
+    await user.click(screen.getByTestId(VisualQueryAccessibility.runQuery));
+    await waitFor(() => expect(screen.getByTestId(ResultsAccessibility.grid)).toBeInTheDocument());
+    await user.click(screen.getByRole("button", { name: /disconnect/i }));
+    expect(screen.getByTestId(ResultsAccessibility.empty)).toHaveTextContent(
+      ResultsCopy.runQueryEmpty,
+    );
+    await user.click(await screen.findByRole("button", { name: /connect/i }));
+    await waitFor(() =>
+      expect(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock)).not.toBeDisabled(),
+    );
+    expect(screen.getByTestId(ResultsAccessibility.empty)).toHaveTextContent(
+      ResultsCopy.runQueryEmpty,
+    );
+    expect(screen.queryByTestId(ResultsAccessibility.grid)).toBeNull();
+    expect(screen.getByTestId(VisualQueryAccessibility.clauseCard("select"))).toBeInTheDocument();
+  });
+
+  it("deleting the SELECT root clears the results pane like Start over", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    vi.spyOn(ipc, "runQuery").mockResolvedValue({
+      columns: ["id"],
+      rows: [[1]],
+      rowsAffected: null,
+      durationMs: 9,
+    });
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
+    await addSelectFromUsers(user);
+    await user.click(screen.getByTestId(VisualQueryAccessibility.runQuery));
+    await waitFor(() => expect(screen.getByTestId(ResultsAccessibility.grid)).toBeInTheDocument());
+    await user.click(screen.getByTestId(VisualQueryAccessibility.deleteClause("select")));
+    expect(await screen.findByTestId(ResultsAccessibility.empty)).toHaveTextContent(
+      ResultsCopy.runQueryEmpty,
+    );
+    expect(screen.queryByTestId(ResultsAccessibility.grid)).toBeNull();
+  });
+
+  it("profile switch remounts canvas and dismisses an open SQL dialog while the pane stays empty", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    await ipc.saveProfile({
+      profile: {
+        name: "B",
+        host: "db-b",
+        port: 5432,
+        username: "postgres",
+        database: "app",
+        isFavorite: false,
+        sslMode: "prefer",
+        sshEnabled: false,
+        sshHost: null,
+        sshPort: null,
+        sshUsername: null,
+        sshAuthMethod: null,
+        sshPrivateKeyPath: null,
+      },
+      secrets: { password: "pw" },
+    });
+    vi.spyOn(ipc, "runQuery").mockResolvedValue({
+      columns: ["id"],
+      rows: [[1]],
+      rowsAffected: null,
+      durationMs: 4,
+    });
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
+    await addSelectFromUsers(user);
+    await user.click(screen.getByTestId(VisualQueryAccessibility.runQuery));
+    await waitFor(() => expect(screen.getByTestId(ResultsAccessibility.grid)).toBeInTheDocument());
+    await user.click(screen.getByTestId(VisualQueryAccessibility.viewGeneratedSQL));
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /^B$/i }));
+    await user.click(await screen.findByRole("button", { name: /confirm switch/i }));
+    await waitFor(() =>
+      expect(screen.getByText(VisualQueryCopy.emptyCanvasTitle)).toBeInTheDocument(),
+    );
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.getByTestId(ResultsAccessibility.empty)).toHaveTextContent(
+      ResultsCopy.runQueryEmpty,
+    );
+    expect(screen.queryByTestId(ResultsAccessibility.grid)).toBeNull();
+  });
+
+  it("incomplete SELECT keeps canRun help on the toolbar, not in the results pane", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
+    await user.click(await screen.findByTestId(VisualQueryAccessibility.initialAddBlock));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("select")));
+    expect(screen.getByTestId(VisualQueryAccessibility.runQuery)).toBeDisabled();
+    expect(screen.getByText("Choose a table in FROM")).toBeInTheDocument();
+    const pane = screen.getByTestId(ResultsAccessibility.pane);
+    expect(pane).toHaveTextContent(ResultsCopy.runQueryEmpty);
+    expect(pane).not.toHaveTextContent("Choose a table in FROM");
+  });
 });

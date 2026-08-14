@@ -107,21 +107,30 @@ function parseCachedResults(data: string | null): TabResultGrid | null {
   try {
     const parsed = JSON.parse(data) as { columns?: unknown; rows?: unknown };
     if (!Array.isArray(parsed.columns) || !Array.isArray(parsed.rows)) return null;
+    const rows: unknown[][] = [];
+    for (const row of parsed.rows) {
+      if (!Array.isArray(row)) return null;
+      rows.push(row);
+    }
     return {
       columns: parsed.columns.map(String),
-      rows: parsed.rows as unknown[][],
+      rows,
     };
   } catch {
     return null;
   }
 }
 
+function compactCells(row: unknown): unknown[] {
+  const cells = Array.isArray(row) ? row : [];
+  return cells.map((cell) => (typeof cell === "string" ? compactCell(cell) : cell));
+}
+
 function compactGrid(raw: TabResultGrid): TabResultGrid {
+  const rows = Array.isArray(raw.rows) ? raw.rows : [];
   return {
     columns: raw.columns,
-    rows: raw.rows.map((row) =>
-      row.map((cell) => (typeof cell === "string" ? compactCell(cell) : cell)),
-    ),
+    rows: rows.map(compactCells),
   };
 }
 
@@ -305,7 +314,11 @@ export function createTabsStore(ipc: DragonIpc, getters: TabsSessionGetters): St
       async refresh() {
         const dtos = await ipc.listTabStates();
         for (const dto of dtos) {
-          get().hydrateFromDto(dto);
+          try {
+            get().hydrateFromDto(dto);
+          } catch {
+            /* malformed cache must not abort remaining tabs */
+          }
         }
         const { tabs, activeTabId } = get();
         if (activeTabId !== null && tabs.some((t) => t.id === activeTabId)) {
