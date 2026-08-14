@@ -43,25 +43,11 @@ export function splitSqlStatements(sql: string): string[] {
       }
     }
 
-    // Single-quoted string ('' escape)
-    if (char === "'") {
-      current += char;
-      i += 1;
-      while (i < sql.length) {
-        const q = sql.charAt(i);
-        current += q;
-        if (q === "'") {
-          if (sql.charAt(i + 1) === "'") {
-            current += "'";
-            i += 2;
-          } else {
-            i += 1;
-            break;
-          }
-        } else {
-          i += 1;
-        }
-      }
+    // Quoted string or identifier ('' / "" escapes)
+    if (char === "'" || char === '"') {
+      const quoted = consumeQuoted(sql, i, char);
+      current += quoted.text;
+      i = quoted.end;
       continue;
     }
 
@@ -76,20 +62,11 @@ export function splitSqlStatements(sql: string): string[] {
       continue;
     }
 
-    // Block comment /* */
+    // Nested block comment /* */
     if (char === "/" && sql.charAt(i + 1) === "*") {
-      current += "/*";
-      i += 2;
-      while (i < sql.length) {
-        const c = sql.charAt(i);
-        current += c;
-        if (c === "*" && sql.charAt(i + 1) === "/") {
-          current += "/";
-          i += 2;
-          break;
-        }
-        i += 1;
-      }
+      const comment = consumeBlockComment(sql, i);
+      current += comment.text;
+      i = comment.end;
       continue;
     }
 
@@ -105,6 +82,54 @@ export function splitSqlStatements(sql: string): string[] {
 
   pushCurrent();
   return statements;
+}
+
+function consumeQuoted(
+  sql: string,
+  start: number,
+  quote: "'" | '"',
+): { text: string; end: number } {
+  let text = quote;
+  let i = start + 1;
+  while (i < sql.length) {
+    const q = sql.charAt(i);
+    text += q;
+    if (q === quote) {
+      if (sql.charAt(i + 1) === quote) {
+        text += quote;
+        i += 2;
+      } else {
+        i += 1;
+        break;
+      }
+    } else {
+      i += 1;
+    }
+  }
+  return { text, end: i };
+}
+
+function consumeBlockComment(sql: string, start: number): { text: string; end: number } {
+  let text = "/*";
+  let i = start + 2;
+  let depth = 1;
+  while (i < sql.length && depth > 0) {
+    if (sql.charAt(i) === "/" && sql.charAt(i + 1) === "*") {
+      text += "/*";
+      depth += 1;
+      i += 2;
+      continue;
+    }
+    if (sql.charAt(i) === "*" && sql.charAt(i + 1) === "/") {
+      text += "*/";
+      depth -= 1;
+      i += 2;
+      continue;
+    }
+    text += sql.charAt(i);
+    i += 1;
+  }
+  return { text, end: i };
 }
 
 function scanDollarTag(sql: string, start: number): number | null {
@@ -140,14 +165,7 @@ function stripLeadingTrivia(input: string): string {
       continue;
     }
     if (c === "/" && input.charAt(i + 1) === "*") {
-      i += 2;
-      while (i < input.length) {
-        if (input.charAt(i) === "*" && input.charAt(i + 1) === "/") {
-          i += 2;
-          break;
-        }
-        i += 1;
-      }
+      i = consumeBlockComment(input, i).end;
       continue;
     }
     break;

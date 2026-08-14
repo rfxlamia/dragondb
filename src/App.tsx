@@ -85,6 +85,7 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
 
   function handleSwitchFailure(_error: IpcError): void {
     // Snapshot already set by onDisconnected after A teardown — keep it for remount-on-B.
+    // See tests/stores/sp3-spec-audit.test.ts "App.handleSwitchFailure must not wipe the disconnect snapshot".
   }
 
   function handleCommittedFromChange(table: TableReference | null): void {

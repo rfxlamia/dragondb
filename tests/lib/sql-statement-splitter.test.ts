@@ -26,4 +26,18 @@ describe("splitSqlStatements", () => {
       "SELECT 2",
     ]);
   });
+
+  it("does not split on semicolon inside double-quoted identifiers", () => {
+    expect(splitSqlStatements('SELECT * FROM "a;b"; SELECT 2')).toEqual([
+      'SELECT * FROM "a;b"',
+      "SELECT 2",
+    ]);
+  });
+
+  it("treats nested PostgreSQL block comments as opaque", () => {
+    expect(splitSqlStatements("/* a /* b; */ */ SELECT 1; SELECT 2")).toEqual([
+      "SELECT 1",
+      "SELECT 2",
+    ]);
+  });
 });

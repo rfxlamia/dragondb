@@ -58,63 +58,80 @@ export function isMutation(sql: string): boolean {
  * Unlike Swift's cleanTableName (table-only), this preserves schema when present
  * so callers can round-trip qualified names.
  */
+const QUALIFIED_IDENT = '(?:"[^"]+"|[A-Za-z_][\\w$]*)(?:\\.(?:"[^"]+"|[A-Za-z_][\\w$]*))*';
+
 export function extractTableName(sql: string): ExtractedTable | null {
   const trimmed = sql.trim();
-  const tableNamePattern = '(?:"[^"]+"|[\\w.]+)';
+  const kind = detectQueryType(sql);
+  let match: RegExpMatchArray | null = null;
 
-  const fromMatch = trimmed.match(new RegExp(`\\bFROM\\s+(${tableNamePattern})`, "i"));
-  if (fromMatch?.[1]) {
-    return splitQualifiedName(fromMatch[1]);
+  switch (kind) {
+    case "select":
+      match = trimmed.match(new RegExp(`\\bFROM\\s+(${QUALIFIED_IDENT})`, "i"));
+      break;
+    case "insert":
+      match = trimmed.match(new RegExp(`INSERT\\s+INTO\\s+(${QUALIFIED_IDENT})`, "i"));
+      break;
+    case "update":
+      match = trimmed.match(new RegExp(`UPDATE\\s+(${QUALIFIED_IDENT})`, "i"));
+      break;
+    case "delete":
+      match = trimmed.match(new RegExp(`DELETE\\s+FROM\\s+(${QUALIFIED_IDENT})`, "i"));
+      break;
+    case "createTable":
+      match = trimmed.match(
+        new RegExp(
+          `CREATE\\s+(?:TEMP(?:ORARY)?\\s+)?TABLE\\s+(?:IF\\s+NOT\\s+EXISTS\\s+)?(${QUALIFIED_IDENT})`,
+          "i",
+        ),
+      );
+      break;
+    case "dropTable":
+      match = trimmed.match(
+        new RegExp(`DROP\\s+TABLE\\s+(?:IF\\s+EXISTS\\s+)?(${QUALIFIED_IDENT})`, "i"),
+      );
+      break;
+    case "alterTable":
+      match = trimmed.match(new RegExp(`ALTER\\s+TABLE\\s+(${QUALIFIED_IDENT})`, "i"));
+      break;
+    default:
+      return null;
   }
 
-  const insertMatch = trimmed.match(new RegExp(`INSERT\\s+INTO\\s+(${tableNamePattern})`, "i"));
-  if (insertMatch?.[1]) {
-    return splitQualifiedName(insertMatch[1]);
-  }
-
-  const updateMatch = trimmed.match(new RegExp(`UPDATE\\s+(${tableNamePattern})`, "i"));
-  if (updateMatch?.[1]) {
-    return splitQualifiedName(updateMatch[1]);
-  }
-
-  const deleteMatch = trimmed.match(new RegExp(`DELETE\\s+FROM\\s+(${tableNamePattern})`, "i"));
-  if (deleteMatch?.[1]) {
-    return splitQualifiedName(deleteMatch[1]);
-  }
-
-  const createMatch = trimmed.match(
-    new RegExp(
-      `CREATE\\s+(?:TEMP(?:ORARY)?\\s+)?TABLE\\s+(?:IF\\s+NOT\\s+EXISTS\\s+)?(${tableNamePattern})`,
-      "i",
-    ),
-  );
-  if (createMatch?.[1]) {
-    return splitQualifiedName(createMatch[1]);
-  }
-
-  const dropMatch = trimmed.match(
-    new RegExp(`DROP\\s+TABLE\\s+(?:IF\\s+EXISTS\\s+)?(${tableNamePattern})`, "i"),
-  );
-  if (dropMatch?.[1]) {
-    return splitQualifiedName(dropMatch[1]);
-  }
-
-  const alterMatch = trimmed.match(new RegExp(`ALTER\\s+TABLE\\s+(${tableNamePattern})`, "i"));
-  if (alterMatch?.[1]) {
-    return splitQualifiedName(alterMatch[1]);
-  }
-
-  return null;
+  return match?.[1] ? splitQualifiedName(match[1]) : null;
 }
 
 function splitQualifiedName(raw: string): ExtractedTable {
-  const cleaned = raw.replace(/"/g, "").replace(/'/g, "");
-  const dot = cleaned.lastIndexOf(".");
-  if (dot === -1) {
-    return { schema: undefined, name: cleaned };
+  const parts: string[] = [];
+  let i = 0;
+  while (i < raw.length) {
+    if (raw.charAt(i) === ".") {
+      i += 1;
+      continue;
+    }
+    if (raw.charAt(i) === '"') {
+      const end = raw.indexOf('"', i + 1);
+      if (end === -1) {
+        parts.push(raw.slice(i + 1));
+        break;
+      }
+      parts.push(raw.slice(i + 1, end));
+      i = end + 1;
+      continue;
+    }
+    let j = i;
+    while (j < raw.length && /[A-Za-z0-9_$]/.test(raw.charAt(j))) {
+      j += 1;
+    }
+    if (j === i) {
+      break;
+    }
+    parts.push(raw.slice(i, j));
+    i = j;
   }
+  const name = parts.pop() ?? "";
   return {
-    schema: cleaned.slice(0, dot) || undefined,
-    name: cleaned.slice(dot + 1),
+    schema: parts.length > 0 ? parts.join(".") : undefined,
+    name,
   };
 }

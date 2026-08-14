@@ -264,7 +264,7 @@ pub fn update_tab_cached_results(
     cached_results_data: Option<Vec<u8>>,
     cached_column_names: Option<String>,
 ) -> SqliteResult<()> {
-    conn.execute(
+    let n = conn.execute(
         r#"
         UPDATE tab_states SET
             cached_results_data = ?1,
@@ -273,6 +273,9 @@ pub fn update_tab_cached_results(
         "#,
         params![cached_results_data, cached_column_names, id],
     )?;
+    if n == 0 {
+        return Err(rusqlite::Error::QueryReturnedNoRows);
+    }
     Ok(())
 }
 
@@ -390,5 +393,12 @@ mod tests {
         delete_tab_state(&conn, &id).unwrap();
         assert!(get_tab_state(&conn, &id).unwrap().is_none());
         assert!(list_tab_states(&conn).unwrap().is_empty());
+    }
+
+    #[test]
+    fn update_tab_cached_results_zero_rows_errors() {
+        let conn = open();
+        let err = update_tab_cached_results(&conn, "missing", None, None).expect_err("0-row");
+        assert!(matches!(err, rusqlite::Error::QueryReturnedNoRows));
     }
 }

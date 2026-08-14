@@ -22,15 +22,19 @@ export type LibraryState = {
 };
 
 export function createLibraryStore(ipc: DragonIpc): StoreApi<LibraryState> {
+  let generation = 0;
+
   return createStore<LibraryState>((set, get) => ({
     queries: [],
     folders: [],
 
     async refresh() {
+      const current = ++generation;
       const [queries, folders] = await Promise.all([
         ipc.listSavedQueries(),
         ipc.listQueryFolders(),
       ]);
+      if (current !== generation) return;
       set({ queries, folders });
     },
 

@@ -46,6 +46,26 @@ describe("session-store", () => {
     });
   });
 
+  it("onConnected rejection does not wipe a live session", async () => {
+    const connectProfile = vi.fn(async () => ({
+      connectionId: "c-a",
+      profileId: "P",
+      database: "app",
+    }));
+    const onConnected = vi.fn(async () => {
+      throw new Error("schema load failed");
+    });
+    const ipc = { connectProfile, disconnect: vi.fn() } as unknown as DragonIpc;
+    const store = createSessionStore(ipc, { onConnected });
+    await expect(store.getState().connect("P")).resolves.toMatchObject({ connectionId: "c-a" });
+    expect(store.getState()).toMatchObject({
+      isConnected: true,
+      connectionId: "c-a",
+      profileId: "P",
+      databaseName: "app",
+    });
+  });
+
   it("superseded connect success throws cancelled without wiping newer session", async () => {
     let resolveA!: (v: ConnectResult) => void;
     const connectProfile = vi

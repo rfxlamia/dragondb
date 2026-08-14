@@ -422,7 +422,7 @@ describe("App session connect / disconnect / switch", () => {
     await waitFor(() => expect(screen.getByText(/Authentication failed/i)).toBeInTheDocument());
     expect(screen.getByTestId(VisualQueryAccessibility.clauseCard("select"))).toBeInTheDocument();
     expect(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock)).toBeDisabled();
-    expect(document.querySelector(".vq-canvas__status")).not.toHaveTextContent(/OK\s*\//i);
+    expect(document.querySelector(".vq-canvas__status")?.textContent ?? "").not.toMatch(/OK\s*\//i);
   });
 });
 

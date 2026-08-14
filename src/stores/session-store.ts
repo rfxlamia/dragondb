@@ -61,7 +61,11 @@ export function createSessionStore(
           profileId: result.profileId,
           databaseName: result.database,
         });
-        await options.onConnected?.(result);
+        try {
+          await options.onConnected?.(result);
+        } catch {
+          /* post-connect side effects must not invalidate the live session */
+        }
         return result;
       } catch (error) {
         if (generation === connectGeneration) {

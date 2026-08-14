@@ -24,6 +24,14 @@ describe("determineEditability", () => {
     expect(result.reason?.title).toBe("Can't Edit Query Results");
   });
 
+  it("rejects non-SELECT statements even when they contain FROM", () => {
+    for (const sql of ["DELETE FROM users", "UPDATE accounts SET name = 'x' FROM users"]) {
+      const result = determineEditability(sql, {});
+      expect(result.isEditable).toBe(false);
+      expect(result.reason?.title).toBe("Can't Edit Query Results");
+    }
+  });
+
   it.each([
     ["CTE", "WITH c AS (SELECT 1) SELECT * FROM c", "Can't Edit CTE Results"],
     ["UNION", "SELECT 1 UNION SELECT 2", "Can't Edit Combined Results"],

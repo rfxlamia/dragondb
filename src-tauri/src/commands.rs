@@ -518,7 +518,16 @@ pub async fn save_csv_file(
         position: None,
     })?;
 
-    std::fs::write(&path_buf, csv_text.as_bytes()).map_err(|e| MappedIpcError {
+    let written = tauri::async_runtime::spawn_blocking(move || {
+        std::fs::write(&path_buf, csv_text.as_bytes()).map(|()| path_buf)
+    })
+    .await
+    .map_err(|e| MappedIpcError {
+        kind: IpcErrorKind::Unknown,
+        message: format!("CSV write task failed: {e}"),
+        position: None,
+    })?
+    .map_err(|e| MappedIpcError {
         kind: IpcErrorKind::Unknown,
         message: format!("Failed to write CSV file: {e}"),
         position: None,
@@ -526,7 +535,7 @@ pub async fn save_csv_file(
 
     Ok(SaveCsvFileResult {
         canceled: false,
-        path: Some(path_buf.to_string_lossy().into_owned()),
+        path: Some(written.to_string_lossy().into_owned()),
     })
 }
 

@@ -19,13 +19,16 @@ export type HistoryState = {
 
 export function createHistoryStore(ipc: DragonIpc): StoreApi<HistoryState> {
   let lastOpts: HistoryListOptions = { limit: 50 };
+  let generation = 0;
 
   return createStore<HistoryState>((set, get) => ({
     entries: [],
 
     async refresh(opts) {
       lastOpts = opts;
+      const current = ++generation;
       const entries = await ipc.listHistory(opts);
+      if (current !== generation) return;
       set({ entries });
     },
 

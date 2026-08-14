@@ -1,3 +1,5 @@
+import { detectQueryType } from "./query-type-detector";
+
 export type EditabilityReason = {
   title: string;
   body: string;
@@ -38,6 +40,16 @@ function analyzeQueryForEditability(query: string): EditabilityResult {
   const reason = detectNonEditablePattern(normalized);
   if (reason) {
     return { isEditable: false, reason };
+  }
+
+  if (detectQueryType(query) !== "select") {
+    return {
+      isEditable: false,
+      reason: {
+        title: "Can't Edit Query Results",
+        body: "Row editing is only available when viewing a table directly. Select a table from the sidebar to edit its rows.",
+      },
+    };
   }
 
   const extracted = extractTableFromSelect(query);

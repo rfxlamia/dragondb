@@ -35,6 +35,32 @@ describe("detectQueryType / extractTableName / isMutation", () => {
     });
   });
 
+  it("extractTableName prefers INSERT/UPDATE target over subquery FROM", () => {
+    expect(extractTableName("INSERT INTO t (a) SELECT a FROM s")).toEqual({
+      schema: undefined,
+      name: "t",
+    });
+    expect(extractTableName("UPDATE t SET a = (SELECT b FROM other)")).toEqual({
+      schema: undefined,
+      name: "t",
+    });
+  });
+
+  it("extractTableName parses quoted schema and table segments", () => {
+    expect(extractTableName('SELECT * FROM public."Order"')).toEqual({
+      schema: "public",
+      name: "Order",
+    });
+    expect(extractTableName('SELECT * FROM "audit"."Order"')).toEqual({
+      schema: "audit",
+      name: "Order",
+    });
+    expect(extractTableName('UPDATE "Order" SET a = 1')).toEqual({
+      schema: undefined,
+      name: "Order",
+    });
+  });
+
   it("isMutation matches Swift (DDL create/drop/alter are mutations; select/other are not)", () => {
     expect(isMutation("INSERT INTO t VALUES (1)")).toBe(true);
     expect(isMutation("UPDATE t SET a=1")).toBe(true);

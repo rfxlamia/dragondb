@@ -760,7 +760,14 @@ impl AppSession {
     ) -> Result<(), RowOperationError> {
         self.require_live(connection_id).map_err(|e| {
             RowOperationError::new(fail_kind, e.message)
-        })
+        })?;
+        if !self.has_live_handle() {
+            return Err(RowOperationError::new(
+                fail_kind,
+                "Not connected to a database.",
+            ));
+        }
+        Ok(())
     }
 
     fn has_live_handle(&self) -> bool {

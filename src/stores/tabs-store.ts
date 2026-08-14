@@ -130,12 +130,19 @@ function maxOrder(tabs: TabState[]): number {
   return Math.max(...tabs.map((t) => t.order));
 }
 
+function accessedAt(tab: TabState): number {
+  const parsed = Number(tab.lastAccessedAt);
+  if (Number.isFinite(parsed)) return parsed;
+  const iso = Date.parse(tab.lastAccessedAt);
+  return Number.isFinite(iso) ? iso : 0;
+}
+
 function mruId(tabs: TabState[]): string | null {
   if (tabs.length === 0) return null;
   let best = tabs[0];
   if (!best) return null;
   for (const t of tabs) {
-    if (t.lastAccessedAt > best.lastAccessedAt) best = t;
+    if (accessedAt(t) > accessedAt(best)) best = t;
   }
   return best.id;
 }
@@ -202,6 +209,7 @@ export function createTabsStore(ipc: DragonIpc, getters: TabsSessionGetters): St
       },
 
       switchTab(id) {
+        if (!get().tabs.some((t) => t.id === id)) return;
         const ts = nowMillis();
         set((state) => ({
           tabs: state.tabs.map((t) =>
@@ -216,6 +224,7 @@ export function createTabsStore(ipc: DragonIpc, getters: TabsSessionGetters): St
       closeTab(id) {
         const { tabs, activeTabId } = get();
         const remaining = tabs.filter((t) => t.id !== id);
+        runGenerations.delete(id);
 
         set((state) => {
           const pending = new Set(state.pendingDeletedIds);
@@ -224,7 +233,7 @@ export function createTabsStore(ipc: DragonIpc, getters: TabsSessionGetters): St
         });
 
         void ipc.deleteTabState(id).catch(() => {
-          /* best-effort persist delete */
+          /* keep pendingDeletedIds so refresh cannot resurrect the tab */
         });
 
         if (remaining.length === 0) {
@@ -260,6 +269,7 @@ export function createTabsStore(ipc: DragonIpc, getters: TabsSessionGetters): St
       },
 
       hydrateFromDto(dto) {
+        if (get().pendingDeletedIds.has(dto.id)) return;
         const raw = parseCachedResults(dto.cachedResultsData);
         const compact = raw ? compactGrid(raw) : null;
         const hydrated = toTabState(dto, raw, compact);
@@ -282,7 +292,10 @@ export function createTabsStore(ipc: DragonIpc, getters: TabsSessionGetters): St
         for (const dto of dtos) {
           get().hydrateFromDto(dto);
         }
-        const { tabs } = get();
+        const { tabs, activeTabId } = get();
+        if (activeTabId !== null && tabs.some((t) => t.id === activeTabId)) {
+          return;
+        }
         const active = tabs.find((t) => t.isActive) ?? tabs[0];
         if (active) {
           set({ activeTabId: active.id });

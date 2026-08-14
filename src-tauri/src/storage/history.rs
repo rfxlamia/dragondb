@@ -91,6 +91,7 @@ pub fn list_history(
             r#"
             SELECT id, profile_id, sql, success, error_message, duration_ms, row_count, created_at
             FROM query_history
+            WHERE profile_id IS NOT NULL
             ORDER BY created_at DESC, id DESC
             LIMIT ?1
             "#,
@@ -177,6 +178,31 @@ mod tests {
         let limited = list_history(&conn, 1, None).unwrap();
         assert_eq!(limited.len(), 1);
         assert_eq!(limited[0].id, h_p2);
+    }
+
+    #[test]
+    fn list_history_global_limit_excludes_null_profile_id() {
+        let conn = Connection::open_in_memory().unwrap();
+        migrate(&conn).unwrap();
+        insert_history(
+            &conn,
+            HistoryInsert {
+                profile_id: None,
+                sql: "SELECT null-profile".into(),
+                success: true,
+                error_message: None,
+                duration_ms: 1,
+                row_count: Some(1),
+            },
+        )
+        .unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(2));
+        let kept = seed(&conn, "P", "SELECT p");
+
+        let global = list_history(&conn, 1, None).unwrap();
+        assert_eq!(global.len(), 1);
+        assert_eq!(global[0].id, kept);
+        assert_eq!(global[0].profile_id.as_deref(), Some("P"));
     }
 
     #[test]

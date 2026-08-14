@@ -98,27 +98,32 @@ pub fn list_folders(conn: &Connection) -> SqliteResult<Vec<FolderRow>> {
 /// Rename a folder and bump `updated_at`.
 pub fn rename_folder(conn: &Connection, id: &str, name: &str) -> SqliteResult<()> {
     let now = utc_now_millis();
-    conn.execute(
+    let n = conn.execute(
         "UPDATE query_folders SET name = ?1, updated_at = ?2 WHERE id = ?3",
         params![name, now, id],
     )?;
+    if n == 0 {
+        return Err(rusqlite::Error::QueryReturnedNoRows);
+    }
     Ok(())
 }
 
 /// Delete a folder. `delete_queries=false` nullifies `folder_id`; `true` cascades.
 pub fn delete_folder(conn: &Connection, id: &str, delete_queries: bool) -> SqliteResult<()> {
+    let tx = conn.unchecked_transaction()?;
     if delete_queries {
-        conn.execute(
+        tx.execute(
             "DELETE FROM saved_queries WHERE folder_id = ?1",
             params![id],
         )?;
     } else {
-        conn.execute(
+        tx.execute(
             "UPDATE saved_queries SET folder_id = NULL WHERE folder_id = ?1",
             params![id],
         )?;
     }
-    conn.execute("DELETE FROM query_folders WHERE id = ?1", params![id])?;
+    tx.execute("DELETE FROM query_folders WHERE id = ?1", params![id])?;
+    tx.commit()?;
     Ok(())
 }
 
@@ -249,18 +254,26 @@ pub fn move_saved_query(
     folder_id: Option<&str>,
 ) -> SqliteResult<()> {
     let now = utc_now_millis();
-    conn.execute(
+    let n = conn.execute(
         "UPDATE saved_queries SET folder_id = ?1, updated_at = ?2 WHERE id = ?3",
         params![folder_id, now, id],
     )?;
+    if n == 0 {
+        return Err(rusqlite::Error::QueryReturnedNoRows);
+    }
     Ok(())
 }
 
 /// Delete multiple saved queries by id.
 pub fn delete_saved_queries(conn: &Connection, ids: &[&str]) -> SqliteResult<()> {
-    for id in ids {
-        conn.execute("DELETE FROM saved_queries WHERE id = ?1", params![id])?;
+    if ids.is_empty() {
+        return Ok(());
     }
+    let tx = conn.unchecked_transaction()?;
+    for id in ids {
+        tx.execute("DELETE FROM saved_queries WHERE id = ?1", params![id])?;
+    }
+    tx.commit()?;
     Ok(())
 }
 
@@ -425,6 +438,15 @@ mod tests {
             },
         )
         .expect_err("0-row update");
+        assert!(matches!(err, rusqlite::Error::QueryReturnedNoRows));
+    }
+
+    #[test]
+    fn rename_folder_and_move_saved_query_zero_rows_error() {
+        let conn = open();
+        let err = rename_folder(&conn, "missing", "x").expect_err("0-row rename");
+        assert!(matches!(err, rusqlite::Error::QueryReturnedNoRows));
+        let err = move_saved_query(&conn, "missing", None).expect_err("0-row move");
         assert!(matches!(err, rusqlite::Error::QueryReturnedNoRows));
     }
 }

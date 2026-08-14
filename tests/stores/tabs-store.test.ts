@@ -69,6 +69,28 @@ describe("tabs-store", () => {
     expect(store.getState().activeTabId).toBe("t1");
   });
 
+  it("closeTab MRU compares lastAccessedAt numerically", () => {
+    const ipc = {
+      saveTabState: vi.fn(async () => undefined),
+      deleteTabState: vi.fn(async () => undefined),
+      listTabStates: vi.fn(async () => []),
+    } as unknown as DragonIpc;
+    const store = createTabsStore(ipc, {
+      getConnectionId: () => null,
+      getDatabaseName: () => null,
+    });
+    store.setState({
+      tabs: [
+        baseTab({ id: "t1", isActive: false, lastAccessedAt: "9", order: 0 }),
+        baseTab({ id: "t2", isActive: true, lastAccessedAt: "8", order: 1 }),
+        baseTab({ id: "t3", isActive: false, lastAccessedAt: "10", order: 2 }),
+      ],
+      activeTabId: "t2",
+    });
+    store.getState().closeTab("t2");
+    expect(store.getState().activeTabId).toBe("t3");
+  });
+
   it("closeTab on last tab recreates empty active tab", () => {
     const ipc = {
       saveTabState: vi.fn(async () => undefined),
@@ -326,5 +348,46 @@ describe("tabs-store", () => {
       expect(tab.status).toEqual({ kind: "idle" });
     }
     expect(deleteTabState).not.toHaveBeenCalled();
+  });
+
+  it("switchTab ignores unknown ids", () => {
+    const ipc = mockTabsIpc();
+    const store = createTabsStore(ipc, {
+      getConnectionId: () => null,
+      getDatabaseName: () => null,
+    });
+    store.setState({
+      tabs: [baseTab({ id: "keep", isActive: true })],
+      activeTabId: "keep",
+    });
+    store.getState().switchTab("missing");
+    expect(store.getState().activeTabId).toBe("keep");
+    expect(store.getState().tabs[0]?.isActive).toBe(true);
+  });
+
+  it("refresh skips pending-deleted ids and keeps a local active tab", async () => {
+    const listTabStates = vi.fn(async () => [
+      baseTab({ id: "db-active", isActive: true }),
+      baseTab({ id: "gone", isActive: false }),
+    ]);
+    const ipc = {
+      saveTabState: vi.fn(async () => undefined),
+      deleteTabState: vi.fn(async () => undefined),
+      listTabStates,
+    } as unknown as DragonIpc;
+    const store = createTabsStore(ipc, {
+      getConnectionId: () => "c1",
+      getDatabaseName: () => "app",
+    });
+    const local = baseTab({ id: "local", isActive: true, lastAccessedAt: "99" });
+    store.setState({
+      tabs: [local],
+      activeTabId: "local",
+      pendingDeletedIds: new Set(["gone"]),
+    });
+    await store.getState().refresh();
+    expect(store.getState().activeTabId).toBe("local");
+    expect(store.getState().tabs.map((t) => t.id)).toEqual(["local", "db-active"]);
+    expect(store.getState().tabs.some((t) => t.id === "gone")).toBe(false);
   });
 });

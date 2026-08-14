@@ -61,4 +61,22 @@ describe("history-store", () => {
       expect.objectContaining({ id: "hq", profileId: "Q" }),
     ]);
   });
+
+  it("overlapping refresh applies only the latest response", async () => {
+    let resolveOlder!: (rows: HistoryDto[]) => void;
+    listHistory
+      .mockImplementationOnce(
+        () =>
+          new Promise<HistoryDto[]>((resolve) => {
+            resolveOlder = resolve;
+          }),
+      )
+      .mockResolvedValueOnce([row({ id: "new", profileId: "P" })]);
+    const store = createHistoryStore(ipc);
+    const older = store.getState().refresh({ limit: 10 });
+    await store.getState().refresh({ limit: 5 });
+    resolveOlder([row({ id: "old", profileId: "P" })]);
+    await older;
+    expect(store.getState().entries.map((e) => e.id)).toEqual(["new"]);
+  });
 });
