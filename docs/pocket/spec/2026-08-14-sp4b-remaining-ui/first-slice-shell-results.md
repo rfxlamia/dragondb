@@ -1,7 +1,7 @@
 # SP-4b first slice — app shell + read-only results
 
 **Date:** 2026-08-14
-**Status:** draft
+**Status:** approved
 **Author:** brainstorm session (pocket-grinding)
 **Spec path:** docs/pocket/spec/2026-08-14-sp4b-remaining-ui/first-slice-shell-results.md
 **Parity ledger:** docs/pocket/spec/2026-08-14-sp4b-remaining-ui/swift-parity-prerequisites.md
