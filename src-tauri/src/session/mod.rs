@@ -15,18 +15,32 @@ use tokio_postgres::Client;
 use uuid::Uuid;
 
 use crate::postgres::{
-    collapse_ssl_mode, connect as pg_connect, list_columns as pg_list_columns,
-    list_tables as pg_list_tables, run_query as pg_run_query, ColumnInfoRow, ConnectParams,
-    IpcErrorKind, MappedIpcError, QueryResultData, TableRefRow,
+    collapse_ssl_mode, connect as pg_connect, delete_rows as pg_delete_rows,
+    list_columns as pg_list_columns, list_tables as pg_list_tables, run_query as pg_run_query,
+    update_row as pg_update_row, ColumnInfoRow, ConnectParams, IpcErrorKind, MappedIpcError,
+    QueryResultData, RowOperationError, RowOperationErrorKind, TableRefRow,
 };
 use crate::secrets::{KeyringStore, KeyringStoreError, ProfileSecrets};
 use crate::ssh::{
     build_auth_method, PreparedAuth, SshAuthInput, TunnelError, TunnelHandle, TunnelRequest,
 };
 use crate::storage::{
-    delete_profile as storage_delete_profile, get_profile as storage_get_profile,
-    insert_history, list_profiles as storage_list_profiles, open_db, upsert_profile,
-    HistoryInsert, ProfileRow,
+    clear_history_for_profile as storage_clear_history_for_profile,
+    create_folder as storage_create_folder, delete_folder as storage_delete_folder,
+    delete_history as storage_delete_history, delete_profile as storage_delete_profile,
+    delete_saved_queries as storage_delete_saved_queries,
+    delete_tab_state as storage_delete_tab_state,
+    duplicate_saved_query as storage_duplicate_saved_query, get_profile as storage_get_profile,
+    get_saved_query as storage_get_saved_query, get_tab_state as storage_get_tab_state,
+    insert_history, insert_saved_query_with_id as storage_insert_saved_query_with_id,
+    insert_tab_state_with_id as storage_insert_tab_state_with_id,
+    list_folders as storage_list_folders, list_history as storage_list_history,
+    list_profiles as storage_list_profiles, list_saved_queries as storage_list_saved_queries,
+    list_tab_states as storage_list_tab_states,
+    move_saved_query as storage_move_saved_query, open_db,
+    rename_folder as storage_rename_folder, save_saved_query as storage_save_saved_query,
+    upsert_profile, upsert_tab_state as storage_upsert_tab_state, FolderRow, HistoryInsert,
+    HistoryRow, ProfileRow, SavedQueryRow, SavedQueryWrite, TabStateRow, TabStateWrite,
 };
 
 /// Executable SQL payload (mirrors TS `ExecutableSQL`).
@@ -102,6 +116,8 @@ pub struct SaveProfileInput {
 pub struct ConnectResult {
     pub connection_id: String,
     pub profile_id: String,
+    /// Profile database name at connect time (tab inheritance).
+    pub database: String,
 }
 
 /// Table ref for list_columns.
@@ -419,6 +435,7 @@ impl AppSession {
             message: format!("Profile not found: {id}"),
             position: None,
         })?;
+        let database = profile.database.clone();
 
         let secrets = self.load_secrets(id)?;
         let connection_id = Uuid::new_v4().to_string();
@@ -460,6 +477,7 @@ impl AppSession {
         Ok(ConnectResult {
             connection_id,
             profile_id: id.to_string(),
+            database,
         })
     }
 
@@ -645,6 +663,113 @@ impl AppSession {
         pg_run_query(client, sql, params).await
     }
 
+    /// UPDATE one row — returns `RowOperationError` (not `MappedIpcError`).
+    pub async fn update_row(
+        &mut self,
+        connection_id: &str,
+        table: &TableRefArg,
+        primary_key: &serde_json::Map<String, serde_json::Value>,
+        patch: &serde_json::Map<String, serde_json::Value>,
+    ) -> Result<(), RowOperationError> {
+        self.require_live_row_op(connection_id, RowOperationErrorKind::UpdateFailed)?;
+        if table.name.trim().is_empty() {
+            return Err(RowOperationError::new(
+                RowOperationErrorKind::NoTableSelected,
+                "No table selected for row update.",
+            ));
+        }
+        let schema = table.schema.as_deref().unwrap_or("public");
+        let table_name = table.name.as_str();
+
+        if matches!(self.backend, Backend::Fake(_)) {
+            let pk_cols: Vec<&str> = primary_key.keys().map(|s| s.as_str()).collect();
+            crate::postgres::validate_update_preconditions(
+                Some((schema, table_name)),
+                &pk_cols,
+                !primary_key.is_empty(),
+            )?;
+            self.fake_query_probe(false).map_err(|e| {
+                RowOperationError::new(RowOperationErrorKind::UpdateFailed, e.message)
+            })?;
+            return Ok(());
+        }
+
+        let client = self
+            .active
+            .as_ref()
+            .and_then(|a| a.client.as_ref())
+            .ok_or_else(|| {
+                RowOperationError::new(
+                    RowOperationErrorKind::UpdateFailed,
+                    "Not connected to a database.",
+                )
+            })?;
+        pg_update_row(client, schema, table_name, primary_key, patch).await
+    }
+
+    /// DELETE rows — returns `RowOperationError` (not `MappedIpcError`).
+    pub async fn delete_rows(
+        &mut self,
+        connection_id: &str,
+        table: &TableRefArg,
+        primary_keys: &[serde_json::Map<String, serde_json::Value>],
+    ) -> Result<(), RowOperationError> {
+        self.require_live_row_op(connection_id, RowOperationErrorKind::DeleteFailed)?;
+        if table.name.trim().is_empty() {
+            return Err(RowOperationError::new(
+                RowOperationErrorKind::NoTableSelected,
+                "No table selected for row delete.",
+            ));
+        }
+        let schema = table.schema.as_deref().unwrap_or("public");
+        let table_name = table.name.as_str();
+
+        if matches!(self.backend, Backend::Fake(_)) {
+            let pk_cols: Vec<&str> = primary_keys
+                .first()
+                .map(|m| m.keys().map(|s| s.as_str()).collect())
+                .unwrap_or_default();
+            crate::postgres::validate_delete_preconditions(
+                Some((schema, table_name)),
+                &pk_cols,
+                primary_keys,
+            )?;
+            self.fake_query_probe(false).map_err(|e| {
+                RowOperationError::new(RowOperationErrorKind::DeleteFailed, e.message)
+            })?;
+            return Ok(());
+        }
+
+        let client = self
+            .active
+            .as_ref()
+            .and_then(|a| a.client.as_ref())
+            .ok_or_else(|| {
+                RowOperationError::new(
+                    RowOperationErrorKind::DeleteFailed,
+                    "Not connected to a database.",
+                )
+            })?;
+        pg_delete_rows(client, schema, table_name, primary_keys).await
+    }
+
+    fn require_live_row_op(
+        &self,
+        connection_id: &str,
+        fail_kind: RowOperationErrorKind,
+    ) -> Result<(), RowOperationError> {
+        self.require_live(connection_id).map_err(|e| {
+            RowOperationError::new(fail_kind, e.message)
+        })?;
+        if !self.has_live_handle() {
+            return Err(RowOperationError::new(
+                fail_kind,
+                "Not connected to a database.",
+            ));
+        }
+        Ok(())
+    }
+
     fn has_live_handle(&self) -> bool {
         match &self.backend {
             Backend::Fake(_) => self.active.as_ref().is_some_and(|a| a.live),
@@ -741,6 +866,308 @@ impl AppSession {
             }
         }
     }
+
+    /// Run a closure against the Production sqlite connection.
+    ///
+    /// Library IPC is Production-only — FakeStorage is not extended for library
+    /// ops (Phase A helper unit tests remain the SQL oracle). Prefer
+    /// `AppSession::open` with a temp app-data dir for command/session tests.
+    fn with_production_db<T>(
+        &self,
+        f: impl FnOnce(&SqliteConnection) -> Result<T, MappedIpcError>,
+    ) -> Result<T, MappedIpcError> {
+        match &self.backend {
+            Backend::Production { db, .. } => {
+                let guard = db.lock().map_err(|_| MappedIpcError {
+                    kind: IpcErrorKind::Unknown,
+                    message: "Storage lock poisoned.".into(),
+                    position: None,
+                })?;
+                f(&guard)
+            }
+            Backend::Fake(_) => Err(MappedIpcError {
+                kind: IpcErrorKind::Unknown,
+                message: "Library IPC requires production storage (temp AppSession::open in tests)."
+                    .into(),
+                position: None,
+            }),
+        }
+    }
+
+    // --- Library (SavedQuery / QueryFolder) thin wrappers --------------------
+
+    pub fn list_saved_queries(&self) -> Result<Vec<SavedQueryRow>, MappedIpcError> {
+        self.with_production_db(|db| storage_list_saved_queries(db).map_err(sqlite_err))
+    }
+
+    pub fn get_saved_query(&self, id: &str) -> Result<Option<SavedQueryRow>, MappedIpcError> {
+        self.with_production_db(|db| storage_get_saved_query(db, id).map_err(sqlite_err))
+    }
+
+    /// Create (id absent in DB) or update (id present). UPDATE matching 0 rows → error.
+    pub fn save_saved_query(&self, query: SavedQueryWriteInput) -> Result<SavedQueryRow, MappedIpcError> {
+        self.with_production_db(|db| {
+            let exists = storage_get_saved_query(db, &query.id)
+                .map_err(sqlite_err)?
+                .is_some();
+            let write = SavedQueryWrite {
+                id: if exists {
+                    Some(query.id.clone())
+                } else {
+                    None
+                },
+                name: query.name.clone(),
+                query_text: query.query_text.clone(),
+                connection_id: query.connection_id.clone(),
+                database_name: query.database_name.clone(),
+                folder_id: query.folder_id.clone(),
+            };
+            if exists {
+                match storage_save_saved_query(db, write) {
+                    Ok(_) => {}
+                    Err(rusqlite::Error::QueryReturnedNoRows) => {
+                        return Err(MappedIpcError {
+                            kind: IpcErrorKind::Unknown,
+                            message: "save_saved_query: no rows updated".into(),
+                            position: None,
+                        });
+                    }
+                    Err(e) => return Err(sqlite_err(e)),
+                }
+            } else {
+                storage_insert_saved_query_with_id(db, &query.id, write).map_err(sqlite_err)?;
+            }
+            storage_get_saved_query(db, &query.id)
+                .map_err(sqlite_err)?
+                .ok_or_else(|| MappedIpcError {
+                    kind: IpcErrorKind::Unknown,
+                    message: "save_saved_query: row missing after write".into(),
+                    position: None,
+                })
+        })
+    }
+
+    pub fn delete_saved_queries(&self, ids: &[String]) -> Result<(), MappedIpcError> {
+        self.with_production_db(|db| {
+            let refs: Vec<&str> = ids.iter().map(|s| s.as_str()).collect();
+            storage_delete_saved_queries(db, &refs).map_err(sqlite_err)
+        })
+    }
+
+    pub fn duplicate_saved_query(&self, id: &str) -> Result<SavedQueryRow, MappedIpcError> {
+        self.with_production_db(|db| {
+            let new_id = match storage_duplicate_saved_query(db, id) {
+                Ok(id) => id,
+                Err(rusqlite::Error::QueryReturnedNoRows) => {
+                    return Err(MappedIpcError {
+                        kind: IpcErrorKind::Unknown,
+                        message: "Saved query not found".into(),
+                        position: None,
+                    });
+                }
+                Err(e) => return Err(sqlite_err(e)),
+            };
+            storage_get_saved_query(db, &new_id)
+                .map_err(sqlite_err)?
+                .ok_or_else(|| MappedIpcError {
+                    kind: IpcErrorKind::Unknown,
+                    message: "duplicate_saved_query: row missing after insert".into(),
+                    position: None,
+                })
+        })
+    }
+
+    pub fn move_saved_query(&self, id: &str, folder_id: Option<&str>) -> Result<(), MappedIpcError> {
+        self.with_production_db(|db| {
+            storage_move_saved_query(db, id, folder_id).map_err(sqlite_err)
+        })
+    }
+
+    pub fn list_folders(&self) -> Result<Vec<FolderRow>, MappedIpcError> {
+        self.with_production_db(|db| storage_list_folders(db).map_err(sqlite_err))
+    }
+
+    pub fn create_folder(&self, name: &str) -> Result<FolderRow, MappedIpcError> {
+        self.with_production_db(|db| {
+            let id = storage_create_folder(db, name).map_err(sqlite_err)?;
+            storage_list_folders(db)
+                .map_err(sqlite_err)?
+                .into_iter()
+                .find(|f| f.id == id)
+                .ok_or_else(|| MappedIpcError {
+                    kind: IpcErrorKind::Unknown,
+                    message: "create_folder: row missing after insert".into(),
+                    position: None,
+                })
+        })
+    }
+
+    pub fn rename_folder(&self, id: &str, name: &str) -> Result<(), MappedIpcError> {
+        self.with_production_db(|db| storage_rename_folder(db, id, name).map_err(sqlite_err))
+    }
+
+    /// `delete_queries=false` nullifies `folder_id` on queries; `true` cascades deletes.
+    pub fn delete_folder(&self, id: &str, delete_queries: bool) -> Result<(), MappedIpcError> {
+        self.with_production_db(|db| {
+            storage_delete_folder(db, id, delete_queries).map_err(sqlite_err)
+        })
+    }
+
+    // --- History thin wrappers ----------------------------------------------
+
+    /// Newest-first. `profile_id: None` ⇒ global list; `Some` ⇒ that profile only.
+    pub fn list_history(
+        &self,
+        limit: i64,
+        profile_id: Option<&str>,
+    ) -> Result<Vec<HistoryRow>, MappedIpcError> {
+        self.with_production_db(|db| {
+            storage_list_history(db, limit, profile_id).map_err(sqlite_err)
+        })
+    }
+
+    pub fn delete_history(&self, id: &str) -> Result<(), MappedIpcError> {
+        self.with_production_db(|db| storage_delete_history(db, id).map_err(sqlite_err))
+    }
+
+    /// Clears history for one profile only (never a global wipe).
+    pub fn clear_history_for_profile(&self, profile_id: &str) -> Result<(), MappedIpcError> {
+        self.with_production_db(|db| {
+            storage_clear_history_for_profile(db, profile_id).map_err(sqlite_err)
+        })
+    }
+
+    // --- Tabs thin wrappers -------------------------------------------------
+
+    pub fn list_tab_states(&self) -> Result<Vec<TabStateRow>, MappedIpcError> {
+        self.with_production_db(|db| storage_list_tab_states(db).map_err(sqlite_err))
+    }
+
+    pub fn get_tab_state(&self, id: &str) -> Result<Option<TabStateRow>, MappedIpcError> {
+        self.with_production_db(|db| storage_get_tab_state(db, id).map_err(sqlite_err))
+    }
+
+    /// UPDATE-only save. Unknown id (0 matching rows) → `MappedIpcError` with `/no rows/i`.
+    ///
+    /// `cached_results_data` is UTF-8 bytes of the opaque JSON string (not base64).
+    /// TS `order` ↔ storage `order_index`.
+    ///
+    /// New tabs: use [`Self::insert_tab_state`] (client id) before update saves.
+    pub fn save_tab_state(
+        &self,
+        input: TabStateWriteInput,
+        include_cached_results: bool,
+    ) -> Result<(), MappedIpcError> {
+        self.with_production_db(|db| {
+            let write = tab_write_from_input(&input, include_cached_results, /* for_update */ true)?;
+            match storage_upsert_tab_state(db, write) {
+                Ok(_) => Ok(()),
+                Err(rusqlite::Error::QueryReturnedNoRows) => Err(MappedIpcError {
+                    kind: IpcErrorKind::Unknown,
+                    message: "save_tab_state: no rows updated".into(),
+                    position: None,
+                }),
+                Err(e) => Err(sqlite_err(e)),
+            }
+        })
+    }
+
+    pub fn delete_tab_state(&self, id: &str) -> Result<(), MappedIpcError> {
+        self.with_production_db(|db| storage_delete_tab_state(db, id).map_err(sqlite_err))
+    }
+
+    /// Insert a new tab with a client-provided id (create path).
+    pub fn insert_tab_state(
+        &self,
+        input: TabStateWriteInput,
+        include_cached_results: bool,
+    ) -> Result<(), MappedIpcError> {
+        self.with_production_db(|db| {
+            let write = tab_write_from_input(&input, include_cached_results, /* for_update */ false)?;
+            storage_insert_tab_state_with_id(db, &input.id, write).map_err(sqlite_err)
+        })
+    }
+}
+
+fn tab_write_from_input(
+    input: &TabStateWriteInput,
+    include_cached_results: bool,
+    for_update: bool,
+) -> Result<TabStateWrite, MappedIpcError> {
+    let cached_bytes = input
+        .cached_results_data
+        .as_ref()
+        .map(|s| s.as_bytes().to_vec());
+    let cached_cols = match &input.cached_column_names {
+        Some(cols) => Some(serde_json::to_string(cols).map_err(|e| MappedIpcError {
+            kind: IpcErrorKind::Unknown,
+            message: format!("cached_column_names serialize: {e}"),
+            position: None,
+        })?),
+        None => None,
+    };
+    Ok(TabStateWrite {
+        id: if for_update {
+            Some(input.id.clone())
+        } else {
+            None
+        },
+        connection_id: input.connection_id.clone(),
+        database_name: input.database_name.clone(),
+        query_text: input.query_text.clone(),
+        saved_query_id: input.saved_query_id.clone(),
+        is_active: input.is_active,
+        order_index: input.order,
+        created_at: input.created_at.clone(),
+        last_accessed_at: input.last_accessed_at.clone(),
+        selected_table_schema: input.selected_table_schema.clone(),
+        selected_table_name: input.selected_table_name.clone(),
+        selected_schema_filter: input.selected_schema_filter.clone(),
+        include_cached_results,
+        cached_results_data: cached_bytes,
+        cached_column_names: cached_cols,
+    })
+}
+
+/// IPC write body for save_tab_state (mirrors TS TabStateDto; `order` ↔ `order_index`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TabStateWriteInput {
+    pub id: String,
+    pub connection_id: Option<String>,
+    pub database_name: Option<String>,
+    pub query_text: String,
+    pub saved_query_id: Option<String>,
+    pub is_active: bool,
+    /// TS `order` ↔ Rust storage `order_index`.
+    pub order: i64,
+    #[serde(default)]
+    pub created_at: Option<String>,
+    #[serde(default)]
+    pub last_accessed_at: Option<String>,
+    pub selected_table_schema: Option<String>,
+    pub selected_table_name: Option<String>,
+    pub selected_schema_filter: Option<String>,
+    /// Opaque JSON string; stored as UTF-8 bytes (not base64).
+    pub cached_results_data: Option<String>,
+    pub cached_column_names: Option<Vec<String>>,
+}
+
+/// IPC write body for save_saved_query (mirrors TS SavedQueryDto fields used on write).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SavedQueryWriteInput {
+    pub id: String,
+    pub name: String,
+    pub query_text: String,
+    pub connection_id: Option<String>,
+    pub database_name: Option<String>,
+    pub folder_id: Option<String>,
+    /// Accepted from TS DTO; ignored on write (storage owns timestamps).
+    #[serde(default)]
+    pub created_at: Option<String>,
+    #[serde(default)]
+    pub updated_at: Option<String>,
 }
 
 async fn establish_live(

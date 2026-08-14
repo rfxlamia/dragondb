@@ -4,11 +4,21 @@ import type {
   ConnectionId,
   ConnectionProfileDto,
   ConnectResult,
+  DeleteRowsInput,
   DragonIpc,
+  HistoryDto,
+  HistoryListOptions,
+  IpcError,
   ProfileId,
+  QueryFolderDto,
   QueryResult,
+  RowOperationError,
+  SaveCsvFileResult,
+  SavedQueryDto,
   SaveProfileInput,
   TableRef,
+  TabStateDto,
+  UpdateRowInput,
 } from "./contract";
 
 export const FIXTURE_CONNECTION_ID: ConnectionId = "fixture";
@@ -174,7 +184,7 @@ export function createMockDragonIpc(mode: MockMode = "happy"): DragonIpc {
       connectionSeq += 1;
       connectedProfileId = id;
       connectionId = `mock-conn-${connectionSeq}`;
-      return { connectionId, profileId: id };
+      return { connectionId, profileId: id, database: profiles.get(id)!.database };
     },
 
     async disconnect(): Promise<void> {
@@ -197,6 +207,73 @@ export function createMockDragonIpc(mode: MockMode = "happy"): DragonIpc {
 
     async runQuery(_c: ConnectionId, _sql: ExecutableSQL): Promise<QueryResult> {
       return emptyQueryResult();
+    },
+
+    // SP-3 library — empty / echo placeholders (Phase B wires persistence)
+    async listSavedQueries(): Promise<SavedQueryDto[]> {
+      return [];
+    },
+    async getSavedQuery(_id: string): Promise<SavedQueryDto | null> {
+      return null;
+    },
+    async saveSavedQuery(query: SavedQueryDto): Promise<SavedQueryDto> {
+      return query;
+    },
+    async deleteSavedQueries(_ids: string[]): Promise<void> {},
+    async duplicateSavedQuery(_id: string): Promise<SavedQueryDto> {
+      const err: IpcError = {
+        kind: "unknown",
+        message: "Saved query not found",
+      };
+      throw err;
+    },
+    async moveSavedQuery(_id: string, _folderId: string | null): Promise<void> {},
+    async listQueryFolders(): Promise<QueryFolderDto[]> {
+      return [];
+    },
+    async createQueryFolder(name: string): Promise<QueryFolderDto> {
+      const now = String(Date.now());
+      return { id: crypto.randomUUID(), name, createdAt: now, updatedAt: now };
+    },
+    async renameQueryFolder(_id: string, _name: string): Promise<void> {},
+    async deleteFolder(_id: string, _deleteQueries: boolean): Promise<void> {},
+
+    // SP-3 tabs
+    async listTabStates(): Promise<TabStateDto[]> {
+      return [];
+    },
+    async saveTabState(
+      _input: TabStateDto,
+      _opts?: { includeCachedResults?: boolean },
+    ): Promise<void> {},
+    async deleteTabState(_id: string): Promise<void> {},
+
+    // SP-3 history — empty placeholders (real persistence via Tauri; store tests inject mocks)
+    async listHistory(_opts: HistoryListOptions): Promise<HistoryDto[]> {
+      return [];
+    },
+    async deleteHistory(_id: string): Promise<void> {},
+    async clearHistory(_profileId: ProfileId): Promise<void> {},
+
+    // SP-3 CSV
+    async saveCsvFile(_csvText: string, _defaultPath?: string): Promise<SaveCsvFileResult> {
+      return { canceled: true };
+    },
+
+    // SP-3 row ops — reject with RowOperationError
+    async updateRow(_input: UpdateRowInput): Promise<void> {
+      const err: RowOperationError = {
+        kind: "updateFailed",
+        message: "SP-3 mock: updateRow not implemented",
+      };
+      throw err;
+    },
+    async deleteRows(_input: DeleteRowsInput): Promise<void> {
+      const err: RowOperationError = {
+        kind: "deleteFailed",
+        message: "SP-3 mock: deleteRows not implemented",
+      };
+      throw err;
     },
   };
 }

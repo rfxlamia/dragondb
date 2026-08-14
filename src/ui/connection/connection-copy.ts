@@ -1,4 +1,5 @@
 import type { IpcError } from "../../ipc/contract";
+import { unknownErrorMessage } from "../../lib/unknown-error-message";
 
 /** Human-facing copy for the rough connection panel (creative-brief tone). */
 export const ConnectionCopy = {
@@ -35,17 +36,11 @@ export const ConnectionCopy = {
   connectHint: "Save the profile before connecting.",
 } as const;
 
+const CONNECTION_ERROR_FALLBACK =
+  "Something went wrong. Check the connection details and try again.";
+
 export function humanIpcErrorMessage(error: unknown): string {
-  if (error && typeof error === "object" && "message" in error) {
-    const message = (error as IpcError).message;
-    if (typeof message === "string" && message.length > 0) {
-      return message;
-    }
-  }
-  if (error instanceof Error && error.message.length > 0) {
-    return error.message;
-  }
-  return "Something went wrong. Check the connection details and try again.";
+  return unknownErrorMessage(error, CONNECTION_ERROR_FALLBACK);
 }
 
 export function isIpcError(error: unknown): error is IpcError {

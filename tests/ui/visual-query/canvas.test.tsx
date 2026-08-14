@@ -397,6 +397,24 @@ describe("VisualQueryCanvas full lock + Run (SP-2)", () => {
     expect(screen.queryByTestId(VisualQueryAccessibility.statementMenu)).toBeNull();
   });
 
+  it("Start over calls onClearTabResults after clearing document", async () => {
+    const user = userEvent.setup();
+    const onClearTabResults = vi.fn();
+    render(
+      <VisualQueryCanvas
+        tables={[{ name: "users", schema: "public" }]}
+        columnNames={[]}
+        metadataErrorMessage={null}
+        isConnected={true}
+        onClearTabResults={onClearTabResults}
+      />,
+    );
+    await user.click(screen.getByTestId(VisualQueryAccessibility.initialAddBlock));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("select")));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.startOver));
+    expect(onClearTabResults).toHaveBeenCalledTimes(1);
+  });
+
   it("Run SELECT calls onRunQuery with exec SQL and shows OK / rows.length / durationMs", async () => {
     const user = userEvent.setup();
     const onRunQuery = vi.fn(async (_sql: { text: string; params: unknown[] }) => ({

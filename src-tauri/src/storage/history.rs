@@ -1,4 +1,4 @@
-//! Query history insert/list helpers (internal; not exposed via IPC in SP-2).
+//! Query history insert/list/delete helpers (internal; not exposed via IPC in Phase A).
 
 use rusqlite::{params, Connection, Result as SqliteResult};
 use uuid::Uuid;
@@ -52,30 +52,70 @@ pub fn insert_history(conn: &Connection, entry: HistoryInsert) -> SqliteResult<S
 }
 
 /// List recent history rows (newest first), capped by `limit`.
-pub fn list_history(conn: &Connection, limit: i64) -> SqliteResult<Vec<HistoryRow>> {
-    let mut stmt = conn.prepare(
-        r#"
-        SELECT id, profile_id, sql, success, error_message, duration_ms, row_count, created_at
-        FROM query_history
-        ORDER BY created_at DESC, id DESC
-        LIMIT ?1
-        "#,
+///
+/// When `profile_id` is `Some`, only that profile's rows are returned; `None` ⇒ global.
+pub fn list_history(
+    conn: &Connection,
+    limit: i64,
+    profile_id: Option<&str>,
+) -> SqliteResult<Vec<HistoryRow>> {
+    let map_row = |row: &rusqlite::Row<'_>| {
+        Ok(HistoryRow {
+            id: row.get(0)?,
+            profile_id: row.get(1)?,
+            sql: row.get(2)?,
+            success: row.get::<_, i64>(3)? != 0,
+            error_message: row.get(4)?,
+            duration_ms: row.get(5)?,
+            row_count: row.get(6)?,
+            created_at: row.get(7)?,
+        })
+    };
+
+    if let Some(pid) = profile_id {
+        let mut stmt = conn.prepare(
+            r#"
+            SELECT id, profile_id, sql, success, error_message, duration_ms, row_count, created_at
+            FROM query_history
+            WHERE profile_id = ?1
+            ORDER BY created_at DESC, id DESC
+            LIMIT ?2
+            "#,
+        )?;
+        let rows = stmt
+            .query_map(params![pid, limit], map_row)?
+            .collect::<SqliteResult<Vec<_>>>()?;
+        Ok(rows)
+    } else {
+        let mut stmt = conn.prepare(
+            r#"
+            SELECT id, profile_id, sql, success, error_message, duration_ms, row_count, created_at
+            FROM query_history
+            WHERE profile_id IS NOT NULL
+            ORDER BY created_at DESC, id DESC
+            LIMIT ?1
+            "#,
+        )?;
+        let rows = stmt
+            .query_map(params![limit], map_row)?
+            .collect::<SqliteResult<Vec<_>>>()?;
+        Ok(rows)
+    }
+}
+
+/// Delete a single history row by id.
+pub fn delete_history(conn: &Connection, id: &str) -> SqliteResult<()> {
+    conn.execute("DELETE FROM query_history WHERE id = ?1", params![id])?;
+    Ok(())
+}
+
+/// Clear all history rows for a profile (never a global wipe).
+pub fn clear_history_for_profile(conn: &Connection, profile_id: &str) -> SqliteResult<()> {
+    conn.execute(
+        "DELETE FROM query_history WHERE profile_id = ?1",
+        params![profile_id],
     )?;
-    let rows = stmt
-        .query_map(params![limit], |row| {
-            Ok(HistoryRow {
-                id: row.get(0)?,
-                profile_id: row.get(1)?,
-                sql: row.get(2)?,
-                success: row.get::<_, i64>(3)? != 0,
-                error_message: row.get(4)?,
-                duration_ms: row.get(5)?,
-                row_count: row.get(6)?,
-                created_at: row.get(7)?,
-            })
-        })?
-        .collect::<SqliteResult<Vec<_>>>()?;
-    Ok(rows)
+    Ok(())
 }
 
 /// Epoch milliseconds (UTC) as a decimal string for `created_at` ordering.
@@ -98,8 +138,96 @@ mod tests {
     use crate::storage::schema::migrate;
     use rusqlite::Connection;
 
+    fn seed(conn: &Connection, profile_id: &str, sql: &str) -> String {
+        insert_history(
+            conn,
+            HistoryInsert {
+                profile_id: Some(profile_id.into()),
+                sql: sql.into(),
+                success: true,
+                error_message: None,
+                duration_ms: 1,
+                row_count: Some(1),
+            },
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn list_history_global_and_profile_filter_newest_first() {
+        let conn = Connection::open_in_memory().unwrap();
+        migrate(&conn).unwrap();
+        let _h_p = seed(&conn, "P", "SELECT p");
+        std::thread::sleep(std::time::Duration::from_millis(2));
+        let h_q = seed(&conn, "Q", "SELECT q");
+        std::thread::sleep(std::time::Duration::from_millis(2));
+        let h_p2 = seed(&conn, "P", "SELECT p2");
+
+        // Cross-note vs T1: omitted profileId ⇒ global; Some(profileId) ⇒ filter.
+        // Signature lock: list_history(conn, limit, profile_id: Option<&str>)
+        let global = list_history(&conn, 10, None).unwrap();
+        assert_eq!(global.len(), 3);
+        assert_eq!(global[0].id, h_p2);
+        assert_eq!(global[1].id, h_q);
+
+        let only_p = list_history(&conn, 10, Some("P")).unwrap();
+        assert_eq!(only_p.len(), 2);
+        assert!(only_p.iter().all(|r| r.profile_id.as_deref() == Some("P")));
+        assert_eq!(only_p[0].sql, "SELECT p2");
+
+        let limited = list_history(&conn, 1, None).unwrap();
+        assert_eq!(limited.len(), 1);
+        assert_eq!(limited[0].id, h_p2);
+    }
+
+    #[test]
+    fn list_history_global_limit_excludes_null_profile_id() {
+        let conn = Connection::open_in_memory().unwrap();
+        migrate(&conn).unwrap();
+        insert_history(
+            &conn,
+            HistoryInsert {
+                profile_id: None,
+                sql: "SELECT null-profile".into(),
+                success: true,
+                error_message: None,
+                duration_ms: 1,
+                row_count: Some(1),
+            },
+        )
+        .unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(2));
+        let kept = seed(&conn, "P", "SELECT p");
+
+        let global = list_history(&conn, 1, None).unwrap();
+        assert_eq!(global.len(), 1);
+        assert_eq!(global[0].id, kept);
+        assert_eq!(global[0].profile_id.as_deref(), Some("P"));
+    }
+
+    #[test]
+    fn delete_history_and_clear_history_for_profile() {
+        let conn = Connection::open_in_memory().unwrap();
+        migrate(&conn).unwrap();
+        let h1 = seed(&conn, "P", "SELECT 1");
+        let h2 = seed(&conn, "P", "SELECT 2");
+        let h3 = seed(&conn, "Q", "SELECT 3");
+
+        delete_history(&conn, &h1).unwrap();
+        let remaining = list_history(&conn, 10, None).unwrap();
+        assert!(!remaining.iter().any(|r| r.id == h1));
+        assert_eq!(remaining.len(), 2);
+
+        clear_history_for_profile(&conn, "P").unwrap();
+        let after = list_history(&conn, 10, None).unwrap();
+        assert_eq!(after.len(), 1);
+        assert_eq!(after[0].id, h3);
+        assert!(!after.iter().any(|r| r.id == h2));
+    }
+
     #[test]
     fn insert_history_persists_success_and_failure_rows() {
+        // Update existing SP-2 call sites to list_history(&conn, 10, None)
         let conn = Connection::open_in_memory().unwrap();
         migrate(&conn).unwrap();
         insert_history(
@@ -126,7 +254,7 @@ mod tests {
             },
         )
         .unwrap();
-        let rows = list_history(&conn, 10).unwrap();
+        let rows = list_history(&conn, 10, None).unwrap();
         assert_eq!(rows.len(), 2);
         assert!(rows.iter().any(|r| r.success && r.sql == "SELECT 1"));
         assert!(rows.iter().any(|r| !r.success && r.error_message.is_some()));

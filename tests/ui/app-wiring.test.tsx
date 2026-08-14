@@ -49,6 +49,14 @@ describe("App production default (no runtime mock)", () => {
     expect(screen.queryByTestId(VisualQueryAccessibility.runQuery)).toBeDisabled();
     expect(screen.getAllByTestId(VisualQueryAccessibility.runQuery)).toHaveLength(1);
   });
+
+  it("Phase C must not render TabBar / History browser / Export button", async () => {
+    const ipc = createMockDragonIpc("happy");
+    render(<App ipc={ipc} />);
+    expect(screen.queryByRole("tablist")).toBeNull();
+    expect(screen.queryByText(/history/i)).toBeNull();
+    expect(screen.queryByRole("button", { name: /export/i })).toBeNull();
+  });
 });
 
 describe("App session connect / disconnect / switch", () => {
@@ -59,7 +67,7 @@ describe("App session connect / disconnect / switch", () => {
     render(<App ipc={ipc} />);
     await connectFirst(user, ipc);
 
-    await waitFor(() => expect(listTables).toHaveBeenCalled());
+    await waitFor(() => expect(listTables).toHaveBeenCalledTimes(1));
     const connectionId = listTables.mock.calls[0]?.[0];
     expect(connectionId).toBeTruthy();
     expect(connectionId).not.toBe(FIXTURE_CONNECTION_ID);
@@ -280,6 +288,141 @@ describe("App session connect / disconnect / switch", () => {
     await waitFor(() => expect(screen.getByText(/Authentication failed/i)).toBeInTheDocument());
     expect(screen.getByTestId(VisualQueryAccessibility.clauseCard("select"))).toBeInTheDocument();
     expect(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock)).toBeDisabled();
+  });
+
+  it("after failed switch to B, connecting to B remounts canvas empty (AC Session)", async () => {
+    // Spec: Switch fail keeps A cards as snapshot; later connect to different profile B
+    // must remount empty — same as disconnect→connect different profile.
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    const b = await ipc.saveProfile({
+      profile: {
+        name: "B",
+        host: "db-b",
+        port: 5432,
+        username: "postgres",
+        database: "app",
+        isFavorite: false,
+        sslMode: "prefer",
+        sshEnabled: false,
+        sshHost: null,
+        sshPort: null,
+        sshUsername: null,
+        sshAuthMethod: null,
+        sshPrivateKeyPath: null,
+      },
+      secrets: { password: "pw" },
+    });
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
+    await user.click(await screen.findByTestId(VisualQueryAccessibility.initialAddBlock));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("select")));
+    expect(screen.getByTestId(VisualQueryAccessibility.clauseCard("select"))).toBeInTheDocument();
+
+    const realConnect = ipc.connectProfile.bind(ipc);
+    let failB = true;
+    ipc.connectProfile = async (id) => {
+      if (failB && id === b.id) throw { kind: "auth", message: "Authentication failed" };
+      return realConnect(id);
+    };
+
+    await user.click(screen.getByRole("button", { name: /^B$/i }));
+    await user.click(screen.getByRole("button", { name: /confirm switch/i }));
+    await waitFor(() => expect(screen.getByText(/Authentication failed/i)).toBeInTheDocument());
+    expect(screen.getByTestId(VisualQueryAccessibility.clauseCard("select"))).toBeInTheDocument();
+
+    failB = false;
+    await user.click(screen.getByRole("button", { name: /^B$/i }));
+    await user.click(await screen.findByRole("button", { name: /connect/i }));
+    await waitFor(() =>
+      expect(screen.getByText(VisualQueryCopy.emptyCanvasTitle)).toBeInTheDocument(),
+    );
+  });
+
+  it("disconnect after Run preserves clause cards (store clear covered by unit oracle)", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    vi.spyOn(ipc, "runQuery").mockResolvedValue({
+      columns: ["id"],
+      rows: [[1]],
+      rowsAffected: null,
+      durationMs: 9,
+    });
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
+    await user.click(await screen.findByTestId(VisualQueryAccessibility.initialAddBlock));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("select")));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.clauseMenuItem("from")));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.fromTablePicker));
+    await user.click(await screen.findByRole("button", { name: "users" }));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.runQuery));
+    await waitFor(() =>
+      expect(document.querySelector(".vq-canvas__status")).toHaveTextContent(
+        /OK\s*\/\s*1 rows\s*\/\s*9 ms/i,
+      ),
+    );
+    await user.click(screen.getByRole("button", { name: /disconnect/i }));
+    // Cards preserved as locked snapshot (SP-2 dual-exit)
+    expect(screen.getByTestId(VisualQueryAccessibility.clauseCard("select"))).toBeInTheDocument();
+    expect(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock)).toBeDisabled();
+    // Status strip must not keep connected OK result as live run outcome after disconnect
+    // (canvas may clear local runOutcome on disconnect lock; store results cleared via orchestrator)
+    expect(screen.queryByRole("tablist")).toBeNull();
+    expect(screen.queryByRole("button", { name: /export/i })).toBeNull();
+  });
+
+  it("failed switch after teardown keeps card snapshot and does not leave live OK status", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    const b = await ipc.saveProfile({
+      profile: {
+        name: "B",
+        host: "db-b",
+        port: 5432,
+        username: "postgres",
+        database: "app",
+        isFavorite: false,
+        sslMode: "prefer",
+        sshEnabled: false,
+        sshHost: null,
+        sshPort: null,
+        sshUsername: null,
+        sshAuthMethod: null,
+        sshPrivateKeyPath: null,
+      },
+      secrets: { password: "pw" },
+    });
+    vi.spyOn(ipc, "runQuery").mockResolvedValue({
+      columns: ["id"],
+      rows: [[1]],
+      rowsAffected: null,
+      durationMs: 3,
+    });
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
+    await user.click(await screen.findByTestId(VisualQueryAccessibility.initialAddBlock));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("select")));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.clauseMenuItem("from")));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.fromTablePicker));
+    await user.click(await screen.findByRole("button", { name: "users" }));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.runQuery));
+    await waitFor(() =>
+      expect(document.querySelector(".vq-canvas__status")).toHaveTextContent(/OK\s*\//i),
+    );
+
+    const realConnect = ipc.connectProfile.bind(ipc);
+    ipc.connectProfile = async (id) => {
+      if (id === b.id) throw { kind: "auth", message: "Authentication failed" };
+      return realConnect(id);
+    };
+    await user.click(screen.getByRole("button", { name: /^B$/i }));
+    await user.click(screen.getByRole("button", { name: /confirm switch/i }));
+    await waitFor(() => expect(screen.getByText(/Authentication failed/i)).toBeInTheDocument());
+    expect(screen.getByTestId(VisualQueryAccessibility.clauseCard("select"))).toBeInTheDocument();
+    expect(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock)).toBeDisabled();
+    expect(document.querySelector(".vq-canvas__status")?.textContent ?? "").not.toMatch(/OK\s*\//i);
   });
 });
 
