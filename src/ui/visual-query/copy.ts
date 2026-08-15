@@ -178,6 +178,7 @@ export const VisualQueryCopy = {
   startOverTitle: "Start over",
   deleteClauseTitle: "Delete",
   columnPopoverNeedsFromMessage: "Choose a table in FROM first.",
+  historyTitle: "History",
   viewGeneratedSQLTitle: "View generated SQL",
   copySQLTitle: "Copy",
   generatedSQLDoneTitle: "Done",

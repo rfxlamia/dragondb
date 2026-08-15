@@ -16,6 +16,8 @@ import type {
   SaveCsvFileResult,
   SavedQueryDto,
   SaveProfileInput,
+  SaveTextFileFilter,
+  SaveTextFileResult,
   TableRef,
   TabStateDto,
   UpdateRowInput,
@@ -257,6 +259,13 @@ export function createMockDragonIpc(mode: MockMode = "happy"): DragonIpc {
 
     // SP-3 CSV
     async saveCsvFile(_csvText: string, _defaultPath?: string): Promise<SaveCsvFileResult> {
+      return { canceled: true };
+    },
+    async saveTextFile(
+      _text: string,
+      _defaultPath?: string,
+      _filter?: SaveTextFileFilter,
+    ): Promise<SaveTextFileResult> {
       return { canceled: true };
     },
 

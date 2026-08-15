@@ -54,6 +54,7 @@ pub fn run() {
             commands::update_row,
             commands::delete_rows,
             commands::save_csv_file,
+            commands::save_text_file,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

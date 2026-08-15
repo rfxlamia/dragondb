@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState } from "react";
+import type { StoreApi } from "zustand/vanilla";
 import type { ClauseKind, ExecutableSQL, StatementKind, TableReference } from "../../core";
 import { CanvasPresentation, canRun, generateSQL, QueryDocument } from "../../core";
-import type { QueryResult } from "../../ipc/contract";
+import type { DragonIpc, QueryResult } from "../../ipc/contract";
 import { sameTable } from "../../ipc/table-ref";
+import type { HistoryState } from "../../stores/history-store";
+import { QueryHistorySheet } from "../history/query-history-sheet";
 import { VisualQueryAccessibility } from "./accessibility";
 import { ClauseCard } from "./clause-card";
 import { VisualQueryCopy } from "./copy";
@@ -43,6 +46,8 @@ export type VisualQueryCanvasProps = {
   onDocumentChange?: (doc: QueryDocument) => void;
   /** Fires when committed FROM identity changes (including to null). */
   onCommittedFromChange?: (table: TableReference | null) => void;
+  historyStore?: StoreApi<HistoryState>;
+  saveTextFile?: DragonIpc["saveTextFile"];
 };
 
 export function VisualQueryCanvas(props: VisualQueryCanvasProps): React.JSX.Element {
@@ -55,6 +60,8 @@ export function VisualQueryCanvas(props: VisualQueryCanvasProps): React.JSX.Elem
     onClearTabResults,
     onDocumentChange,
     onCommittedFromChange,
+    historyStore,
+    saveTextFile,
   } = props;
 
   const [doc] = useState(() => props.document ?? new QueryDocument());
@@ -64,6 +71,7 @@ export function VisualQueryCanvas(props: VisualQueryCanvasProps): React.JSX.Elem
   const [showStatementPicker, setShowStatementPicker] = useState(false);
   const [showClauseMenu, setShowClauseMenu] = useState(false);
   const [sqlDialogOpen, setSqlDialogOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [runInFlight, setRunInFlight] = useState(false);
   const runGeneration = useRef(0);
 
@@ -257,6 +265,9 @@ export function VisualQueryCanvas(props: VisualQueryCanvasProps): React.JSX.Elem
         onViewGeneratedSQL={() => {
           setSqlDialogOpen(true);
         }}
+        onHistory={() => {
+          setHistoryOpen(true);
+        }}
         runHelpMessage={runHelpMessage}
       />
 
@@ -339,6 +350,15 @@ export function VisualQueryCanvas(props: VisualQueryCanvasProps): React.JSX.Elem
 
       {sqlDialogOpen ? (
         <GeneratedSQLDialog sql={sql} onDismiss={() => setSqlDialogOpen(false)} />
+      ) : null}
+
+      {historyOpen && historyStore !== undefined && saveTextFile !== undefined ? (
+        <QueryHistorySheet
+          open={historyOpen}
+          onOpenChange={setHistoryOpen}
+          historyStore={historyStore}
+          saveTextFile={saveTextFile}
+        />
       ) : null}
     </div>
   );

@@ -10,6 +10,7 @@ export function VisualQueryToolbar(props: {
   onRunQuery: () => void;
   onViewGeneratedSQL: () => void;
   runHelpMessage: string | null;
+  onHistory?: () => void;
 }): React.JSX.Element {
   const {
     canStartOver,
@@ -19,6 +20,7 @@ export function VisualQueryToolbar(props: {
     onRunQuery,
     onViewGeneratedSQL,
     runHelpMessage,
+    onHistory,
   } = props;
   const runDisabled = !isConnected || !canRunQuery;
 
@@ -36,6 +38,14 @@ export function VisualQueryToolbar(props: {
         </button>
       ) : null}
       {runHelpMessage ? <span className="vq-toolbar__help">{runHelpMessage}</span> : null}
+      <button
+        type="button"
+        className="vq-toolbar__history"
+        onClick={() => onHistory?.()}
+        data-testid={VisualQueryAccessibility.history}
+      >
+        {VisualQueryCopy.historyTitle}
+      </button>
       <button
         type="button"
         className="vq-toolbar__view-sql"

@@ -211,6 +211,8 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
         onRunQuery={onRunQuery}
         onClearTabResults={handleClearTabResults}
         onCommittedFromChange={handleCommittedFromChange}
+        historyStore={stores.history}
+        saveTextFile={ipc.saveTextFile}
       />
     ) : null;
 

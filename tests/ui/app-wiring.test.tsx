@@ -72,7 +72,7 @@ describe("App production default (no runtime mock)", () => {
     expect(screen.getAllByTestId(VisualQueryAccessibility.runQuery)).toHaveLength(1);
   });
 
-  it("workspace with 1 tab hides the tab strip, shows New Tab, and does not render History or Export", async () => {
+  it("workspace with 1 tab hides the tab strip, shows New Tab, canvas History, and no Export", async () => {
     const ipc = createMockDragonIpc("happy");
     await ipc.saveProfile({
       profile: { ...fixtureProfileFields(), name: "dev" },
@@ -81,7 +81,7 @@ describe("App production default (no runtime mock)", () => {
     render(<App ipc={ipc} />);
     expect(await screen.findByTestId(TabBarAccessibility.newTab)).toBeInTheDocument();
     expect(screen.queryByTestId(TabBarAccessibility.strip)).toBeNull();
-    expect(screen.queryByRole("button", { name: /history/i })).toBeNull();
+    expect(screen.getByTestId(VisualQueryAccessibility.history)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /export/i })).toBeNull();
   });
 });

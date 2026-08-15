@@ -142,3 +142,25 @@ describe("VisualQueryToolbar View generated SQL (SP-4b)", () => {
     expect(screen.getByText("Choose a table in FROM")).toBeInTheDocument();
   });
 });
+
+describe("VisualQueryToolbar History (SP-4b)", () => {
+  it("shows History and click calls onHistory", async () => {
+    const user = userEvent.setup();
+    const onHistory = vi.fn();
+    render(
+      <VisualQueryToolbar
+        canStartOver={false}
+        onStartOver={() => {}}
+        isConnected={true}
+        canRunQuery={false}
+        onRunQuery={() => {}}
+        onViewGeneratedSQL={() => {}}
+        runHelpMessage={null}
+        onHistory={onHistory}
+      />,
+    );
+    await user.click(screen.getByTestId(VisualQueryAccessibility.history));
+    expect(onHistory).toHaveBeenCalledOnce();
+    expect(screen.getByRole("button", { name: VisualQueryCopy.historyTitle })).toBeInTheDocument();
+  });
+});

@@ -280,6 +280,11 @@ describe("DragonIpc contract delta (SP-3 library/tab/history/row/csv)", () => {
       // SP-3 CSV
       saveCsvFile: async (_csvText: string, _defaultPath?: string) =>
         ({ canceled: true }) satisfies SaveCsvFileResult,
+      saveTextFile: async (
+        _text: string,
+        _defaultPath?: string,
+        _filter?: { name: string; extensions: string[] },
+      ) => ({ canceled: true }) satisfies SaveCsvFileResult,
       // SP-3 row ops — reject with RowOperationError (NOT IpcError kind expansion)
       updateRow: async (_input: UpdateRowInput) => {},
       deleteRows: async (_input: DeleteRowsInput) => {},
@@ -311,6 +316,7 @@ describe("DragonIpc contract delta (SP-3 library/tab/history/row/csv)", () => {
         "renameQueryFolder",
         "runQuery",
         "saveCsvFile",
+        "saveTextFile",
         "saveProfile",
         "saveSavedQuery",
         "saveTabState",

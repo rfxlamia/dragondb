@@ -5,7 +5,9 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { QueryDocument } from "../../../src/core";
-import type { QueryResult } from "../../../src/ipc/contract";
+import type { DragonIpc, QueryResult } from "../../../src/ipc/contract";
+import { createHistoryStore } from "../../../src/stores/history-store";
+import { HistoryAccessibility } from "../../../src/ui/history/history-accessibility";
 import { VisualQueryAccessibility } from "../../../src/ui/visual-query/accessibility";
 import { VisualQueryCanvas } from "../../../src/ui/visual-query/canvas";
 import { VisualQueryCopy } from "../../../src/ui/visual-query/copy";
@@ -664,5 +666,26 @@ describe("VisualQueryCanvas full lock + Run (SP-2)", () => {
     expect(screen.getByTestId(VisualQueryAccessibility.runQuery)).not.toBeDisabled();
     await user.click(screen.getByTestId(VisualQueryAccessibility.runQuery));
     await waitFor(() => expect(onRunQuery).toHaveBeenCalledTimes(2));
+  });
+});
+
+describe("VisualQueryCanvas History sheet (SP-4b)", () => {
+  it("History on the toolbar opens the sheet", async () => {
+    const user = userEvent.setup();
+    const listHistory = vi.fn(async () => []);
+    const historyStore = createHistoryStore({ listHistory } as unknown as DragonIpc);
+    render(
+      <VisualQueryCanvas
+        tables={tables}
+        columnNames={[]}
+        metadataErrorMessage={null}
+        isConnected={true}
+        historyStore={historyStore}
+        saveTextFile={vi.fn()}
+      />,
+    );
+    expect(listHistory).not.toHaveBeenCalled();
+    await user.click(screen.getByTestId(VisualQueryAccessibility.history));
+    expect(await screen.findByTestId(HistoryAccessibility.sheet)).toBeInTheDocument();
   });
 });

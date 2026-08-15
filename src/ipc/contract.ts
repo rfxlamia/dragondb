@@ -186,6 +186,13 @@ export interface SaveCsvFileResult {
   path?: string;
 }
 
+export type SaveTextFileResult = SaveCsvFileResult;
+
+export type SaveTextFileFilter = {
+  name: string;
+  extensions: string[];
+};
+
 /**
  * DragonIpc — SP-2 profile/connect/query + SP-3 library/tabs/history/csv/row-ops.
  *
@@ -237,6 +244,13 @@ export interface DragonIpc {
 
   // SP-3 CSV save-file
   saveCsvFile(csvText: string, defaultPath?: string): Promise<SaveCsvFileResult>;
+
+  // SP-4b generic text save (history JSON/CSV/SQL). Keep saveCsvFile unchanged.
+  saveTextFile(
+    text: string,
+    defaultPath?: string,
+    filter?: SaveTextFileFilter,
+  ): Promise<SaveTextFileResult>;
 
   // SP-3 row ops — reject with RowOperationError (not IpcError kind expansion)
   updateRow(input: UpdateRowInput): Promise<void>;
