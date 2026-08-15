@@ -35,7 +35,7 @@ export function createLibraryStore(ipc: DragonIpc): StoreApi<LibraryState> {
         ipc.listQueryFolders(),
       ]);
       if (current !== generation) return;
-      set({ queries, folders });
+      set({ queries: queries.slice(), folders: folders.slice() });
     },
 
     async saveSavedQuery(query: SavedQueryDto) {

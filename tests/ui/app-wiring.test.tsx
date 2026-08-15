@@ -19,7 +19,10 @@ import {
   FIXTURE_CONNECTION_ID,
   fixtureProfileFields,
 } from "../../src/ipc/mock";
+import { ConnectionAccessibility } from "../../src/ui/connection/connection-accessibility";
 import { ConnectionCopy } from "../../src/ui/connection/connection-copy";
+import { QueriesAccessibility } from "../../src/ui/library/queries-accessibility";
+import { QueriesCopy } from "../../src/ui/library/queries-copy";
 import { ResultsAccessibility } from "../../src/ui/results/results-accessibility";
 import { ResultsCopy } from "../../src/ui/results/results-copy";
 import { TabBarAccessibility } from "../../src/ui/shell/tab-bar-accessibility";
@@ -101,6 +104,15 @@ describe("App session connect / disconnect / switch", () => {
     expect(screen.getByTestId(VisualQueryAccessibility.initialAddBlock)).not.toBeDisabled();
   });
 
+  it("after connect, connection column shows public.users table display name", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
+    const tables = await screen.findByTestId(ConnectionAccessibility.tablesRegion);
+    expect(tables).toHaveTextContent("users");
+  });
+
   it("listColumns on FROM commit uses live connectionId, not FIXTURE", async () => {
     const user = userEvent.setup();
     const ipc = createMockDragonIpc("happy");
@@ -113,7 +125,11 @@ describe("App session connect / disconnect / switch", () => {
     await user.click(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock));
     await user.click(screen.getByTestId(VisualQueryAccessibility.clauseMenuItem("from")));
     await user.click(screen.getByTestId(VisualQueryAccessibility.fromTablePicker));
-    await user.click(await screen.findByRole("button", { name: "users" }));
+    await user.click(
+      await screen.findByTestId(
+        VisualQueryAccessibility.schemaPopoverItem("Tables", "public:users"),
+      ),
+    );
 
     await waitFor(() => expect(listColumns).toHaveBeenCalled());
     expect(listColumns.mock.calls[0]?.[0]).not.toBe(FIXTURE_CONNECTION_ID);
@@ -383,7 +399,11 @@ describe("App session connect / disconnect / switch", () => {
     await user.click(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock));
     await user.click(screen.getByTestId(VisualQueryAccessibility.clauseMenuItem("from")));
     await user.click(screen.getByTestId(VisualQueryAccessibility.fromTablePicker));
-    await user.click(await screen.findByRole("button", { name: "users" }));
+    await user.click(
+      await screen.findByTestId(
+        VisualQueryAccessibility.schemaPopoverItem("Tables", "public:users"),
+      ),
+    );
     await user.click(screen.getByTestId(VisualQueryAccessibility.runQuery));
     await waitFor(() => expect(screen.getByTestId(ResultsAccessibility.grid)).toBeInTheDocument());
     expect(document.querySelector(".vq-canvas__status")?.textContent ?? "").not.toMatch(/OK\s*\//i);
@@ -435,7 +455,11 @@ describe("App session connect / disconnect / switch", () => {
     await user.click(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock));
     await user.click(screen.getByTestId(VisualQueryAccessibility.clauseMenuItem("from")));
     await user.click(screen.getByTestId(VisualQueryAccessibility.fromTablePicker));
-    await user.click(await screen.findByRole("button", { name: "users" }));
+    await user.click(
+      await screen.findByTestId(
+        VisualQueryAccessibility.schemaPopoverItem("Tables", "public:users"),
+      ),
+    );
     await user.click(screen.getByTestId(VisualQueryAccessibility.runQuery));
     await waitFor(() => expect(screen.getByTestId(ResultsAccessibility.grid)).toBeInTheDocument());
     expect(document.querySelector(".vq-canvas__status")?.textContent ?? "").not.toMatch(/OK\s*\//i);
@@ -469,7 +493,11 @@ describe("App wiring regressions after connect (SP-4a)", () => {
     await user.click(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock));
     await user.click(screen.getByTestId(VisualQueryAccessibility.clauseMenuItem("from")));
     await user.click(screen.getByTestId(VisualQueryAccessibility.fromTablePicker));
-    await user.click(await screen.findByRole("button", { name: "users" }));
+    await user.click(
+      await screen.findByTestId(
+        VisualQueryAccessibility.schemaPopoverItem("Tables", "public:users"),
+      ),
+    );
     await waitFor(() => expect(listColumns).toHaveBeenCalled());
     await user.click(screen.getByTestId(VisualQueryAccessibility.startOver));
     await user.click(screen.getByTestId(VisualQueryAccessibility.initialAddBlock));
@@ -497,7 +525,11 @@ describe("App wiring regressions after connect (SP-4a)", () => {
     await user.click(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock));
     await user.click(screen.getByTestId(VisualQueryAccessibility.clauseMenuItem("from")));
     await user.click(screen.getByTestId(VisualQueryAccessibility.fromTablePicker));
-    await user.click(await screen.findByRole("button", { name: "users" }));
+    await user.click(
+      await screen.findByTestId(
+        VisualQueryAccessibility.schemaPopoverItem("Tables", "public:users"),
+      ),
+    );
     expect(await screen.findByText(VisualQueryCopy.columnsLoadError)).toBeInTheDocument();
   });
 
@@ -509,7 +541,7 @@ describe("App wiring regressions after connect (SP-4a)", () => {
     };
     render(<App ipc={ipc} />);
     await connectFirst(user, ipc);
-    expect(await screen.findByText(VisualQueryCopy.tablesLoadError)).toBeInTheDocument();
+    expect(await screen.findAllByText(VisualQueryCopy.tablesLoadError)).not.toHaveLength(0);
   });
 
   it("never calls runQuery during canvas editing", async () => {
@@ -523,7 +555,11 @@ describe("App wiring regressions after connect (SP-4a)", () => {
     await user.click(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock));
     await user.click(screen.getByTestId(VisualQueryAccessibility.clauseMenuItem("from")));
     await user.click(screen.getByTestId(VisualQueryAccessibility.fromTablePicker));
-    await user.click(await screen.findByRole("button", { name: "users" }));
+    await user.click(
+      await screen.findByTestId(
+        VisualQueryAccessibility.schemaPopoverItem("Tables", "public:users"),
+      ),
+    );
     await user.click(screen.getByTestId(VisualQueryAccessibility.startOver));
     await user.click(screen.getByTestId(VisualQueryAccessibility.initialAddBlock));
     await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("createTable")));
@@ -559,7 +595,11 @@ describe("App wiring regressions after connect (SP-4a)", () => {
     await user.click(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock));
     await user.click(screen.getByTestId(VisualQueryAccessibility.clauseMenuItem("from")));
     await user.click(screen.getByTestId(VisualQueryAccessibility.fromTablePicker));
-    await user.click(await screen.findByRole("button", { name: "users" }));
+    await user.click(
+      await screen.findByTestId(
+        VisualQueryAccessibility.schemaPopoverItem("Tables", "public:users"),
+      ),
+    );
 
     expect(screen.getAllByTestId(VisualQueryAccessibility.runQuery)).toHaveLength(1);
     await user.click(screen.getByTestId(VisualQueryAccessibility.runQuery));
@@ -617,9 +657,17 @@ describe("App wiring regressions after connect (SP-4a)", () => {
     await user.click(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock));
     await user.click(screen.getByTestId(VisualQueryAccessibility.clauseMenuItem("from")));
     await user.click(screen.getByTestId(VisualQueryAccessibility.fromTablePicker));
-    await user.click(await screen.findByRole("button", { name: "users" }));
+    await user.click(
+      await screen.findByTestId(
+        VisualQueryAccessibility.schemaPopoverItem("Tables", "public:users"),
+      ),
+    );
     await user.click(screen.getByTestId(VisualQueryAccessibility.fromTablePicker));
-    await user.click(await screen.findByRole("button", { name: "analytics.events" }));
+    await user.click(
+      await screen.findByTestId(
+        VisualQueryAccessibility.schemaPopoverItem("Tables", "analytics:events"),
+      ),
+    );
     await waitFor(() => expect(call).toBe(2));
     releaseFirst();
     await waitFor(() => expect(firstReturned).toBe(true));
@@ -661,7 +709,11 @@ describe("App wiring regressions after connect (SP-4a)", () => {
     await user.click(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock));
     await user.click(screen.getByTestId(VisualQueryAccessibility.clauseMenuItem("from")));
     await user.click(screen.getByTestId(VisualQueryAccessibility.fromTablePicker));
-    await user.click(await screen.findByRole("button", { name: "users" }));
+    await user.click(
+      await screen.findByTestId(
+        VisualQueryAccessibility.schemaPopoverItem("Tables", "public:users"),
+      ),
+    );
     await waitFor(() => expect(listColumns).toHaveBeenCalledTimes(1));
     await user.click(screen.getByTestId(VisualQueryAccessibility.startOver));
     release();
@@ -708,9 +760,17 @@ describe("App wiring regressions after connect (SP-4a)", () => {
     await user.click(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock));
     await user.click(screen.getByTestId(VisualQueryAccessibility.clauseMenuItem("from")));
     await user.click(screen.getByTestId(VisualQueryAccessibility.fromTablePicker));
-    await user.click(await screen.findByRole("button", { name: "users" }));
+    await user.click(
+      await screen.findByTestId(
+        VisualQueryAccessibility.schemaPopoverItem("Tables", "public:users"),
+      ),
+    );
     await user.click(screen.getByTestId(VisualQueryAccessibility.fromTablePicker));
-    await user.click(await screen.findByRole("button", { name: "analytics.events" }));
+    await user.click(
+      await screen.findByTestId(
+        VisualQueryAccessibility.schemaPopoverItem("Tables", "analytics:events"),
+      ),
+    );
     await waitFor(() => expect(call).toBe(2));
     rejectFirst(new Error("stale rejection"));
     await firstSettled;
@@ -759,7 +819,11 @@ describe("App wiring regressions after connect (SP-4a)", () => {
     await user.click(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock));
     await user.click(screen.getByTestId(VisualQueryAccessibility.clauseMenuItem("from")));
     await user.click(screen.getByTestId(VisualQueryAccessibility.fromTablePicker));
-    await user.click(await screen.findByRole("button", { name: "users" }));
+    await user.click(
+      await screen.findByTestId(
+        VisualQueryAccessibility.schemaPopoverItem("Tables", "public:users"),
+      ),
+    );
     unmount();
     release();
     await waitFor(() => {
@@ -782,7 +846,9 @@ async function addSelectFromUsers(user: UserEvent): Promise<void> {
   await user.click(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock));
   await user.click(screen.getByTestId(VisualQueryAccessibility.clauseMenuItem("from")));
   await user.click(screen.getByTestId(VisualQueryAccessibility.fromTablePicker));
-  await user.click(await screen.findByRole("button", { name: "users" }));
+  await user.click(
+    await screen.findByTestId(VisualQueryAccessibility.schemaPopoverItem("Tables", "public:users")),
+  );
 }
 
 describe("App results pane (SP-4b first slice)", () => {
@@ -836,7 +902,11 @@ describe("App results pane (SP-4b first slice)", () => {
     await user.click(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock));
     await user.click(screen.getByTestId(VisualQueryAccessibility.clauseMenuItem("from")));
     await user.click(screen.getByTestId(VisualQueryAccessibility.fromTablePicker));
-    await user.click(await screen.findByRole("button", { name: "users" }));
+    await user.click(
+      await screen.findByTestId(
+        VisualQueryAccessibility.schemaPopoverItem("Tables", "public:users"),
+      ),
+    );
     await user.click(screen.getByTestId(VisualQueryAccessibility.runQuery));
     await waitFor(() => expect(screen.getByTestId(ResultsAccessibility.grid)).toBeInTheDocument());
     await user.click(screen.getByTestId(VisualQueryAccessibility.runQuery));
@@ -864,7 +934,11 @@ describe("App results pane (SP-4b first slice)", () => {
     await user.click(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock));
     await user.click(screen.getByTestId(VisualQueryAccessibility.clauseMenuItem("from")));
     await user.click(screen.getByTestId(VisualQueryAccessibility.fromTablePicker));
-    await user.click(await screen.findByRole("button", { name: "users" }));
+    await user.click(
+      await screen.findByTestId(
+        VisualQueryAccessibility.schemaPopoverItem("Tables", "public:users"),
+      ),
+    );
     await user.click(screen.getByTestId(VisualQueryAccessibility.runQuery));
     await waitFor(() => expect(screen.getByTestId(ResultsAccessibility.grid)).toBeInTheDocument());
     await user.click(screen.getByTestId(VisualQueryAccessibility.startOver));
@@ -1404,5 +1478,183 @@ describe("App tab bar and in-session documents", () => {
     await user.click(closeButtons[0]!);
     expect(screen.getAllByRole("tab")).toHaveLength(2);
     expect(screen.getByTestId(VisualQueryAccessibility.clauseCard("select"))).toBeInTheDocument();
+  });
+});
+
+function savedQuery(
+  id: string,
+  name: string,
+  queryText: string,
+): {
+  id: string;
+  name: string;
+  queryText: string;
+  connectionId: null;
+  databaseName: null;
+  createdAt: string;
+  updatedAt: string;
+  folderId: null;
+} {
+  return {
+    id,
+    name,
+    queryText,
+    connectionId: null,
+    databaseName: null,
+    createdAt: "1",
+    updatedAt: "1",
+    folderId: null,
+  };
+}
+
+describe("App Queries column (SP-4b)", () => {
+  it("shows Queries left of the canvas in the workspace including disconnected, and hides it on welcome", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    render(<App ipc={ipc} />);
+    expect(screen.queryByTestId(QueriesAccessibility.column)).toBeNull();
+    await user.click(await screen.findByRole("button", { name: WelcomeCopy.connectToServer }));
+    expect(screen.getByTestId(QueriesAccessibility.column)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: ConnectionCopy.cancel }));
+    expect(await screen.findByText(WelcomeCopy.hello)).toBeInTheDocument();
+    expect(screen.queryByTestId(QueriesAccessibility.column)).toBeNull();
+  });
+
+  it("does not persist the Queries split layout", async () => {
+    const ipc = createMockDragonIpc("happy");
+    await ipc.saveProfile({
+      profile: { ...fixtureProfileFields(), name: "dev" },
+      secrets: { password: "pw" },
+    });
+    const setItem = vi.spyOn(Storage.prototype, "setItem");
+    render(<App ipc={ipc} />);
+    expect(await screen.findByTestId(QueriesAccessibility.column)).toBeInTheDocument();
+    expect(setItem).not.toHaveBeenCalled();
+    setItem.mockRestore();
+  });
+
+  it("clicking Q1 restores B′ grid rows without rebuilding visual cards from Q1 SQL", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    const library = [
+      savedQuery("q1", "Q1", "SELECT * FROM other"),
+      savedQuery("q2", "Q2", "SELECT 2"),
+    ];
+    vi.spyOn(ipc, "listSavedQueries").mockImplementation(async () => library);
+    vi.spyOn(ipc, "runQuery").mockResolvedValue({
+      columns: ["id"],
+      rows: Array.from({ length: 10 }, (_, i) => [i]),
+      rowsAffected: null,
+      durationMs: 8,
+    });
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
+    await addSelectFromUsers(user);
+    await user.click(await screen.findByRole("button", { name: "Q1" }));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.runQuery));
+    await waitFor(() => expect(screen.getByTestId(ResultsAccessibility.grid)).toBeInTheDocument());
+    await user.click(screen.getByRole("button", { name: "Q2" }));
+    await user.click(screen.getByRole("button", { name: "Q1" }));
+    expect(screen.getByTestId(VisualQueryAccessibility.clauseCard("from"))).toBeInTheDocument();
+    expect(screen.queryByText("other")).toBeNull();
+    expect(screen.getByTestId(ResultsAccessibility.grid)).toBeInTheDocument();
+    expect(screen.getByTestId(ResultsAccessibility.grid).querySelectorAll("tbody tr")).toHaveLength(
+      10,
+    );
+  });
+
+  it("a failed Run while Q1 is selected does not overwrite the last success cache", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    vi.spyOn(ipc, "listSavedQueries").mockResolvedValue([
+      savedQuery("q1", "Q1", "SELECT 1"),
+      savedQuery("q2", "Q2", "SELECT 2"),
+    ]);
+    const runQuery = vi.spyOn(ipc, "runQuery");
+    runQuery.mockResolvedValueOnce({
+      columns: ["id"],
+      rows: [[1], [2]],
+      rowsAffected: null,
+      durationMs: 3,
+    });
+    runQuery.mockRejectedValueOnce({ kind: "syntax", message: "boom" });
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
+    await addSelectFromUsers(user);
+    await user.click(await screen.findByRole("button", { name: "Q1" }));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.runQuery));
+    await waitFor(() => expect(screen.getByTestId(ResultsAccessibility.grid)).toBeInTheDocument());
+    await user.click(screen.getByTestId(VisualQueryAccessibility.runQuery));
+    await waitFor(() => expect(screen.getByTestId(ResultsAccessibility.error)).toBeInTheDocument());
+    await user.click(screen.getByRole("button", { name: "Q2" }));
+    await user.click(screen.getByRole("button", { name: "Q1" }));
+    expect(screen.getByTestId(ResultsAccessibility.grid)).toBeInTheDocument();
+    expect(screen.queryByTestId(ResultsAccessibility.error)).toBeNull();
+  });
+
+  it("profile switch drops B′ so clicking Q1 does not refill profile A rows", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    await ipc.saveProfile({
+      profile: {
+        name: "B",
+        host: "db-b",
+        port: 5432,
+        username: "postgres",
+        database: "app",
+        isFavorite: false,
+        sslMode: "prefer",
+        sshEnabled: false,
+        sshHost: null,
+        sshPort: null,
+        sshUsername: null,
+        sshAuthMethod: null,
+        sshPrivateKeyPath: null,
+      },
+      secrets: { password: "pw" },
+    });
+    vi.spyOn(ipc, "listSavedQueries").mockResolvedValue([savedQuery("q1", "Q1", "SELECT 1")]);
+    vi.spyOn(ipc, "runQuery").mockResolvedValue({
+      columns: ["id"],
+      rows: [["from-a"]],
+      rowsAffected: null,
+      durationMs: 2,
+    });
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
+    await addSelectFromUsers(user);
+    await user.click(await screen.findByRole("button", { name: "Q1" }));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.runQuery));
+    await waitFor(() => expect(screen.getByText("from-a")).toBeInTheDocument());
+    await user.click(screen.getByRole("button", { name: /disconnect/i }));
+    await user.click(screen.getByRole("button", { name: /^B$/i }));
+    await user.click(await screen.findByRole("button", { name: /connect/i }));
+    await user.click(await screen.findByRole("button", { name: "Q1" }));
+    expect(screen.queryByText("from-a")).toBeNull();
+    expect(screen.getByTestId(ResultsAccessibility.empty)).toHaveTextContent(
+      ResultsCopy.runQueryEmpty,
+    );
+  });
+
+  it("Queries + selects a new Query yy-MM-dd H:mm:ss and clears the active canvas and grid", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    const library = [savedQuery("q1", "Q1", "SELECT 1")];
+    vi.spyOn(ipc, "listSavedQueries").mockImplementation(async () => library);
+    vi.spyOn(ipc, "saveSavedQuery").mockImplementation(async (query) => {
+      library.push(query);
+      return query;
+    });
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
+    await addSelectFromUsers(user);
+    await user.click(await screen.findByRole("button", { name: "Q1" }));
+    await user.click(screen.getByTestId(QueriesAccessibility.newQuery));
+    expect(screen.getByText(/^Query \d{2}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/)).toBeInTheDocument();
+    expect(screen.getByText(VisualQueryCopy.emptyCanvasTitle)).toBeInTheDocument();
+    expect(screen.getByTestId(ResultsAccessibility.empty)).toHaveTextContent(
+      ResultsCopy.runQueryEmpty,
+    );
+    expect(QueriesCopy.empty).toBe("No saved queries");
   });
 });

@@ -1,0 +1,128 @@
+/** @vitest-environment jsdom */
+import { cleanup, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { QueriesAccessibility } from "../../../src/ui/library/queries-accessibility";
+import { QueriesColumn } from "../../../src/ui/library/queries-column";
+import { QueriesCopy } from "../../../src/ui/library/queries-copy";
+
+afterEach(() => cleanup());
+
+const q1 = {
+  id: "q1",
+  name: "Q1",
+  queryText: "SELECT 1",
+  connectionId: null,
+  databaseName: null,
+  createdAt: "1",
+  updatedAt: "1",
+  folderId: null,
+};
+const folder = { id: "f1", name: "Folder", createdAt: "1", updatedAt: "1" };
+
+describe("QueriesColumn", () => {
+  it("shows No saved queries when the library is empty", () => {
+    render(
+      <QueriesColumn
+        queries={[]}
+        folders={[]}
+        selectedQueryId={null}
+        onSelectQuery={vi.fn()}
+        onNewQuery={vi.fn()}
+        onRenameQuery={vi.fn()}
+        onDeleteQuery={vi.fn()}
+        onMoveQuery={vi.fn()}
+        onDeleteFolder={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId(QueriesAccessibility.column)).toHaveTextContent(QueriesCopy.empty);
+    expect(QueriesCopy.empty).toBe("No saved queries");
+  });
+
+  it("disables rename Save when the name is blank", async () => {
+    const user = userEvent.setup();
+    render(
+      <QueriesColumn
+        queries={[q1]}
+        folders={[]}
+        selectedQueryId="q1"
+        onSelectQuery={vi.fn()}
+        onNewQuery={vi.fn()}
+        onRenameQuery={vi.fn()}
+        onDeleteQuery={vi.fn()}
+        onMoveQuery={vi.fn()}
+        onDeleteFolder={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: QueriesCopy.rename }));
+    await user.clear(screen.getByLabelText(QueriesCopy.name));
+    expect(screen.getByRole("button", { name: QueriesCopy.save })).toBeDisabled();
+  });
+
+  it("runs a confirm step before deleteSavedQueries", async () => {
+    const user = userEvent.setup();
+    const onDeleteQuery = vi.fn();
+    render(
+      <QueriesColumn
+        queries={[q1]}
+        folders={[]}
+        selectedQueryId="q1"
+        onSelectQuery={vi.fn()}
+        onNewQuery={vi.fn()}
+        onRenameQuery={vi.fn()}
+        onDeleteQuery={onDeleteQuery}
+        onMoveQuery={vi.fn()}
+        onDeleteFolder={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: QueriesCopy.delete }));
+    expect(onDeleteQuery).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: QueriesCopy.confirmDelete }));
+    expect(onDeleteQuery).toHaveBeenCalledWith("q1");
+  });
+
+  it("move to folder calls onMoveQuery with the folder id", async () => {
+    const user = userEvent.setup();
+    const onMoveQuery = vi.fn();
+    render(
+      <QueriesColumn
+        queries={[q1]}
+        folders={[folder]}
+        selectedQueryId="q1"
+        onSelectQuery={vi.fn()}
+        onNewQuery={vi.fn()}
+        onRenameQuery={vi.fn()}
+        onDeleteQuery={vi.fn()}
+        onMoveQuery={onMoveQuery}
+        onDeleteFolder={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: QueriesCopy.move }));
+    await user.click(screen.getByRole("button", { name: "Folder" }));
+    expect(onMoveQuery).toHaveBeenCalledWith("q1", "f1");
+  });
+
+  it("delete folder offers Delete Folder Only and Delete Folder and Queries", async () => {
+    const user = userEvent.setup();
+    const onDeleteFolder = vi.fn();
+    render(
+      <QueriesColumn
+        queries={[{ ...q1, folderId: "f1" }]}
+        folders={[folder]}
+        selectedQueryId="q1"
+        onSelectQuery={vi.fn()}
+        onNewQuery={vi.fn()}
+        onRenameQuery={vi.fn()}
+        onDeleteQuery={vi.fn()}
+        onMoveQuery={vi.fn()}
+        onDeleteFolder={onDeleteFolder}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: QueriesCopy.deleteFolder }));
+    await user.click(screen.getByRole("button", { name: QueriesCopy.deleteFolderOnly }));
+    expect(onDeleteFolder).toHaveBeenCalledWith("f1", false);
+    await user.click(screen.getByRole("button", { name: QueriesCopy.deleteFolder }));
+    await user.click(screen.getByRole("button", { name: QueriesCopy.deleteFolderAndQueries }));
+    expect(onDeleteFolder).toHaveBeenCalledWith("f1", true);
+  });
+});

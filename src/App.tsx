@@ -1,12 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Group, Panel, Separator } from "react-resizable-panels";
 import { useStore } from "zustand";
 import type { ExecutableSQL, TableReference } from "./core";
 import type { ConnectResult, DragonIpc, IpcError, ProfileId } from "./ipc/contract";
 import { coreToTableRef, tableRefToCore } from "./ipc/table-ref";
 import { createTauriDragonIpc } from "./ipc/tauri-client";
+import { newSavedQueryName } from "./lib/new-saved-query-name";
 import { type AppStores, composeAppStores } from "./stores/compose-app-stores";
 import { runSelectOnActiveTab } from "./stores/run-select-on-active-tab";
 import { ConnectionPanel } from "./ui/connection/connection-panel";
+import { QueriesColumn } from "./ui/library/queries-column";
+import { createSavedQueryResultCache } from "./ui/library/saved-query-result-cache";
 import { QueryResultsPane } from "./ui/results/query-results-pane";
 import { TabBar } from "./ui/shell/tab-bar";
 import { TabBarCopy } from "./ui/shell/tab-bar-copy";
@@ -51,11 +55,17 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
   const connectionId = useStore(stores.session, (s) => s.connectionId);
   const profileId = useStore(stores.session, (s) => s.profileId);
   const tableRefs = useStore(stores.schema, (s) => s.tables);
+  const tablesLoading = useStore(stores.schema, (s) => s.tablesLoading);
+  const tablesErrorMessage = useStore(stores.schema, (s) => s.tablesErrorMessage);
   const columnNames = useStore(stores.schema, (s) => s.columnNames);
   const metadataErrorCode = useStore(stores.schema, (s) => s.metadataErrorMessage);
   const tabs = useStore(stores.tabs, (s) => s.tabs);
   const activeTabId = useStore(stores.tabs, (s) => s.activeTabId);
   const tabsReady = useStore(stores.tabs, (s) => s.tabsReady);
+  const savedQueryId = useStore(
+    stores.tabs,
+    (s) => s.tabs.find((t) => t.id === s.activeTabId)?.savedQueryId ?? null,
+  );
   const status = useStore(
     stores.tabs,
     (s) => s.tabs.find((t) => t.id === s.activeTabId)?.status ?? IDLE_STATUS,
@@ -64,11 +74,14 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
     stores.tabs,
     (s) => s.tabs.find((t) => t.id === s.activeTabId)?.compact ?? null,
   );
+  const libraryQueries = useStore(stores.library, (s) => s.queries);
+  const libraryFolders = useStore(stores.library, (s) => s.folders);
 
   /** Last live profile id — store clears before panel calls onDisconnected. */
   const lastProfileIdRef = useRef<ProfileId | null>(null);
   const formVisibilityTouchedRef = useRef(false);
   const tabDocumentsRef = useRef(createTabDocuments());
+  const savedQueryCacheRef = useRef(createSavedQueryResultCache());
   const [profilesReady, setProfilesReady] = useState(false);
   const [profileCount, setProfileCount] = useState(0);
   const [formVisible, setFormVisible] = useState(false);
@@ -142,7 +155,21 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
   function resetTabDocuments(): void {
     const ids = stores.tabs.getState().tabs.map((tab) => tab.id);
     tabDocumentsRef.current.resetAll(ids);
+    savedQueryCacheRef.current.clear();
     setDocsEpoch((value) => value + 1);
+  }
+
+  function resetActiveTabDocument(): void {
+    const tabId = stores.tabs.getState().activeTabId;
+    if (tabId === null) return;
+    const document = tabDocumentsRef.current.getOrCreate(tabId);
+    const priorFrom = document.committedFromTable;
+    document.startOver();
+    if (priorFrom !== null) {
+      stores.schema.getState().clearColumns();
+    }
+    setDocsEpoch((value) => value + 1);
+    stores.tabs.getState().restoreSavedQueryResult(tabId, null);
   }
 
   function handleConnected(result: ConnectResult): void {
@@ -180,7 +207,12 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
 
   const onRunQuery =
     isConnected && connectionId !== null
-      ? (sql: ExecutableSQL) => runSelectOnActiveTab(stores, ipc, sql)
+      ? (sql: ExecutableSQL) =>
+          runSelectOnActiveTab(stores, ipc, sql, (tab) => {
+            if (tab.savedQueryId !== null && tab.compact != null && tab.status?.kind === "ok") {
+              savedQueryCacheRef.current.write(tab.savedQueryId, tab.compact, tab.status);
+            }
+          })
       : undefined;
 
   function handleClearTabResults(): void {
@@ -197,6 +229,55 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
   function handleCloseTab(id: string): void {
     stores.tabs.getState().closeTab(id);
     tabDocumentsRef.current.delete(id);
+  }
+
+  function handleSelectQuery(queryId: string): void {
+    const tabId = stores.tabs.getState().activeTabId;
+    if (tabId === null) return;
+    stores.tabs.getState().setSavedQueryId(tabId, queryId);
+    stores.tabs.getState().restoreSavedQueryResult(tabId, savedQueryCacheRef.current.read(queryId));
+  }
+
+  async function handleNewQuery(): Promise<void> {
+    const tabId = stores.tabs.getState().activeTabId;
+    if (tabId === null) return;
+    const now = String(Date.now());
+    const session = stores.session.getState();
+    const id = crypto.randomUUID();
+    await stores.library.getState().saveSavedQuery({
+      id,
+      name: newSavedQueryName(new Date()),
+      queryText: "",
+      connectionId: session.connectionId,
+      databaseName: session.databaseName,
+      createdAt: now,
+      updatedAt: now,
+      folderId: null,
+    });
+    stores.tabs.getState().setSavedQueryId(tabId, id);
+    resetActiveTabDocument();
+  }
+
+  async function handleRenameQuery(id: string, name: string): Promise<void> {
+    const existing = stores.library.getState().queries.find((query) => query.id === id);
+    if (existing === undefined) return;
+    await stores.library.getState().saveSavedQuery({
+      ...existing,
+      name,
+      updatedAt: String(Date.now()),
+    });
+  }
+
+  async function handleDeleteQuery(id: string): Promise<void> {
+    await stores.library.getState().deleteSavedQueries([id]);
+  }
+
+  async function handleMoveQuery(id: string, folderId: string): Promise<void> {
+    await stores.library.getState().moveSavedQuery(id, folderId);
+  }
+
+  async function handleDeleteFolder(id: string, deleteQueries: boolean): Promise<void> {
+    await stores.library.getState().deleteFolder(id, deleteQueries);
   }
 
   const canvas =
@@ -237,6 +318,9 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
         formVisible={formVisible}
         onFormVisibleChange={handleFormVisibleChange}
         onProfilesLoaded={handleProfilesLoaded}
+        tables={tableRefs}
+        tablesLoading={tablesLoading}
+        tablesErrorMessage={tablesErrorMessage}
         connectProfile={(id) => stores.session.getState().connect(id)}
         disconnectSession={() => stores.session.getState().disconnect()}
         onConnected={handleConnected}
@@ -245,24 +329,44 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
         onSwitchFailure={handleSwitchFailure}
       />
       <div className="app-main-column" aria-busy={workspaceReady ? undefined : true}>
-        {workspaceReady ? (
-          <>
-            <TabBar
-              tabs={tabs.map((tab) => ({
-                id: tab.id,
-                title: TabBarCopy.untitled,
-                isActive: tab.id === activeTabId,
-              }))}
-              onNewTab={handleNewTab}
-              onSwitchTab={(id) => stores.tabs.getState().switchTab(id)}
-              onCloseTab={handleCloseTab}
+        <Group orientation="horizontal" className="app-workspace-split">
+          <Panel className="app-workspace-split__queries" defaultSize={220} minSize={160}>
+            <QueriesColumn
+              queries={libraryQueries}
+              folders={libraryFolders}
+              selectedQueryId={savedQueryId}
+              onSelectQuery={handleSelectQuery}
+              onNewQuery={handleNewQuery}
+              onRenameQuery={handleRenameQuery}
+              onDeleteQuery={handleDeleteQuery}
+              onMoveQuery={handleMoveQuery}
+              onDeleteFolder={handleDeleteFolder}
             />
-            <WorkspaceSplit
-              canvas={canvas}
-              results={<QueryResultsPane status={status} compact={compact} />}
-            />
-          </>
-        ) : null}
+          </Panel>
+          <Separator className="app-workspace-split__separator" />
+          <Panel className="app-workspace-split__main" minSize={400}>
+            <div className="app-workspace-main">
+              {workspaceReady ? (
+                <>
+                  <TabBar
+                    tabs={tabs.map((tab) => ({
+                      id: tab.id,
+                      title: TabBarCopy.untitled,
+                      isActive: tab.id === activeTabId,
+                    }))}
+                    onNewTab={handleNewTab}
+                    onSwitchTab={(id) => stores.tabs.getState().switchTab(id)}
+                    onCloseTab={handleCloseTab}
+                  />
+                  <WorkspaceSplit
+                    canvas={canvas}
+                    results={<QueryResultsPane status={status} compact={compact} />}
+                  />
+                </>
+              ) : null}
+            </div>
+          </Panel>
+        </Group>
       </div>
     </main>
   );

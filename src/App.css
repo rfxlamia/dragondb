@@ -31,6 +31,32 @@
   min-width: 0;
 }
 
+.app-workspace-split {
+  flex: 1;
+  height: 100%;
+  min-height: 0;
+  width: 100%;
+}
+
+.app-workspace-split__queries,
+.app-workspace-split__main {
+  min-height: 0;
+  min-width: 0;
+}
+
+.app-workspace-split__separator {
+  background: var(--neutral-300);
+}
+
+.app-workspace-main {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+}
+
+.app-workspace-main .tab-bar,
 .app-main-column .tab-bar {
   border-bottom: 1px solid var(--neutral-300);
 }

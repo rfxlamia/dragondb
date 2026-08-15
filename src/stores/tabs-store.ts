@@ -56,6 +56,11 @@ export type TabsState = {
   applyRunFailure: (tabId: string, message: string, generation?: number) => void;
   clearTabResults: (tabId: string) => void;
   clearInMemoryResults: () => void;
+  setSavedQueryId: (tabId: string, queryId: string | null) => void;
+  restoreSavedQueryResult: (
+    tabId: string,
+    cached: { compact: TabResultGrid; status: Extract<TabRunStatus, { kind: "ok" }> } | null,
+  ) => void;
 };
 
 function nowMillis(): string {
@@ -404,6 +409,31 @@ export function createTabsStore(ipc: DragonIpc, getters: TabsSessionGetters): St
             status: { kind: "idle" as const },
           })),
         }));
+      },
+
+      setSavedQueryId(tabId, queryId) {
+        if (!get().tabs.some((t) => t.id === tabId)) return;
+        patchTab(tabId, { savedQueryId: queryId });
+        const tab = get().tabs.find((t) => t.id === tabId);
+        if (tab) queueMetadataPersist(tab);
+      },
+
+      restoreSavedQueryResult(tabId, cached) {
+        if (!get().tabs.some((t) => t.id === tabId)) return;
+        bumpRunGeneration(tabId);
+        if (cached === null) {
+          patchTab(tabId, {
+            raw: null,
+            compact: null,
+            status: { kind: "idle" },
+          });
+          return;
+        }
+        patchTab(tabId, {
+          raw: null,
+          compact: cached.compact,
+          status: cached.status,
+        });
       },
     };
   });

@@ -636,4 +636,76 @@ describe("tabs-store", () => {
     expect(store.getState().activeTabId).toBe("hydrated");
     expect(saveTabState).not.toHaveBeenCalled();
   });
+
+  it("setSavedQueryId updates in-memory tab and persists metadata without changing compact/status", async () => {
+    const saveTabState = vi.fn(async () => undefined);
+    const ipc = {
+      saveTabState,
+      deleteTabState: vi.fn(async () => undefined),
+      listTabStates: vi.fn(async () => []),
+    } as unknown as DragonIpc;
+    const store = createTabsStore(ipc, {
+      getConnectionId: () => "c1",
+      getDatabaseName: () => "app",
+    });
+    const compact = { columns: ["id"], rows: [[1]] };
+    store.setState({
+      tabs: [
+        {
+          ...baseTab({ id: "t1", savedQueryId: null }),
+          compact,
+          status: { kind: "ok", rowCount: 1, durationMs: 3 },
+        },
+      ],
+      activeTabId: "t1",
+    });
+    saveTabState.mockClear();
+    store.getState().setSavedQueryId("t1", "q1");
+    expect(store.getState().tabs[0]?.savedQueryId).toBe("q1");
+    expect(store.getState().tabs[0]?.compact).toEqual(compact);
+    expect(store.getState().tabs[0]?.status).toEqual({
+      kind: "ok",
+      rowCount: 1,
+      durationMs: 3,
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(saveTabState).toHaveBeenCalled();
+    const persisted = saveTabState.mock.calls[0]?.[0];
+    expect(persisted?.savedQueryId).toBe("q1");
+    store.getState().setSavedQueryId("t1", null);
+    expect(store.getState().tabs[0]?.savedQueryId).toBeNull();
+  });
+
+  it("restoreSavedQueryResult restores a success cache or clears an uncached selection", () => {
+    const store = createTabsStore(
+      {
+        saveTabState: vi.fn(async () => undefined),
+        deleteTabState: vi.fn(async () => undefined),
+        listTabStates: vi.fn(async () => []),
+      } as unknown as DragonIpc,
+      { getConnectionId: () => "c1", getDatabaseName: () => "app" },
+    );
+    store.setState({ tabs: [{ ...baseTab({ id: "t1" }) }], activeTabId: "t1" });
+    const staleGeneration = store.getState().beginRun("t1");
+    const cached = {
+      compact: { columns: ["id"], rows: [[9]] },
+      status: { kind: "ok" as const, rowCount: 1, durationMs: 7 },
+    };
+    store.getState().restoreSavedQueryResult("t1", cached);
+    expect(store.getState().tabs[0]?.raw).toBeNull();
+    expect(store.getState().tabs[0]?.compact).toEqual(cached.compact);
+    expect(store.getState().tabs[0]?.status).toEqual(cached.status);
+    void store
+      .getState()
+      .applyRunSuccess(
+        "t1",
+        { columns: ["id"], rows: [[1]], durationMs: 1 },
+        staleGeneration ?? undefined,
+      );
+    expect(store.getState().tabs[0]?.compact).toEqual(cached.compact);
+    store.getState().restoreSavedQueryResult("t1", null);
+    expect(store.getState().tabs[0]?.compact).toBeNull();
+    expect(store.getState().tabs[0]?.status).toEqual({ kind: "idle" });
+  });
 });

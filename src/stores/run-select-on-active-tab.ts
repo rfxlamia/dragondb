@@ -9,6 +9,7 @@ import type { ExecutableSQL } from "../core";
 import type { DragonIpc, QueryResult } from "../ipc/contract";
 import { QUERY_FAILED_MESSAGE, unknownErrorMessage } from "../lib/unknown-error-message";
 import type { AppStores } from "./compose-app-stores";
+import type { TabState } from "./tabs-store";
 
 function ensureActiveTab(stores: AppStores): string {
   const { activeTabId, createTab } = stores.tabs.getState();
@@ -20,6 +21,7 @@ export async function runSelectOnActiveTab(
   stores: AppStores,
   ipc: DragonIpc,
   sql: ExecutableSQL,
+  onAppliedSuccess?: (tab: TabState) => void,
 ): Promise<QueryResult> {
   const connectionId = stores.session.getState().connectionId;
   if (connectionId === null) {
@@ -58,6 +60,10 @@ export async function runSelectOnActiveTab(
       );
     } catch {
       /* best-effort persist */
+    }
+    const tab = stores.tabs.getState().tabs.find((t) => t.id === executingTabId);
+    if (tab !== undefined) {
+      onAppliedSuccess?.(tab);
     }
   }
   return result;
