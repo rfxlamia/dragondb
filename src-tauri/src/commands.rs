@@ -498,9 +498,33 @@ pub async fn save_csv_file(
     csv_text: String,
     default_path: Option<String>,
 ) -> Result<SaveCsvFileResult, MappedIpcError> {
+    save_text_with_filter(app, csv_text, default_path, "CSV", &["csv".to_string()]).await
+}
+
+/// Generic text save via native save dialog with a caller-provided filter.
+/// Cancel → `{ canceled: true }` (no write, no throw).
+#[tauri::command(rename_all = "camelCase")]
+pub async fn save_text_file(
+    app: tauri::AppHandle,
+    text: String,
+    default_path: Option<String>,
+    filter_name: String,
+    extensions: Vec<String>,
+) -> Result<SaveCsvFileResult, MappedIpcError> {
+    save_text_with_filter(app, text, default_path, &filter_name, &extensions).await
+}
+
+async fn save_text_with_filter(
+    app: tauri::AppHandle,
+    text: String,
+    default_path: Option<String>,
+    filter_name: &str,
+    extensions: &[String],
+) -> Result<SaveCsvFileResult, MappedIpcError> {
     use tauri_plugin_dialog::DialogExt;
 
-    let mut builder = app.dialog().file().add_filter("CSV", &["csv"]);
+    let ext_refs: Vec<&str> = extensions.iter().map(String::as_str).collect();
+    let mut builder = app.dialog().file().add_filter(filter_name, &ext_refs);
     if let Some(name) = default_path.as_deref() {
         builder = builder.set_file_name(name);
     }
@@ -519,17 +543,17 @@ pub async fn save_csv_file(
     })?;
 
     let written = tauri::async_runtime::spawn_blocking(move || {
-        std::fs::write(&path_buf, csv_text.as_bytes()).map(|()| path_buf)
+        std::fs::write(&path_buf, text.as_bytes()).map(|()| path_buf)
     })
     .await
     .map_err(|e| MappedIpcError {
         kind: IpcErrorKind::Unknown,
-        message: format!("CSV write task failed: {e}"),
+        message: format!("Write task failed: {e}"),
         position: None,
     })?
     .map_err(|e| MappedIpcError {
         kind: IpcErrorKind::Unknown,
-        message: format!("Failed to write CSV file: {e}"),
+        message: format!("Failed to write file: {e}"),
         position: None,
     })?;
 

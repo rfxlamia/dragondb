@@ -79,4 +79,21 @@ describe("history-store", () => {
     await older;
     expect(store.getState().entries.map((e) => e.id)).toEqual(["new"]);
   });
+
+  it("refresh() with no args calls listHistory({ limit: 50 }) without profileId", async () => {
+    listHistory.mockResolvedValueOnce([]);
+    const store = createHistoryStore(ipc);
+    await store.getState().refresh();
+    expect(listHistory).toHaveBeenCalledWith({ limit: 50 });
+    expect(listHistory.mock.calls[0]?.[0]).not.toHaveProperty("profileId");
+  });
+
+  it("listHistory reject sets loadError and does not look like empty success", async () => {
+    listHistory.mockRejectedValueOnce(new Error("history boom"));
+    const store = createHistoryStore(ipc);
+    await store.getState().refresh();
+    expect(store.getState().loadError).toEqual(expect.any(String));
+    expect(store.getState().loadError?.length).toBeGreaterThan(0);
+    expect(store.getState().entries).toEqual([]);
+  });
 });

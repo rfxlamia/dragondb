@@ -41,7 +41,7 @@
   line-height: 1.4;
 }
 
-.vq-toolbar__view-sql {
+.vq-toolbar__history {
   background: transparent;
   border: 1px solid var(--neutral-300);
   border-radius: var(--radius);
@@ -52,6 +52,24 @@
   font-weight: 500;
   line-height: 1.4;
   margin-left: auto;
+  padding: 4px 12px;
+}
+
+.vq-toolbar__history:hover {
+  background: var(--primary-100);
+  border-color: var(--primary-300);
+}
+
+.vq-toolbar__view-sql {
+  background: transparent;
+  border: 1px solid var(--neutral-300);
+  border-radius: var(--radius);
+  color: var(--primary-700);
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.4;
   padding: 4px 12px;
 }
 

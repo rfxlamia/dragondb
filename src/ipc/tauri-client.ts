@@ -18,6 +18,8 @@ import type {
   SaveCsvFileResult,
   SavedQueryDto,
   SaveProfileInput,
+  SaveTextFileFilter,
+  SaveTextFileResult,
   TableRef,
   TabStateDto,
   UpdateRowInput,
@@ -190,6 +192,18 @@ export function createTauriDragonIpc(): DragonIpc {
     // SP-3 CSV save-file — real invoke (cancel returns `{ canceled: true }`).
     saveCsvFile(csvText: string, defaultPath?: string): Promise<SaveCsvFileResult> {
       return invokeCommand("save_csv_file", { csvText, defaultPath });
+    },
+    saveTextFile(
+      text: string,
+      defaultPath?: string,
+      filter?: SaveTextFileFilter,
+    ): Promise<SaveTextFileResult> {
+      return invokeCommand("save_text_file", {
+        text,
+        defaultPath,
+        filterName: filter?.name ?? "Text",
+        extensions: filter?.extensions ?? ["txt"],
+      });
     },
     // SP-3 row ops — invokeRowOp preserves RowOperationError kinds (not IpcError).
     updateRow(input: UpdateRowInput): Promise<void> {
