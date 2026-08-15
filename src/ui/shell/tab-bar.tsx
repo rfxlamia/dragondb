@@ -1,0 +1,72 @@
+import { TabBarAccessibility } from "./tab-bar-accessibility";
+import { TabBarCopy } from "./tab-bar-copy";
+import "./tab-bar.css";
+
+export type TabBarItem = {
+  id: string;
+  title: string;
+  isActive: boolean;
+};
+
+export type TabBarProps = {
+  tabs: TabBarItem[];
+  onNewTab: () => void;
+  onSwitchTab: (id: string) => void;
+  onCloseTab: (id: string) => void;
+};
+
+export function TabBar(props: TabBarProps): React.JSX.Element {
+  const { tabs, onNewTab, onSwitchTab, onCloseTab } = props;
+  const showStrip = tabs.length >= 2;
+  const soloTab = tabs.length === 1 ? tabs[0] : undefined;
+
+  return (
+    <div className="tab-bar">
+      {showStrip ? (
+        <div className="tab-bar__strip" data-testid={TabBarAccessibility.strip} role="tablist">
+          {tabs.map((tab) => (
+            <div className="tab-bar__item" key={tab.id}>
+              <button
+                type="button"
+                role="tab"
+                className={tab.isActive ? "tab-bar__tab tab-bar__tab--active" : "tab-bar__tab"}
+                aria-selected={tab.isActive}
+                onClick={() => onSwitchTab(tab.id)}
+              >
+                {tab.title}
+              </button>
+              <button
+                type="button"
+                className="tab-bar__close"
+                aria-label={TabBarCopy.closeTab}
+                onClick={() => onCloseTab(tab.id)}
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : null}
+      {soloTab !== undefined ? (
+        <button
+          type="button"
+          className="tab-bar__close tab-bar__close--solo"
+          data-testid={TabBarAccessibility.closeTab}
+          aria-label={TabBarCopy.closeTab}
+          onClick={() => onCloseTab(soloTab.id)}
+        >
+          ×
+        </button>
+      ) : null}
+      <button
+        type="button"
+        className="tab-bar__new"
+        data-testid={TabBarAccessibility.newTab}
+        aria-label={TabBarCopy.newTab}
+        onClick={onNewTab}
+      >
+        +
+      </button>
+    </div>
+  );
+}

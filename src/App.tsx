@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useStore } from "zustand";
 import type { ExecutableSQL, TableReference } from "./core";
 import type { ConnectResult, DragonIpc, IpcError, ProfileId } from "./ipc/contract";
@@ -8,9 +8,12 @@ import { type AppStores, composeAppStores } from "./stores/compose-app-stores";
 import { runSelectOnActiveTab } from "./stores/run-select-on-active-tab";
 import { ConnectionPanel } from "./ui/connection/connection-panel";
 import { QueryResultsPane } from "./ui/results/query-results-pane";
+import { TabBar } from "./ui/shell/tab-bar";
+import { TabBarCopy } from "./ui/shell/tab-bar-copy";
 import { WorkspaceSplit } from "./ui/shell/workspace-split";
 import { VisualQueryCanvas } from "./ui/visual-query/canvas";
 import { VisualQueryCopy } from "./ui/visual-query/copy";
+import { createTabDocuments } from "./ui/visual-query/tab-documents";
 import { WelcomeView } from "./ui/welcome/welcome-view";
 import "./App.css";
 
@@ -50,7 +53,9 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
   const tableRefs = useStore(stores.schema, (s) => s.tables);
   const columnNames = useStore(stores.schema, (s) => s.columnNames);
   const metadataErrorCode = useStore(stores.schema, (s) => s.metadataErrorMessage);
-  const canvasEpoch = useSyncExternalStore(stores.subscribeCanvasEpoch, stores.getCanvasEpoch);
+  const tabs = useStore(stores.tabs, (s) => s.tabs);
+  const activeTabId = useStore(stores.tabs, (s) => s.activeTabId);
+  const tabsReady = useStore(stores.tabs, (s) => s.tabsReady);
   const status = useStore(
     stores.tabs,
     (s) => s.tabs.find((t) => t.id === s.activeTabId)?.status ?? IDLE_STATUS,
@@ -63,9 +68,11 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
   /** Last live profile id — store clears before panel calls onDisconnected. */
   const lastProfileIdRef = useRef<ProfileId | null>(null);
   const formVisibilityTouchedRef = useRef(false);
+  const tabDocumentsRef = useRef(createTabDocuments());
   const [profilesReady, setProfilesReady] = useState(false);
   const [profileCount, setProfileCount] = useState(0);
   const [formVisible, setFormVisible] = useState(false);
+  const [docsEpoch, setDocsEpoch] = useState(0);
 
   useEffect(() => {
     if (isConnected && profileId !== null) {
@@ -130,9 +137,17 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
 
   const tables = tableRefs.map(tableRefToCore);
   const metadataErrorMessage = mapSchemaError(metadataErrorCode);
+  const workspaceReady = tabsReady && activeTabId !== null;
+
+  function resetTabDocuments(): void {
+    const ids = stores.tabs.getState().tabs.map((tab) => tab.id);
+    tabDocumentsRef.current.resetAll(ids);
+    setDocsEpoch((value) => value + 1);
+  }
 
   function handleConnected(result: ConnectResult): void {
     if (stores.shouldRemountCanvasOnConnect(result.profileId)) {
+      resetTabDocuments();
       stores.bumpCanvasEpoch();
     }
     stores.acknowledgeConnect(result.profileId);
@@ -143,6 +158,7 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
   }
 
   function handleSwitchSuccess(result: ConnectResult): void {
+    resetTabDocuments();
     stores.bumpCanvasEpoch();
     stores.acknowledgeConnect(result.profileId);
   }
@@ -168,23 +184,35 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
       : undefined;
 
   function handleClearTabResults(): void {
-    const activeTabId = stores.tabs.getState().activeTabId;
-    if (activeTabId === null) return;
-    stores.tabs.getState().clearTabResults(activeTabId);
+    const tabId = stores.tabs.getState().activeTabId;
+    if (tabId === null) return;
+    stores.tabs.getState().clearTabResults(tabId);
   }
 
-  const canvas = (
-    <VisualQueryCanvas
-      key={canvasEpoch}
-      tables={tables}
-      columnNames={columnNames}
-      metadataErrorMessage={metadataErrorMessage}
-      isConnected={isConnected}
-      onRunQuery={onRunQuery}
-      onClearTabResults={handleClearTabResults}
-      onCommittedFromChange={handleCommittedFromChange}
-    />
-  );
+  function handleNewTab(): void {
+    const created = stores.tabs.getState().createTab();
+    tabDocumentsRef.current.getOrCreate(created.id);
+  }
+
+  function handleCloseTab(id: string): void {
+    stores.tabs.getState().closeTab(id);
+    tabDocumentsRef.current.delete(id);
+  }
+
+  const canvas =
+    workspaceReady && activeTabId !== null ? (
+      <VisualQueryCanvas
+        key={`${activeTabId}:${docsEpoch}`}
+        document={tabDocumentsRef.current.getOrCreate(activeTabId)}
+        tables={tables}
+        columnNames={columnNames}
+        metadataErrorMessage={metadataErrorMessage}
+        isConnected={isConnected}
+        onRunQuery={onRunQuery}
+        onClearTabResults={handleClearTabResults}
+        onCommittedFromChange={handleCommittedFromChange}
+      />
+    ) : null;
 
   if (!profilesReady) {
     return <main aria-busy="true" className="app-startup" />;
@@ -214,11 +242,25 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
         onSwitchSuccess={handleSwitchSuccess}
         onSwitchFailure={handleSwitchFailure}
       />
-      <div className="app-main-column">
-        <WorkspaceSplit
-          canvas={canvas}
-          results={<QueryResultsPane status={status} compact={compact} />}
-        />
+      <div className="app-main-column" aria-busy={workspaceReady ? undefined : true}>
+        {workspaceReady ? (
+          <>
+            <TabBar
+              tabs={tabs.map((tab) => ({
+                id: tab.id,
+                title: TabBarCopy.untitled,
+                isActive: tab.id === activeTabId,
+              }))}
+              onNewTab={handleNewTab}
+              onSwitchTab={(id) => stores.tabs.getState().switchTab(id)}
+              onCloseTab={handleCloseTab}
+            />
+            <WorkspaceSplit
+              canvas={canvas}
+              results={<QueryResultsPane status={status} compact={compact} />}
+            />
+          </>
+        ) : null}
       </div>
     </main>
   );

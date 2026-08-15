@@ -563,4 +563,77 @@ describe("tabs-store", () => {
     expect(store.getState().activeTabId).toBe("good");
     expect(store.getState().tabs.find((t) => t.id === "good")?.compact?.rows).toEqual([["ok"]]);
   });
+
+  it("does not create a default tab before listTabStates resolves, then creates one when empty", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const saveTabState = vi.fn(async () => undefined);
+    const ipc = {
+      saveTabState,
+      deleteTabState: vi.fn(async () => undefined),
+      listTabStates: vi.fn(async () => {
+        await gate;
+        return [];
+      }),
+    } as unknown as DragonIpc;
+    const store = createTabsStore(ipc, {
+      getConnectionId: () => null,
+      getDatabaseName: () => null,
+    });
+    expect(store.getState().tabsReady).toBe(false);
+    expect(store.getState().tabs).toHaveLength(0);
+    const pending = store.getState().refresh();
+    expect(store.getState().tabs).toHaveLength(0);
+    expect(store.getState().tabsReady).toBe(false);
+    expect(store.getState().activeTabId).toBeNull();
+    release();
+    await pending;
+    expect(store.getState().tabsReady).toBe(true);
+    expect(store.getState().tabs).toHaveLength(1);
+    const created = store.getState().tabs[0];
+    expect(created).toBeDefined();
+    expect(store.getState().activeTabId).toBe(created?.id);
+    expect(created?.queryText).toBe("");
+    expect(saveTabState).toHaveBeenCalled();
+  });
+
+  it("sets tabsReady with one in-memory tab when listTabStates rejects", async () => {
+    const saveTabState = vi.fn(async () => undefined);
+    const ipc = {
+      saveTabState,
+      deleteTabState: vi.fn(async () => undefined),
+      listTabStates: vi.fn(async () => {
+        throw new Error("hydrate failed");
+      }),
+    } as unknown as DragonIpc;
+    const store = createTabsStore(ipc, {
+      getConnectionId: () => null,
+      getDatabaseName: () => null,
+    });
+    await store.getState().refresh();
+    expect(store.getState().tabsReady).toBe(true);
+    expect(store.getState().tabs).toHaveLength(1);
+    expect(store.getState().activeTabId).toBe(store.getState().tabs[0]?.id);
+    expect(saveTabState).toHaveBeenCalled();
+  });
+
+  it("preserves hydrated tabs without adding a default", async () => {
+    const saveTabState = vi.fn(async () => undefined);
+    const ipc = {
+      saveTabState,
+      deleteTabState: vi.fn(async () => undefined),
+      listTabStates: vi.fn(async () => [baseTab({ id: "hydrated", isActive: true })]),
+    } as unknown as DragonIpc;
+    const store = createTabsStore(ipc, {
+      getConnectionId: () => "c1",
+      getDatabaseName: () => "app",
+    });
+    await store.getState().refresh();
+    expect(store.getState().tabs.map((t) => t.id)).toEqual(["hydrated"]);
+    expect(store.getState().tabsReady).toBe(true);
+    expect(store.getState().activeTabId).toBe("hydrated");
+    expect(saveTabState).not.toHaveBeenCalled();
+  });
 });
