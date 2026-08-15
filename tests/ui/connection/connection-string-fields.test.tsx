@@ -13,13 +13,7 @@ describe("ConnectionStringFields", () => {
     const user = userEvent.setup();
     const onChange = vi.fn();
     render(
-      <ConnectionStringFields
-        value=""
-        onChange={onChange}
-        readOnly={false}
-        errorMessage={null}
-        onCopy={vi.fn()}
-      />,
+      <ConnectionStringFields value="" onChange={onChange} readOnly={false} onCopy={vi.fn()} />,
     );
     await user.type(
       screen.getByTestId(ConnectionAccessibility.connectionStringField),
@@ -39,7 +33,6 @@ describe("ConnectionStringFields", () => {
         value="postgresql://alice:YOUR_PASSWORD@localhost/app"
         onChange={vi.fn()}
         readOnly={true}
-        errorMessage={null}
         onCopy={onCopy}
       />,
     );

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { ColumnInfo, DragonIpc } from "../../src/ipc/contract";
-import { createSchemaStore } from "../../src/stores/schema-store";
+import { createSchemaStore, TABLES_LOAD_FAILED } from "../../src/stores/schema-store";
 
 function column(name: string): ColumnInfo {
   return {
@@ -152,7 +152,7 @@ describe("schema-store", () => {
     const store = createSchemaStore(ipc);
     await store.getState().loadTables("c-a");
     expect(store.getState().tables).toEqual([]);
-    expect(store.getState().metadataErrorMessage).toBe("tables_load_failed");
+    expect(store.getState().metadataErrorMessage).toBe(TABLES_LOAD_FAILED);
     await store.getState().loadTables("c-a");
     expect(store.getState().tables).toEqual([{ name: "users", schema: "public" }]);
     expect(store.getState().metadataErrorMessage).toBeNull();
@@ -191,7 +191,7 @@ describe("schema-store", () => {
     rejectTables(new Error("boom"));
     await pending;
     expect(store.getState().tablesLoading).toBe(false);
-    expect(store.getState().tablesErrorMessage).toBe("tables_load_failed");
+    expect(store.getState().tablesErrorMessage).toBe(TABLES_LOAD_FAILED);
     expect(store.getState().tables).toEqual([]);
   });
 

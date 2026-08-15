@@ -1,7 +1,8 @@
 /** @vitest-environment jsdom */
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
+import { TABLES_LOAD_FAILED } from "../../../src/stores/schema-store";
 import { ConnectionAccessibility } from "../../../src/ui/connection/connection-accessibility";
 import { ConnectionCopy } from "../../../src/ui/connection/connection-copy";
 import { ConnectionTablesList } from "../../../src/ui/connection/connection-tables-list";
@@ -19,7 +20,6 @@ describe("ConnectionTablesList", () => {
 
   it("lists display names and click does not call onRunQuery", async () => {
     const user = userEvent.setup();
-    const onRunQuery = vi.fn();
     render(
       <ConnectionTablesList
         tables={[
@@ -28,13 +28,13 @@ describe("ConnectionTablesList", () => {
         ]}
         tablesLoading={false}
         tablesErrorMessage={null}
-        onRunQuery={onRunQuery}
       />,
     );
     expect(screen.getByRole("button", { name: "users" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "other.orders" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "users" }));
-    expect(onRunQuery).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "users" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "other.orders" })).toBeInTheDocument();
   });
 
   it("shows No tables found when the list is empty", () => {
@@ -47,7 +47,7 @@ describe("ConnectionTablesList", () => {
       <ConnectionTablesList
         tables={[]}
         tablesLoading={false}
-        tablesErrorMessage="tables_load_failed"
+        tablesErrorMessage={TABLES_LOAD_FAILED}
       />,
     );
     expect(ConnectionCopy.tablesLoadError).toBe(

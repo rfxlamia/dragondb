@@ -7,9 +7,8 @@ import type {
   ProfileId,
   TableRef,
 } from "../../ipc/contract";
-import { ConnectionStringParseError, parseConnectionString } from "../../lib/connection-string";
-import { ConnectionConfirmDialog } from "./connection-confirm-dialog";
-import { ConnectionCopy, humanIpcErrorMessage, isIpcError } from "./connection-copy";
+import { ConnectionStringParseError } from "../../lib/connection-string";
+import { ConnectionCopy, humanIpcErrorMessage } from "./connection-copy";
 import {
   ConnectionForm,
   type ConnectionFormValue,
@@ -19,7 +18,8 @@ import {
 import { ConnectionPanelActions } from "./connection-panel-actions";
 import { ConnectionProfileList } from "./connection-profile-list";
 import { ConnectionTablesList } from "./connection-tables-list";
-import { copyUriForProfile, profileFromParsedUri } from "./connection-uri";
+import { useConnectionConfirmations } from "./use-connection-confirmations";
+import { useConnectionStringMode } from "./use-connection-string-mode";
 import "./connection.css";
 
 export interface ConnectionPanelProps {
@@ -42,11 +42,6 @@ export interface ConnectionPanelProps {
   onSwitchFailure: (error: IpcError) => void;
 }
 
-function toIpcError(error: unknown): IpcError {
-  if (isIpcError(error)) return error;
-  return { kind: "unknown", message: humanIpcErrorMessage(error) };
-}
-
 export function ConnectionPanel(props: ConnectionPanelProps): React.JSX.Element {
   const {
     ipc,
@@ -62,8 +57,6 @@ export function ConnectionPanel(props: ConnectionPanelProps): React.JSX.Element 
     disconnectSession,
     onConnected,
     onDisconnected,
-    onSwitchSuccess,
-    onSwitchFailure,
   } = props;
 
   const [profiles, setProfiles] = useState<ConnectionProfileDto[]>([]);
@@ -76,11 +69,25 @@ export function ConnectionPanel(props: ConnectionPanelProps): React.JSX.Element 
   const [connectedProfileId, setConnectedProfileId] = useState<ProfileId | null>(
     isConnected ? (activeProfileId ?? null) : null,
   );
-  const [pendingSwitchId, setPendingSwitchId] = useState<ProfileId | null>(null);
-  const [pendingDeleteId, setPendingDeleteId] = useState<ProfileId | null>(null);
   const [busy, setBusy] = useState(false);
-  const [connectionStringMode, setConnectionStringMode] = useState(false);
-  const [connectionStringDraft, setConnectionStringDraft] = useState("");
+  const uri = useConnectionStringMode();
+  const confirm = useConnectionConfirmations({
+    ...props,
+    profiles,
+    selectedId,
+    sessionClaimed,
+    connectedProfileId,
+    busy,
+    resetUriMode: uri.resetUriMode,
+    setSelectedId,
+    setForm,
+    setDirty,
+    setSessionClaimed,
+    setConnectedProfileId,
+    setErrorMessage,
+    setBusy,
+    setProfiles,
+  });
 
   const canConnect = selectedId !== null && !dirty && !sessionClaimed && !busy;
 
@@ -122,11 +129,6 @@ export function ConnectionPanel(props: ConnectionPanelProps): React.JSX.Element 
     };
   }, [ipc, activeProfileId]);
 
-  function resetUriMode(): void {
-    setConnectionStringMode(false);
-    setConnectionStringDraft("");
-  }
-
   function updateForm(next: ConnectionFormValue): void {
     setForm(next);
     setDirty(true);
@@ -138,9 +140,8 @@ export function ConnectionPanel(props: ConnectionPanelProps): React.JSX.Element 
     setForm(emptyConnectionFormValue());
     setDirty(false);
     setErrorMessage(null);
-    setPendingSwitchId(null);
-    setPendingDeleteId(null);
-    resetUriMode();
+    confirm.clearPending();
+    uri.resetUriMode();
     onFormVisibleChange(true);
   }
 
@@ -149,37 +150,22 @@ export function ConnectionPanel(props: ConnectionPanelProps): React.JSX.Element 
     // Prefer parent activeProfileId so switch still confirms when App session lags behind panel.
     const liveId = sessionClaimed ? (activeProfileId ?? connectedProfileId ?? selectedId) : null;
     if (liveId !== null && profile.id !== liveId) {
-      setPendingSwitchId(profile.id);
-      setPendingDeleteId(null);
+      confirm.requestSwitch(profile.id);
       return;
     }
     setSelectedId(profile.id);
     setForm(formValueFromProfile(profile));
     setDirty(false);
-    setPendingSwitchId(null);
-    resetUriMode();
+    confirm.clearPending();
+    uri.resetUriMode();
     onFormVisibleChange(true);
-  }
-
-  async function handleCopyConnectionString(): Promise<void> {
-    const uri = selectedId !== null ? copyUriForProfile(form.profile) : connectionStringDraft;
-    await navigator.clipboard.writeText(uri);
   }
 
   async function handleSave(): Promise<void> {
     setBusy(true);
     setErrorMessage(null);
     try {
-      let profile = form.profile;
-      let secrets = form.secrets;
-      if (connectionStringMode && selectedId === null) {
-        const parsed = parseConnectionString(connectionStringDraft);
-        profile = profileFromParsedUri(form.profile, parsed);
-        secrets = {
-          ...form.secrets,
-          ...(parsed.password !== undefined ? { password: parsed.password } : {}),
-        };
-      }
+      const { profile, secrets } = uri.applyParseOnSave(form, selectedId);
       const saved = await ipc.saveProfile({
         id: selectedId ?? undefined,
         profile,
@@ -233,81 +219,6 @@ export function ConnectionPanel(props: ConnectionPanelProps): React.JSX.Element 
     }
   }
 
-  async function confirmSwitch(): Promise<void> {
-    if (pendingSwitchId === null) return;
-    const targetId = pendingSwitchId;
-    setPendingSwitchId(null);
-    setBusy(true);
-    setErrorMessage(null);
-    try {
-      await disconnectSession();
-    } catch (error) {
-      // Keep Connected claim; disconnect failure is not connect-B failure.
-      setErrorMessage(humanIpcErrorMessage(error));
-      setBusy(false);
-      return;
-    }
-    // A torn down — clear claim before attempting B.
-    setSessionClaimed(false);
-    setConnectedProfileId(null);
-    onDisconnected();
-    try {
-      const result = await connectProfile(targetId);
-      setSessionClaimed(true);
-      setConnectedProfileId(result.profileId);
-      setSelectedId(targetId);
-      const target = profiles.find((p) => p.id === targetId);
-      if (target) {
-        setForm(formValueFromProfile(target));
-        setDirty(false);
-      }
-      resetUriMode();
-      onSwitchSuccess(result);
-    } catch (error) {
-      setSessionClaimed(false);
-      setConnectedProfileId(null);
-      const ipcError = toIpcError(error);
-      setErrorMessage(ipcError.message);
-      onSwitchFailure(ipcError);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function confirmDelete(): Promise<void> {
-    if (pendingDeleteId === null) return;
-    const id = pendingDeleteId;
-    setPendingDeleteId(null);
-    setBusy(true);
-    setErrorMessage(null);
-    try {
-      const liveId = connectedProfileId ?? activeProfileId ?? selectedId;
-      const isActiveConnected = sessionClaimed && liveId === id;
-      if (isActiveConnected) {
-        await disconnectSession();
-        setSessionClaimed(false);
-        setConnectedProfileId(null);
-        onDisconnected();
-      }
-      await ipc.deleteProfile(id);
-      const list = await refreshProfiles();
-      if (selectedId === id) {
-        setSelectedId(null);
-        setForm(emptyConnectionFormValue());
-        setDirty(false);
-        setErrorMessage(null);
-        resetUriMode();
-      }
-      if (list.length === 0) {
-        onFormVisibleChange(false);
-      }
-    } catch (error) {
-      setErrorMessage(humanIpcErrorMessage(error));
-    } finally {
-      setBusy(false);
-    }
-  }
-
   return (
     <section className="connection-panel" aria-label={ConnectionCopy.panelTitle}>
       <h2>{ConnectionCopy.panelTitle}</h2>
@@ -332,21 +243,19 @@ export function ConnectionPanel(props: ConnectionPanelProps): React.JSX.Element 
           <ConnectionForm
             value={form}
             onChange={updateForm}
-            connectionStringMode={connectionStringMode}
+            connectionStringMode={uri.connectionStringMode}
             onConnectionStringModeChange={(next) => {
-              setConnectionStringMode(next);
+              uri.setConnectionStringMode(next);
               setErrorMessage(null);
             }}
-            connectionStringValue={
-              selectedId !== null ? copyUriForProfile(form.profile) : connectionStringDraft
-            }
+            connectionStringValue={uri.uriValue(selectedId, form)}
             onConnectionStringChange={(next) => {
-              setConnectionStringDraft(next);
+              uri.setConnectionStringDraft(next);
               setDirty(true);
               setErrorMessage(null);
             }}
             connectionStringReadOnly={selectedId !== null}
-            onCopyConnectionString={() => void handleCopyConnectionString()}
+            onCopyConnectionString={() => void uri.copy(selectedId, form)}
           />
 
           <ConnectionPanelActions
@@ -357,36 +266,13 @@ export function ConnectionPanel(props: ConnectionPanelProps): React.JSX.Element 
             onSave={() => void handleSave()}
             onConnect={() => void handleConnect()}
             onDisconnect={() => void handleDisconnect()}
-            onRequestDelete={() => {
-              setPendingDeleteId(selectedId);
-              setPendingSwitchId(null);
-            }}
+            onRequestDelete={() => confirm.requestDelete(selectedId)}
             onCancel={() => onFormVisibleChange(false)}
           />
         </>
       ) : null}
 
-      {pendingSwitchId !== null ? (
-        <ConnectionConfirmDialog
-          title="Switch connection"
-          prompt={ConnectionCopy.switchPrompt}
-          confirmLabel={ConnectionCopy.confirmSwitch}
-          busy={busy}
-          onConfirm={() => void confirmSwitch()}
-          onCancel={() => setPendingSwitchId(null)}
-        />
-      ) : null}
-
-      {pendingDeleteId !== null ? (
-        <ConnectionConfirmDialog
-          title="Delete profile"
-          prompt={ConnectionCopy.deletePrompt}
-          confirmLabel={ConnectionCopy.confirmDelete}
-          busy={busy}
-          onConfirm={() => void confirmDelete()}
-          onCancel={() => setPendingDeleteId(null)}
-        />
-      ) : null}
+      {confirm.dialogs}
 
       {errorMessage ? (
         <p className="connection-panel__status" role="status">

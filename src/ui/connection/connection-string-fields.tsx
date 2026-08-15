@@ -5,10 +5,9 @@ export function ConnectionStringFields(props: {
   value: string;
   onChange: (next: string) => void;
   readOnly: boolean;
-  errorMessage: string | null;
   onCopy: () => void;
 }): React.JSX.Element {
-  const { value, onChange, readOnly, errorMessage, onCopy } = props;
+  const { value, onChange, readOnly, onCopy } = props;
   return (
     <div className="connection-string-fields">
       <textarea
@@ -22,7 +21,6 @@ export function ConnectionStringFields(props: {
       <button type="button" onClick={onCopy}>
         {ConnectionCopy.copyConnectionString}
       </button>
-      {errorMessage ? <p className="connection-panel__status">{errorMessage}</p> : null}
     </div>
   );
 }

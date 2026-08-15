@@ -3,6 +3,7 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createMockDragonIpc, fixtureProfileFields } from "../../../src/ipc/mock";
+import { TABLES_LOAD_FAILED } from "../../../src/stores/schema-store";
 import { ConnectionAccessibility } from "../../../src/ui/connection/connection-accessibility";
 import { ConnectionCopy } from "../../../src/ui/connection/connection-copy";
 import { ConnectionPanel } from "../../../src/ui/connection/connection-panel";
@@ -535,7 +536,7 @@ describe("ConnectionPanel Save-then-Connect", () => {
         onProfilesLoaded={vi.fn()}
         tables={[{ schema: "public", name: "users" }]}
         tablesLoading={false}
-        tablesErrorMessage="tables_load_failed"
+        tablesErrorMessage={TABLES_LOAD_FAILED}
         {...sessionPropsFromIpc(ipc)}
         onConnected={vi.fn()}
         onDisconnected={vi.fn()}

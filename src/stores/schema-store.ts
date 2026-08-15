@@ -1,6 +1,9 @@
 import { createStore, type StoreApi } from "zustand/vanilla";
 import type { ConnectionId, DragonIpc, TableRef } from "../ipc/contract";
 
+/** Sentinel written on listTables failure; tables UI matches this exact code. */
+export const TABLES_LOAD_FAILED = "tables_load_failed";
+
 export type SchemaState = {
   tables: TableRef[];
   columnNames: string[];
@@ -47,8 +50,8 @@ export function createSchemaStore(ipc: DragonIpc): StoreApi<SchemaState> {
         set({
           tables: [],
           tablesLoading: false,
-          tablesErrorMessage: "tables_load_failed",
-          metadataErrorMessage: "tables_load_failed",
+          tablesErrorMessage: TABLES_LOAD_FAILED,
+          metadataErrorMessage: TABLES_LOAD_FAILED,
         });
       }
     },

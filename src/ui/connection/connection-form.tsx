@@ -144,7 +144,6 @@ export function ConnectionForm(props: {
           value={connectionStringValue}
           onChange={(next) => onConnectionStringChange?.(next)}
           readOnly={connectionStringReadOnly}
-          errorMessage={null}
           onCopy={() => onCopyConnectionString?.()}
         />
       ) : (
