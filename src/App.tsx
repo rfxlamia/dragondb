@@ -1,3 +1,4 @@
+import { listen } from "@tauri-apps/api/event";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Group, Panel, Separator } from "react-resizable-panels";
 import { useStore } from "zustand";
@@ -9,13 +10,23 @@ import { newSavedQueryName } from "./lib/new-saved-query-name";
 import { type AppStores, composeAppStores } from "./stores/compose-app-stores";
 import { runSelectOnActiveTab } from "./stores/run-select-on-active-tab";
 import { ConnectionPanel } from "./ui/connection/connection-panel";
+import { HelpDialog } from "./ui/help/help-dialog";
+import { SettingsDialog } from "./ui/help/settings-dialog";
+import { ShortcutsDialog } from "./ui/help/shortcuts-dialog";
 import { QueriesColumn } from "./ui/library/queries-column";
 import { createSavedQueryResultCache } from "./ui/library/saved-query-result-cache";
 import { QueryResultsPane } from "./ui/results/query-results-pane";
 import { TabBar } from "./ui/shell/tab-bar";
 import { TabBarCopy } from "./ui/shell/tab-bar-copy";
+import {
+  handleMenuEvent,
+  handleWorkspaceKeydown,
+  isTauriRuntime,
+  type MenuEventId,
+  type WorkspaceAccelContext,
+} from "./ui/shell/workspace-accelerators";
 import { WorkspaceSplit } from "./ui/shell/workspace-split";
-import { VisualQueryCanvas } from "./ui/visual-query/canvas";
+import { VisualQueryCanvas, type VisualQueryCanvasHandle } from "./ui/visual-query/canvas";
 import { VisualQueryCopy } from "./ui/visual-query/copy";
 import { createTabDocuments } from "./ui/visual-query/tab-documents";
 import { WelcomeView } from "./ui/welcome/welcome-view";
@@ -86,6 +97,20 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
   const [profileCount, setProfileCount] = useState(0);
   const [formVisible, setFormVisible] = useState(false);
   const [docsEpoch, setDocsEpoch] = useState(0);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const canvasHandleRef = useRef<VisualQueryCanvasHandle | null>(null);
+  const accelCtxRef = useRef<WorkspaceAccelContext>({
+    newTab: () => {},
+    closeTab: () => {},
+    runQuery: () => {},
+    canRun: () => false,
+    welcome: true,
+    openHelp: () => {},
+    openShortcuts: () => {},
+    openSettings: () => {},
+  });
 
   useEffect(() => {
     if (isConnected && profileId !== null) {
@@ -137,6 +162,63 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
   }, [stores]);
 
   const welcome = profilesReady && profileCount === 0 && !formVisible;
+
+  function handleNewTab(): void {
+    const created = stores.tabs.getState().createTab();
+    tabDocumentsRef.current.getOrCreate(created.id);
+  }
+
+  function handleCloseTab(id: string): void {
+    stores.tabs.getState().closeTab(id);
+    tabDocumentsRef.current.delete(id);
+  }
+
+  accelCtxRef.current = {
+    newTab: handleNewTab,
+    closeTab: () => {
+      const id = stores.tabs.getState().activeTabId;
+      if (id !== null) handleCloseTab(id);
+    },
+    runQuery: () => {
+      canvasHandleRef.current?.runIfRunnable();
+    },
+    canRun: () => canvasHandleRef.current?.canRun() ?? false,
+    welcome,
+    openHelp: () => setHelpOpen(true),
+    openShortcuts: () => setShortcutsOpen(true),
+    openSettings: () => setSettingsOpen(true),
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    let unlisten: (() => void) | undefined;
+    void listen<MenuEventId>("dragondb://menu", (event) => {
+      handleMenuEvent(event.payload, accelCtxRef.current);
+    })
+      .then((fn) => {
+        if (cancelled) {
+          fn();
+          return;
+        }
+        unlisten = fn;
+      })
+      .catch(() => {
+        /* non-Tauri unit tests still exercise the keydown fallback */
+      });
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (isTauriRuntime()) return;
+    function onKeyDown(event: KeyboardEvent): void {
+      handleWorkspaceKeydown(event, accelCtxRef.current);
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   useEffect(() => {
     if (!profilesReady || welcome) return;
@@ -221,16 +303,6 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
     stores.tabs.getState().clearTabResults(tabId);
   }
 
-  function handleNewTab(): void {
-    const created = stores.tabs.getState().createTab();
-    tabDocumentsRef.current.getOrCreate(created.id);
-  }
-
-  function handleCloseTab(id: string): void {
-    stores.tabs.getState().closeTab(id);
-    tabDocumentsRef.current.delete(id);
-  }
-
   function handleSelectQuery(queryId: string): void {
     const tabId = stores.tabs.getState().activeTabId;
     if (tabId === null) return;
@@ -284,6 +356,7 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
     workspaceReady && activeTabId !== null ? (
       <VisualQueryCanvas
         key={`${activeTabId}:${docsEpoch}`}
+        ref={canvasHandleRef}
         document={tabDocumentsRef.current.getOrCreate(activeTabId)}
         tables={tables}
         columnNames={columnNames}
@@ -297,15 +370,32 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
       />
     ) : null;
 
+  const platform = typeof navigator === "undefined" ? "Win32" : navigator.platform;
+  const chromeDialogs = (
+    <>
+      <HelpDialog open={helpOpen} onOpenChange={setHelpOpen} platform={platform} />
+      <ShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} platform={platform} />
+      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+    </>
+  );
+
   if (!profilesReady) {
-    return <main aria-busy="true" className="app-startup" />;
+    return (
+      <>
+        <main aria-busy="true" className="app-startup" />
+        {chromeDialogs}
+      </>
+    );
   }
 
   if (welcome) {
     return (
-      <main className="app-welcome">
-        <WelcomeView onConnectToServer={() => handleFormVisibleChange(true)} />
-      </main>
+      <>
+        <main className="app-welcome">
+          <WelcomeView onConnectToServer={() => handleFormVisibleChange(true)} />
+        </main>
+        {chromeDialogs}
+      </>
     );
   }
 
@@ -368,6 +458,7 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
           </Panel>
         </Group>
       </div>
+      {chromeDialogs}
     </main>
   );
 }

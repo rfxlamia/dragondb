@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useImperativeHandle, useRef, useState } from "react";
 import type { StoreApi } from "zustand/vanilla";
 import type { ClauseKind, ExecutableSQL, StatementKind, TableReference } from "../../core";
 import { CanvasPresentation, canRun, generateSQL, QueryDocument } from "../../core";
@@ -27,11 +27,17 @@ function previewSQL(doc: QueryDocument): string {
   return generateSQL(doc)?.display ?? VisualQueryCopy.sqlPreviewEmpty;
 }
 
+export type VisualQueryCanvasHandle = {
+  runIfRunnable: () => boolean;
+  canRun: () => boolean;
+};
+
 export type VisualQueryCanvasProps = {
   tables: TableReference[];
   columnNames: string[];
   metadataErrorMessage: string | null;
   isConnected: boolean;
+  ref?: React.Ref<VisualQueryCanvasHandle>;
   onRunQuery?: (sql: ExecutableSQL) => Promise<QueryResult>;
   /** Clears in-memory tab results (App → clearTabResults(activeTabId)). */
   onClearTabResults?: () => void;
@@ -62,6 +68,7 @@ export function VisualQueryCanvas(props: VisualQueryCanvasProps): React.JSX.Elem
     onCommittedFromChange,
     historyStore,
     saveTextFile,
+    ref,
   } = props;
 
   const [doc] = useState(() => props.document ?? new QueryDocument());
@@ -164,6 +171,15 @@ export function VisualQueryCanvas(props: VisualQueryCanvasProps): React.JSX.Elem
       }
     }
   }
+
+  useImperativeHandle(ref, () => ({
+    canRun: () => canRunQuery,
+    runIfRunnable: () => {
+      if (!canRunQuery) return false;
+      void handleRunQuery();
+      return true;
+    },
+  }));
 
   const statementKind = presentation.statementKind;
   const chainCards: React.ReactNode[] = [];

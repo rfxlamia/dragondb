@@ -11,6 +11,31 @@ vi.mock("../../src/ipc/tauri-client", () => ({
   }),
 }));
 
+const menuListen = vi.hoisted(() => {
+  let registeredListener: ((event: { payload: string }) => void) | undefined;
+  return {
+    listen: vi.fn(async (_event: string, listener: (event: { payload: string }) => void) => {
+      registeredListener = listener;
+      return () => {
+        if (registeredListener === listener) {
+          registeredListener = undefined;
+        }
+      };
+    }),
+    emit(id: string) {
+      registeredListener?.({ payload: id });
+    },
+    reset() {
+      registeredListener = undefined;
+    },
+  };
+});
+
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: (event: string, listener: (event: { payload: string }) => void) =>
+    menuListen.listen(event, listener),
+}));
+
 import type { UserEvent } from "@testing-library/user-event";
 import App from "../../src/App";
 import type { DragonIpc } from "../../src/ipc/contract";
@@ -21,17 +46,28 @@ import {
 } from "../../src/ipc/mock";
 import { ConnectionAccessibility } from "../../src/ui/connection/connection-accessibility";
 import { ConnectionCopy } from "../../src/ui/connection/connection-copy";
+import { HelpAccessibility } from "../../src/ui/help/help-accessibility";
+import { HelpCopy } from "../../src/ui/help/help-copy";
 import { QueriesAccessibility } from "../../src/ui/library/queries-accessibility";
 import { QueriesCopy } from "../../src/ui/library/queries-copy";
 import { ResultsAccessibility } from "../../src/ui/results/results-accessibility";
 import { ResultsCopy } from "../../src/ui/results/results-copy";
 import { TabBarAccessibility } from "../../src/ui/shell/tab-bar-accessibility";
+import type { MenuEventId } from "../../src/ui/shell/workspace-accelerators";
 import { VisualQueryAccessibility } from "../../src/ui/visual-query/accessibility";
 import { VisualQueryCopy } from "../../src/ui/visual-query/copy";
 import { WelcomeAccessibility } from "../../src/ui/welcome/welcome-accessibility";
 import { WelcomeCopy } from "../../src/ui/welcome/welcome-copy";
 
-afterEach(() => cleanup());
+function emitTauriMenuForTest(id: MenuEventId): void {
+  menuListen.emit(id);
+}
+
+afterEach(() => {
+  cleanup();
+  menuListen.reset();
+  localStorage.clear();
+});
 
 async function connectFirst(user: UserEvent, _ipc: DragonIpc): Promise<void> {
   await waitFor(() => {
@@ -1656,5 +1692,80 @@ describe("App Queries column (SP-4b)", () => {
       ResultsCopy.runQueryEmpty,
     );
     expect(QueriesCopy.empty).toBe("No saved queries");
+  });
+});
+
+describe("App native menu and accelerators (SP-4b)", () => {
+  it("Accel+T creates a second tab in the workspace", async () => {
+    const ipc = createMockDragonIpc("happy");
+    await ipc.saveProfile({
+      profile: { ...fixtureProfileFields(), name: "dev" },
+      secrets: { password: "pw" },
+    });
+    render(<App ipc={ipc} />);
+    await screen.findByTestId(TabBarAccessibility.newTab);
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "t", ctrlKey: true, bubbles: true }));
+    expect(await screen.findByTestId(TabBarAccessibility.strip)).toBeInTheDocument();
+    expect(screen.getAllByRole("tab")).toHaveLength(2);
+  });
+
+  it("Accel+Enter does not call runQuery when Run is disabled", async () => {
+    const ipc = createMockDragonIpc("happy");
+    await ipc.saveProfile({
+      profile: { ...fixtureProfileFields(), name: "dev" },
+      secrets: { password: "pw" },
+    });
+    const runQuery = vi.spyOn(ipc, "runQuery");
+    render(<App ipc={ipc} />);
+    await screen.findByTestId(VisualQueryAccessibility.runQuery);
+    expect(screen.getByTestId(VisualQueryAccessibility.runQuery)).toBeDisabled();
+    window.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Enter", ctrlKey: true, bubbles: true }),
+    );
+    expect(runQuery).not.toHaveBeenCalled();
+  });
+
+  it("Accel+Enter runs the active runnable SELECT exactly once", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    await ipc.saveProfile({
+      profile: { ...fixtureProfileFields(), name: "dev" },
+      secrets: { password: "pw" },
+    });
+    const runQuery = vi.spyOn(ipc, "runQuery");
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
+    await addSelectFromUsers(user);
+    window.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Enter", ctrlKey: true, bubbles: true }),
+    );
+    await waitFor(() => expect(runQuery).toHaveBeenCalledTimes(1));
+  });
+
+  it("welcome ignores Accel+T and still opens Help from the menu handler", async () => {
+    const ipc = createMockDragonIpc("happy");
+    render(<App ipc={ipc} />);
+    expect(await screen.findByText(WelcomeCopy.hello)).toBeInTheDocument();
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "t", ctrlKey: true, bubbles: true }));
+    expect(screen.queryByTestId(TabBarAccessibility.strip)).toBeNull();
+    emitTauriMenuForTest("help");
+    expect(await screen.findByRole("dialog", { name: HelpCopy.helpTitle })).toBeInTheDocument();
+    expect(screen.getByTestId(HelpAccessibility.done)).toBeInTheDocument();
+  });
+
+  it("Settings date format radio survives remount via localStorage", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    await ipc.saveProfile({
+      profile: { ...fixtureProfileFields(), name: "dev" },
+      secrets: { password: "pw" },
+    });
+    const { unmount } = render(<App ipc={ipc} />);
+    emitTauriMenuForTest("settings");
+    await user.click(await screen.findByLabelText(HelpCopy.dateFormatEuropean));
+    unmount();
+    render(<App ipc={ipc} />);
+    emitTauriMenuForTest("settings");
+    expect(await screen.findByLabelText(HelpCopy.dateFormatEuropean)).toBeChecked();
   });
 });
