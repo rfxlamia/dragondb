@@ -3,6 +3,7 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createMockDragonIpc, fixtureProfileFields } from "../../../src/ipc/mock";
+import { ConnectionCopy } from "../../../src/ui/connection/connection-copy";
 import { ConnectionPanel } from "../../../src/ui/connection/connection-panel";
 
 afterEach(() => cleanup());
@@ -18,6 +19,21 @@ function sessionPropsFromIpc(ipc: ReturnType<typeof createMockDragonIpc>) {
   };
 }
 
+function formGateProps(
+  overrides: {
+    formVisible?: boolean;
+    onFormVisibleChange?: (next: boolean) => void;
+    onProfilesLoaded?: (count: number) => void;
+  } = {},
+) {
+  return {
+    formVisible: true,
+    onFormVisibleChange: vi.fn(),
+    onProfilesLoaded: vi.fn(),
+    ...overrides,
+  };
+}
+
 describe("ConnectionPanel Save-then-Connect", () => {
   it("keeps Connect unavailable until the profile is saved", async () => {
     const user = userEvent.setup();
@@ -26,6 +42,7 @@ describe("ConnectionPanel Save-then-Connect", () => {
     render(
       <ConnectionPanel
         ipc={ipc}
+        {...formGateProps()}
         isConnected={false}
         {...sessionPropsFromIpc(ipc)}
         onConnected={onConnected}
@@ -52,6 +69,7 @@ describe("ConnectionPanel Save-then-Connect", () => {
     render(
       <ConnectionPanel
         ipc={ipc}
+        {...formGateProps()}
         isConnected={false}
         {...sessionPropsFromIpc(ipc)}
         onConnected={onConnected}
@@ -82,6 +100,7 @@ describe("ConnectionPanel Save-then-Connect", () => {
     render(
       <ConnectionPanel
         ipc={ipc}
+        {...formGateProps()}
         isConnected={false}
         connectProfile={connectProfile}
         disconnectSession={disconnectSession}
@@ -107,6 +126,7 @@ describe("ConnectionPanel Save-then-Connect", () => {
     render(
       <ConnectionPanel
         ipc={ipc}
+        {...formGateProps()}
         isConnected={false}
         {...sessionPropsFromIpc(ipc)}
         onConnected={vi.fn()}
@@ -137,6 +157,7 @@ describe("ConnectionPanel Save-then-Connect", () => {
     render(
       <ConnectionPanel
         ipc={ipc}
+        {...formGateProps()}
         isConnected={true}
         activeProfileId={saved.id}
         connectProfile={(id) => ipc.connectProfile(id)}
@@ -164,6 +185,7 @@ describe("ConnectionPanel Save-then-Connect", () => {
     render(
       <ConnectionPanel
         ipc={ipc}
+        {...formGateProps()}
         isConnected={true}
         activeProfileId={saved.id}
         {...sessionPropsFromIpc(ipc)}
@@ -205,6 +227,7 @@ describe("ConnectionPanel Save-then-Connect", () => {
     render(
       <ConnectionPanel
         ipc={ipc}
+        {...formGateProps()}
         isConnected={true}
         activeProfileId={a.id}
         {...sessionPropsFromIpc(ipc)}
@@ -244,6 +267,7 @@ describe("ConnectionPanel Save-then-Connect", () => {
     const { rerender } = render(
       <ConnectionPanel
         ipc={ipc}
+        {...formGateProps()}
         isConnected={true}
         activeProfileId={a.id}
         {...sessionPropsFromIpc(ipc)}
@@ -268,6 +292,7 @@ describe("ConnectionPanel Save-then-Connect", () => {
     rerender(
       <ConnectionPanel
         ipc={ipc}
+        {...formGateProps()}
         isConnected={true}
         activeProfileId={a.id}
         {...sessionPropsFromIpc(ipc)}
@@ -310,6 +335,7 @@ describe("ConnectionPanel Save-then-Connect", () => {
     render(
       <ConnectionPanel
         ipc={ipc}
+        {...formGateProps()}
         isConnected={true}
         activeProfileId={a.id}
         {...sessionPropsFromIpc(ipc)}
@@ -343,6 +369,7 @@ describe("ConnectionPanel Save-then-Connect", () => {
     render(
       <ConnectionPanel
         ipc={ipc}
+        {...formGateProps()}
         isConnected={false}
         activeProfileId={saved.id}
         {...sessionPropsFromIpc(ipc)}
@@ -373,6 +400,7 @@ describe("ConnectionPanel Save-then-Connect", () => {
     render(
       <ConnectionPanel
         ipc={ipc}
+        {...formGateProps()}
         isConnected={true}
         activeProfileId={saved.id}
         connectProfile={(id) => ipc.connectProfile(id)}
@@ -407,6 +435,7 @@ describe("ConnectionPanel Save-then-Connect", () => {
     render(
       <ConnectionPanel
         ipc={ipc}
+        {...formGateProps()}
         isConnected={false}
         {...sessionPropsFromIpc(ipc)}
         onConnected={vi.fn()}
@@ -418,5 +447,79 @@ describe("ConnectionPanel Save-then-Connect", () => {
     await waitFor(() => {
       expect(screen.getByRole("status")).toHaveTextContent(/Storage boom/);
     });
+  });
+
+  it("shows No connections when the profile list is empty and the form is showing", async () => {
+    const ipc = createMockDragonIpc("happy");
+    render(
+      <ConnectionPanel
+        ipc={ipc}
+        isConnected={false}
+        formVisible={true}
+        onFormVisibleChange={vi.fn()}
+        onProfilesLoaded={vi.fn()}
+        {...sessionPropsFromIpc(ipc)}
+        onConnected={vi.fn()}
+        onDisconnected={vi.fn()}
+        onSwitchSuccess={vi.fn()}
+        onSwitchFailure={vi.fn()}
+      />,
+    );
+    expect(await screen.findByText(ConnectionCopy.noConnections)).toBeInTheDocument();
+  });
+
+  it("form-level Cancel hides the form without calling saveProfile", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    const saveSpy = vi.spyOn(ipc, "saveProfile");
+    const onFormVisibleChange = vi.fn();
+    render(
+      <ConnectionPanel
+        ipc={ipc}
+        isConnected={false}
+        formVisible={true}
+        onFormVisibleChange={onFormVisibleChange}
+        onProfilesLoaded={vi.fn()}
+        {...sessionPropsFromIpc(ipc)}
+        onConnected={vi.fn()}
+        onDisconnected={vi.fn()}
+        onSwitchSuccess={vi.fn()}
+        onSwitchFailure={vi.fn()}
+      />,
+    );
+    await user.type(screen.getByLabelText(/host/i), "127.0.0.1");
+    await user.click(screen.getByRole("button", { name: ConnectionCopy.cancel }));
+    expect(onFormVisibleChange).toHaveBeenCalledWith(false);
+    expect(saveSpy).not.toHaveBeenCalled();
+  });
+
+  it("delete last profile hides the form and reports 0 profiles", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    await ipc.saveProfile({
+      profile: baseProfileFields(),
+      secrets: { password: "pw" },
+    });
+    const onFormVisibleChange = vi.fn();
+    const onProfilesLoaded = vi.fn();
+    render(
+      <ConnectionPanel
+        ipc={ipc}
+        isConnected={false}
+        formVisible={true}
+        onFormVisibleChange={onFormVisibleChange}
+        onProfilesLoaded={onProfilesLoaded}
+        {...sessionPropsFromIpc(ipc)}
+        onConnected={vi.fn()}
+        onDisconnected={vi.fn()}
+        onSwitchSuccess={vi.fn()}
+        onSwitchFailure={vi.fn()}
+      />,
+    );
+    await user.click(await screen.findByRole("button", { name: /^dev$/i }));
+    await user.click(screen.getByRole("button", { name: ConnectionCopy.delete }));
+    await user.click(screen.getByRole("button", { name: ConnectionCopy.confirmDelete }));
+    await waitFor(() => expect(onFormVisibleChange).toHaveBeenCalledWith(false));
+    expect(onProfilesLoaded).toHaveBeenCalledWith(0);
   });
 });

@@ -34,6 +34,7 @@ export const ConnectionCopy = {
   deletePrompt: "Delete this profile? This cannot be undone.",
   unnamedProfile: "Unnamed",
   connectHint: "Save the profile before connecting.",
+  noConnections: "No connections",
 } as const;
 
 const CONNECTION_ERROR_FALLBACK =

@@ -164,4 +164,27 @@ describe("composeAppStores", () => {
     expect(spy).toHaveBeenCalled();
     unsub();
   });
+
+  it("exposes library and history stores and library.refresh hits saved-query IPC", async () => {
+    const listSavedQueries = vi.fn(async () => []);
+    const listQueryFolders = vi.fn(async () => []);
+    const ipc = {
+      connectProfile: vi.fn(),
+      disconnect: vi.fn(),
+      listTables: vi.fn(),
+      listColumns: vi.fn(),
+      saveTabState: vi.fn(),
+      deleteTabState: vi.fn(),
+      listTabStates: vi.fn(async () => []),
+      listSavedQueries,
+      listQueryFolders,
+      listHistory: vi.fn(async () => []),
+    } as unknown as DragonIpc;
+    const stores = composeAppStores(ipc);
+    expect(stores.library).toBeDefined();
+    expect(stores.history).toBeDefined();
+    await stores.library.getState().refresh();
+    expect(listSavedQueries).toHaveBeenCalledOnce();
+    expect(listQueryFolders).toHaveBeenCalledOnce();
+  });
 });

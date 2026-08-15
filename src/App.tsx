@@ -1,4 +1,4 @@
-import { useEffect, useRef, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useStore } from "zustand";
 import type { ExecutableSQL, TableReference } from "./core";
 import type { ConnectResult, DragonIpc, IpcError, ProfileId } from "./ipc/contract";
@@ -11,6 +11,7 @@ import { QueryResultsPane } from "./ui/results/query-results-pane";
 import { WorkspaceSplit } from "./ui/shell/workspace-split";
 import { VisualQueryCanvas } from "./ui/visual-query/canvas";
 import { VisualQueryCopy } from "./ui/visual-query/copy";
+import { WelcomeView } from "./ui/welcome/welcome-view";
 import "./App.css";
 
 export type AppProps = { ipc?: DragonIpc };
@@ -61,11 +62,50 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
 
   /** Last live profile id — store clears before panel calls onDisconnected. */
   const lastProfileIdRef = useRef<ProfileId | null>(null);
+  const formVisibilityTouchedRef = useRef(false);
+  const [profilesReady, setProfilesReady] = useState(false);
+  const [profileCount, setProfileCount] = useState(0);
+  const [formVisible, setFormVisible] = useState(false);
+
   useEffect(() => {
     if (isConnected && profileId !== null) {
       lastProfileIdRef.current = profileId;
     }
   }, [isConnected, profileId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void ipc
+      .listProfiles()
+      .then((list) => {
+        if (cancelled) return;
+        setProfileCount(list.length);
+        if (!formVisibilityTouchedRef.current) {
+          setFormVisible(list.length > 0);
+        }
+        setProfilesReady(true);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setProfileCount(0);
+        if (!formVisibilityTouchedRef.current) {
+          setFormVisible(false);
+        }
+        setProfilesReady(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [ipc]);
+
+  const handleFormVisibleChange = useCallback((next: boolean) => {
+    formVisibilityTouchedRef.current = true;
+    setFormVisible(next);
+  }, []);
+
+  const handleProfilesLoaded = useCallback((count: number) => {
+    setProfileCount(count);
+  }, []);
 
   useEffect(() => {
     void stores.tabs
@@ -75,6 +115,18 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
         /* best-effort hydrate on start */
       });
   }, [stores]);
+
+  const welcome = profilesReady && profileCount === 0 && !formVisible;
+
+  useEffect(() => {
+    if (!profilesReady || welcome) return;
+    void stores.library
+      .getState()
+      .refresh()
+      .catch(() => {
+        /* best-effort library hydrate on workspace mount */
+      });
+  }, [stores, profilesReady, welcome]);
 
   const tables = tableRefs.map(tableRefToCore);
   const metadataErrorMessage = mapSchemaError(metadataErrorCode);
@@ -134,12 +186,27 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
     />
   );
 
+  if (!profilesReady) {
+    return <main aria-busy="true" className="app-startup" />;
+  }
+
+  if (welcome) {
+    return (
+      <main className="app-welcome">
+        <WelcomeView onConnectToServer={() => handleFormVisibleChange(true)} />
+      </main>
+    );
+  }
+
   return (
     <main className="app-shell">
       <ConnectionPanel
         ipc={ipc}
         isConnected={isConnected}
         activeProfileId={profileId ?? undefined}
+        formVisible={formVisible}
+        onFormVisibleChange={handleFormVisibleChange}
+        onProfilesLoaded={handleProfilesLoaded}
         connectProfile={(id) => stores.session.getState().connect(id)}
         disconnectSession={() => stores.session.getState().disconnect()}
         onConnected={handleConnected}

@@ -6,6 +6,7 @@ import type {
   IpcError,
   ProfileId,
 } from "../../ipc/contract";
+import { ConnectionAccessibility } from "./connection-accessibility";
 import { ConnectionCopy, humanIpcErrorMessage, isIpcError } from "./connection-copy";
 import {
   ConnectionForm,
@@ -13,12 +14,16 @@ import {
   emptyConnectionFormValue,
   formValueFromProfile,
 } from "./connection-form";
+import { ConnectionProfileList } from "./connection-profile-list";
 import "./connection.css";
 
 export interface ConnectionPanelProps {
   ipc: DragonIpc;
   isConnected: boolean;
   activeProfileId?: ProfileId;
+  formVisible: boolean;
+  onFormVisibleChange: (next: boolean) => void;
+  onProfilesLoaded: (count: number) => void;
   /** Session connect via store (generation-guarded). Profile CRUD stays on ipc. */
   connectProfile: (id: ProfileId) => Promise<ConnectResult>;
   /** Session disconnect via store (orchestrator clear). Never raw ipc.disconnect for live session. */
@@ -27,10 +32,6 @@ export interface ConnectionPanelProps {
   onDisconnected: () => void;
   onSwitchSuccess: (result: ConnectResult) => void;
   onSwitchFailure: (error: IpcError) => void;
-}
-
-function profileLabel(profile: ConnectionProfileDto): string {
-  return profile.name?.trim() || profile.host || ConnectionCopy.unnamedProfile;
 }
 
 function toIpcError(error: unknown): IpcError {
@@ -43,6 +44,9 @@ export function ConnectionPanel(props: ConnectionPanelProps): React.JSX.Element 
     ipc,
     isConnected,
     activeProfileId,
+    formVisible,
+    onFormVisibleChange,
+    onProfilesLoaded,
     connectProfile,
     disconnectSession,
     onConnected,
@@ -70,6 +74,7 @@ export function ConnectionPanel(props: ConnectionPanelProps): React.JSX.Element 
   async function refreshProfiles(): Promise<ConnectionProfileDto[]> {
     const list = await ipc.listProfiles();
     setProfiles(list);
+    onProfilesLoaded(list.length);
     return list;
   }
 
@@ -117,6 +122,7 @@ export function ConnectionPanel(props: ConnectionPanelProps): React.JSX.Element 
     setErrorMessage(null);
     setPendingSwitchId(null);
     setPendingDeleteId(null);
+    onFormVisibleChange(true);
   }
 
   function selectProfile(profile: ConnectionProfileDto): void {
@@ -132,6 +138,7 @@ export function ConnectionPanel(props: ConnectionPanelProps): React.JSX.Element 
     setForm(formValueFromProfile(profile));
     setDirty(false);
     setPendingSwitchId(null);
+    onFormVisibleChange(true);
   }
 
   async function handleSave(): Promise<void> {
@@ -243,10 +250,16 @@ export function ConnectionPanel(props: ConnectionPanelProps): React.JSX.Element 
         onDisconnected();
       }
       await ipc.deleteProfile(id);
+      const list = await refreshProfiles();
       if (selectedId === id) {
-        startNewProfile();
+        setSelectedId(null);
+        setForm(emptyConnectionFormValue());
+        setDirty(false);
+        setErrorMessage(null);
       }
-      await refreshProfiles();
+      if (list.length === 0) {
+        onFormVisibleChange(false);
+      }
     } catch (error) {
       setErrorMessage(humanIpcErrorMessage(error));
     } finally {
@@ -258,59 +271,61 @@ export function ConnectionPanel(props: ConnectionPanelProps): React.JSX.Element 
     <section className="connection-panel" aria-label={ConnectionCopy.panelTitle}>
       <h2>{ConnectionCopy.panelTitle}</h2>
 
-      <div className="connection-panel__profiles">
-        <div className="connection-panel__profiles-header">
-          <h3>{ConnectionCopy.profilesHeading}</h3>
-          <button type="button" className="connection-panel__new" onClick={startNewProfile}>
-            {ConnectionCopy.newProfile}
-          </button>
-        </div>
-        <ul>
-          {profiles.map((profile) => (
-            <li key={profile.id}>
-              <button type="button" onClick={() => selectProfile(profile)}>
-                {profileLabel(profile)}
+      <ConnectionProfileList
+        profiles={profiles}
+        formVisible={formVisible}
+        onSelect={selectProfile}
+        onNewProfile={startNewProfile}
+      />
+
+      {formVisible ? (
+        <>
+          <ConnectionForm value={form} onChange={updateForm} />
+
+          <div className="connection-panel__actions">
+            <button type="button" onClick={() => void handleSave()} disabled={busy}>
+              {ConnectionCopy.save}
+            </button>
+
+            {sessionClaimed ? (
+              <button type="button" onClick={() => void handleDisconnect()} disabled={busy}>
+                {ConnectionCopy.disconnect}
               </button>
-            </li>
-          ))}
-        </ul>
-      </div>
+            ) : (
+              <button
+                type="button"
+                className="connection-panel__primary"
+                onClick={() => void handleConnect()}
+                disabled={!canConnect}
+              >
+                {ConnectionCopy.connect}
+              </button>
+            )}
 
-      <ConnectionForm value={form} onChange={updateForm} />
+            {selectedId !== null ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setPendingDeleteId(selectedId);
+                  setPendingSwitchId(null);
+                }}
+                disabled={busy}
+              >
+                {ConnectionCopy.delete}
+              </button>
+            ) : null}
 
-      <div className="connection-panel__actions">
-        <button type="button" onClick={() => void handleSave()} disabled={busy}>
-          {ConnectionCopy.save}
-        </button>
-
-        {sessionClaimed ? (
-          <button type="button" onClick={() => void handleDisconnect()} disabled={busy}>
-            {ConnectionCopy.disconnect}
-          </button>
-        ) : (
-          <button
-            type="button"
-            className="connection-panel__primary"
-            onClick={() => void handleConnect()}
-            disabled={!canConnect}
-          >
-            {ConnectionCopy.connect}
-          </button>
-        )}
-
-        {selectedId !== null ? (
-          <button
-            type="button"
-            onClick={() => {
-              setPendingDeleteId(selectedId);
-              setPendingSwitchId(null);
-            }}
-            disabled={busy}
-          >
-            {ConnectionCopy.delete}
-          </button>
-        ) : null}
-      </div>
+            <button
+              type="button"
+              data-testid={ConnectionAccessibility.formCancel}
+              onClick={() => onFormVisibleChange(false)}
+              disabled={busy}
+            >
+              {ConnectionCopy.cancel}
+            </button>
+          </div>
+        </>
+      ) : null}
 
       {pendingSwitchId !== null ? (
         <div className="connection-panel__confirm" role="dialog" aria-label="Switch connection">
@@ -345,7 +360,7 @@ export function ConnectionPanel(props: ConnectionPanelProps): React.JSX.Element 
           {errorMessage}
         </p>
       ) : null}
-      {!canConnect && !sessionClaimed && selectedId === null ? (
+      {formVisible && !canConnect && !sessionClaimed && selectedId === null ? (
         <p className="connection-panel__hint">{ConnectionCopy.connectHint}</p>
       ) : null}
     </section>

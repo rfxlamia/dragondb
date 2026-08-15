@@ -14,15 +14,32 @@ vi.mock("../../src/ipc/tauri-client", () => ({
 import type { UserEvent } from "@testing-library/user-event";
 import App from "../../src/App";
 import type { DragonIpc } from "../../src/ipc/contract";
-import { createMockDragonIpc, FIXTURE_CONNECTION_ID } from "../../src/ipc/mock";
+import {
+  createMockDragonIpc,
+  FIXTURE_CONNECTION_ID,
+  fixtureProfileFields,
+} from "../../src/ipc/mock";
+import { ConnectionCopy } from "../../src/ui/connection/connection-copy";
 import { ResultsAccessibility } from "../../src/ui/results/results-accessibility";
 import { ResultsCopy } from "../../src/ui/results/results-copy";
 import { VisualQueryAccessibility } from "../../src/ui/visual-query/accessibility";
 import { VisualQueryCopy } from "../../src/ui/visual-query/copy";
+import { WelcomeAccessibility } from "../../src/ui/welcome/welcome-accessibility";
+import { WelcomeCopy } from "../../src/ui/welcome/welcome-copy";
 
 afterEach(() => cleanup());
 
 async function connectFirst(user: UserEvent, _ipc: DragonIpc): Promise<void> {
+  await waitFor(() => {
+    expect(
+      screen.queryByRole("button", { name: WelcomeCopy.connectToServer }) ??
+        screen.queryByLabelText(/host/i),
+    ).not.toBeNull();
+  });
+  const connectToServer = screen.queryByRole("button", { name: WelcomeCopy.connectToServer });
+  if (connectToServer) {
+    await user.click(connectToServer);
+  }
   await user.type(screen.getByLabelText(/host/i), "127.0.0.1");
   await user.type(screen.getByLabelText(/username/i), "postgres");
   await user.type(screen.getByLabelText(/database/i), "app");
@@ -45,10 +62,12 @@ describe("App production default (no runtime mock)", () => {
   });
 
   it("starts disconnected — canvas mutate controls locked until connect", async () => {
+    const user = userEvent.setup();
     const ipc = createMockDragonIpc("happy");
     render(<App ipc={ipc} />);
-    expect(screen.queryByTestId(VisualQueryAccessibility.initialAddBlock)).toBeDisabled();
-    expect(screen.queryByTestId(VisualQueryAccessibility.runQuery)).toBeDisabled();
+    await user.click(await screen.findByRole("button", { name: WelcomeCopy.connectToServer }));
+    expect(screen.getByTestId(VisualQueryAccessibility.initialAddBlock)).toBeDisabled();
+    expect(screen.getByTestId(VisualQueryAccessibility.runQuery)).toBeDisabled();
     expect(screen.getAllByTestId(VisualQueryAccessibility.runQuery)).toHaveLength(1);
   });
 
@@ -763,6 +782,10 @@ async function addSelectFromUsers(user: UserEvent): Promise<void> {
 describe("App results pane (SP-4b first slice)", () => {
   it("idle launch with hydrated cachedResultsData shows empty copy, not the grid", async () => {
     const ipc = createMockDragonIpc("happy");
+    await ipc.saveProfile({
+      profile: { ...fixtureProfileFields(), name: "dev" },
+      secrets: { password: "pw" },
+    });
     vi.spyOn(ipc, "listTabStates").mockResolvedValue([
       {
         id: "cached-tab",
@@ -1100,5 +1123,128 @@ describe("App results pane (SP-4b first slice)", () => {
     const pane = screen.getByTestId(ResultsAccessibility.pane);
     expect(pane).toHaveTextContent(ResultsCopy.runQueryEmpty);
     expect(pane).not.toHaveTextContent("Choose a table in FROM");
+  });
+});
+
+describe("App welcome gating", () => {
+  it("shows hello and Connect to Server on 0-profile launch and hides the host field", async () => {
+    const ipc = createMockDragonIpc("happy");
+    render(<App ipc={ipc} />);
+    expect(await screen.findByText(WelcomeCopy.hello)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: WelcomeCopy.connectToServer })).toBeInTheDocument();
+    expect(screen.getByTestId(WelcomeAccessibility.hello)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/host/i)).toBeNull();
+  });
+
+  it("Connect to Server shows the form and No connections", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    render(<App ipc={ipc} />);
+    await user.click(await screen.findByRole("button", { name: WelcomeCopy.connectToServer }));
+    expect(screen.getByLabelText(/host/i)).toBeInTheDocument();
+    expect(screen.queryByText(WelcomeCopy.hello)).toBeNull();
+    expect(screen.getByText(ConnectionCopy.noConnections)).toBeInTheDocument();
+  });
+
+  it("Cancel with 0 profiles returns welcome and does not save", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    const saveSpy = vi.spyOn(ipc, "saveProfile");
+    render(<App ipc={ipc} />);
+    await user.click(await screen.findByRole("button", { name: WelcomeCopy.connectToServer }));
+    await user.type(screen.getByLabelText(/host/i), "127.0.0.1");
+    await user.click(screen.getByRole("button", { name: ConnectionCopy.cancel }));
+    expect(await screen.findByText(WelcomeCopy.hello)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/host/i)).toBeNull();
+    expect(saveSpy).not.toHaveBeenCalled();
+  });
+
+  it("does not show welcome when a saved profile exists on launch", async () => {
+    const ipc = createMockDragonIpc("happy");
+    await ipc.saveProfile({
+      profile: { ...fixtureProfileFields(), name: "dev" },
+      secrets: { password: "pw" },
+    });
+    render(<App ipc={ipc} />);
+    expect(await screen.findByLabelText(/host/i)).toBeInTheDocument();
+    expect(screen.queryByText(WelcomeCopy.hello)).toBeNull();
+  });
+
+  it("returns welcome after the last profile is deleted", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    await ipc.saveProfile({
+      profile: { ...fixtureProfileFields(), name: "dev" },
+      secrets: { password: "pw" },
+    });
+    render(<App ipc={ipc} />);
+    await user.click(await screen.findByRole("button", { name: /^dev$/i }));
+    await user.click(screen.getByRole("button", { name: ConnectionCopy.delete }));
+    await user.click(screen.getByRole("button", { name: ConnectionCopy.confirmDelete }));
+    expect(await screen.findByText(WelcomeCopy.hello)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/host/i)).toBeNull();
+  });
+
+  it("Cancel on a dirty New profile form with existing profiles does not show welcome or save", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    await ipc.saveProfile({
+      profile: { ...fixtureProfileFields(), name: "dev" },
+      secrets: { password: "pw" },
+    });
+    const saveSpy = vi.spyOn(ipc, "saveProfile");
+    render(<App ipc={ipc} />);
+    await user.click(await screen.findByRole("button", { name: ConnectionCopy.newProfile }));
+    await user.type(screen.getByLabelText(/host/i), "other-host");
+    saveSpy.mockClear();
+    await user.click(screen.getByRole("button", { name: ConnectionCopy.cancel }));
+    expect(screen.queryByText(WelcomeCopy.hello)).toBeNull();
+    expect(screen.getByTestId(VisualQueryAccessibility.initialAddBlock)).toBeInTheDocument();
+    expect(saveSpy).not.toHaveBeenCalled();
+  });
+
+  it("does not commit welcome or workspace until initial listProfiles resolves to 0", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const ipc = createMockDragonIpc("happy");
+    const realList = ipc.listProfiles.bind(ipc);
+    ipc.listProfiles = async () => {
+      await gate;
+      return realList();
+    };
+    render(<App ipc={ipc} />);
+    expect(screen.queryByText(WelcomeCopy.hello)).toBeNull();
+    expect(screen.queryByLabelText(/host/i)).toBeNull();
+    expect(screen.queryByTestId(VisualQueryAccessibility.initialAddBlock)).toBeNull();
+    release();
+    expect(await screen.findByText(WelcomeCopy.hello)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/host/i)).toBeNull();
+    expect(screen.queryByTestId(VisualQueryAccessibility.initialAddBlock)).toBeNull();
+  });
+
+  it("shows only a neutral aria-busy startup shell while initial listProfiles is pending", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const ipc = createMockDragonIpc("happy");
+    const realList = ipc.listProfiles.bind(ipc);
+    ipc.listProfiles = async () => {
+      await gate;
+      return realList();
+    };
+    render(<App ipc={ipc} />);
+    const busy = document.querySelector("main[aria-busy='true']");
+    expect(busy).not.toBeNull();
+    expect(screen.queryByText(WelcomeCopy.hello)).toBeNull();
+    expect(screen.queryByLabelText(/host/i)).toBeNull();
+    expect(screen.queryByTestId(VisualQueryAccessibility.initialAddBlock)).toBeNull();
+    expect(screen.queryByTestId(VisualQueryAccessibility.runQuery)).toBeNull();
+    expect(screen.queryByRole("tablist")).toBeNull();
+    expect(screen.queryByRole("button", { name: /queries/i })).toBeNull();
+    release();
+    expect(await screen.findByText(WelcomeCopy.hello)).toBeInTheDocument();
   });
 });
