@@ -52,7 +52,10 @@ describe("QueryHistorySheet", () => {
     expect(screen.getByText(HistoryCopy.emptyHint)).toHaveTextContent(
       "Executed queries will appear here.",
     );
-    expect(screen.getByTestId(HistoryAccessibility.export)).toBeDisabled();
+    expect(screen.getByTestId(HistoryAccessibility.export)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: HistoryCopy.exportJson })).toBeDisabled();
+    expect(screen.getByRole("button", { name: HistoryCopy.exportCsv })).toBeDisabled();
+    expect(screen.getByRole("button", { name: HistoryCopy.exportSql })).toBeDisabled();
   });
 
   it("shows load error instead of empty copy when listHistory rejects", async () => {
@@ -132,6 +135,27 @@ describe("QueryHistorySheet", () => {
     expect(saveTextFile).toHaveBeenCalledTimes(4);
   });
 
+  it("shows an error when saveTextFile rejects and does not leak from the click handler", async () => {
+    const user = userEvent.setup();
+    const listHistory = vi.fn(async () => [historyRow()]);
+    const store = createHistoryStore({ listHistory } as unknown as DragonIpc);
+    const saveTextFile = vi.fn().mockRejectedValue(new Error("disk full"));
+    render(
+      <QueryHistorySheet
+        open={true}
+        onOpenChange={vi.fn()}
+        historyStore={store}
+        saveTextFile={saveTextFile}
+      />,
+    );
+    await screen.findByText("SELECT 1");
+    await expect(
+      user.click(screen.getByRole("button", { name: HistoryCopy.exportJson })),
+    ).resolves.toBeUndefined();
+    expect(await screen.findByText("disk full")).toBeInTheDocument();
+    expect(screen.queryByTestId(HistoryAccessibility.loadError)).toBeNull();
+  });
+
   it("Done and Escape close the sheet", async () => {
     const user = userEvent.setup();
     const onOpenChange = vi.fn();
@@ -175,13 +199,9 @@ describe("QueryHistorySheet", () => {
       />,
     );
     expect(await screen.findByText("SELECT newer")).toBeInTheDocument();
-    const rows = [
-      screen.getByTestId(HistoryAccessibility.row("newer")),
-      screen.getByTestId(HistoryAccessibility.row("older")),
-    ];
-    expect(
-      rows[0].compareDocumentPosition(rows[1]) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
+    const newer = screen.getByTestId(HistoryAccessibility.row("newer"));
+    const older = screen.getByTestId(HistoryAccessibility.row("older"));
+    expect(newer.compareDocumentPosition(older) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it("truncates SQL to five selectable lines and shows a relative date", async () => {

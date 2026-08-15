@@ -27,10 +27,12 @@ export function QueryHistorySheet(props: QueryHistorySheetProps): React.JSX.Elem
   const entries = useStore(historyStore, (s) => s.entries);
   const loadError = useStore(historyStore, (s) => s.loadError);
   const [ready, setReady] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) {
       setReady(false);
+      setExportError(null);
       return;
     }
     let cancelled = false;
@@ -67,7 +69,14 @@ export function QueryHistorySheet(props: QueryHistorySheetProps): React.JSX.Elem
     defaultPath: string,
     filter: { name: string; extensions: string[] },
   ): Promise<void> {
-    await saveTextFile(text, defaultPath, filter);
+    try {
+      await saveTextFile(text, defaultPath, filter);
+      setExportError(null);
+    } catch (err) {
+      const message =
+        err instanceof Error && err.message.length > 0 ? err.message : HistoryCopy.exportFailed;
+      setExportError(message);
+    }
   }
 
   return (
@@ -82,15 +91,7 @@ export function QueryHistorySheet(props: QueryHistorySheetProps): React.JSX.Elem
         <h2 id="history-sheet-title" className="history-sheet__title">
           {VisualQueryCopy.historyTitle}
         </h2>
-        <div className="history-sheet__exports">
-          <button
-            type="button"
-            className="history-sheet__export"
-            data-testid={HistoryAccessibility.export}
-            disabled
-          >
-            {HistoryCopy.export}
-          </button>
+        <div className="history-sheet__exports" data-testid={HistoryAccessibility.export}>
           <button
             type="button"
             className="history-sheet__export-format"
@@ -139,6 +140,7 @@ export function QueryHistorySheet(props: QueryHistorySheetProps): React.JSX.Elem
             {loadError}
           </div>
         ) : null}
+        {exportError !== null ? <div className="history-sheet__error">{exportError}</div> : null}
         {showEmpty ? (
           <div className="history-sheet__empty">
             <div className="history-sheet__empty-title">{HistoryCopy.empty}</div>

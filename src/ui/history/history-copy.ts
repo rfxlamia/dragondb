@@ -41,5 +41,5 @@ export const HistoryCopy = {
   success: "Success",
   failed: "Failed",
   databaseNa: "N/A",
-  formatRelativeDate,
+  exportFailed: "Failed to export history",
 } as const;
