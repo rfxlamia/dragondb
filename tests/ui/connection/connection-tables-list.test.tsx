@@ -18,7 +18,7 @@ describe("ConnectionTablesList", () => {
     expect(screen.queryByText(ConnectionCopy.noTablesFound)).toBeNull();
   });
 
-  it("lists display names and click does not call onRunQuery", async () => {
+  it("lists display names and click keeps the name buttons mounted", async () => {
     const user = userEvent.setup();
     render(
       <ConnectionTablesList

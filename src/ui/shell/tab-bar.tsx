@@ -25,7 +25,7 @@ export function TabBar(props: TabBarProps): React.JSX.Element {
       {showStrip ? (
         <div className="tab-bar__strip" data-testid={TabBarAccessibility.strip} role="tablist">
           {tabs.map((tab) => (
-            <div className="tab-bar__item" key={tab.id}>
+            <div className="tab-bar__item" key={tab.id} role="presentation">
               <button
                 type="button"
                 role="tab"

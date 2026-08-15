@@ -91,7 +91,7 @@ export function QueryHistorySheet(props: QueryHistorySheetProps): React.JSX.Elem
         <h2 id="history-sheet-title" className="history-sheet__title">
           {VisualQueryCopy.historyTitle}
         </h2>
-        <div className="history-sheet__exports" data-testid={HistoryAccessibility.export}>
+        <div className="history-sheet__exports" data-testid={HistoryAccessibility.exports}>
           <button
             type="button"
             className="history-sheet__export-format"

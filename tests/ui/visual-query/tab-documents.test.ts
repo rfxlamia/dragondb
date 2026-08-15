@@ -19,4 +19,11 @@ describe("createTabDocuments", () => {
     docs.delete("a");
     expect(docs.getOrCreate("a")).not.toBe(afterA);
   });
+
+  it("get returns undefined for a missing id and the same instance after getOrCreate", () => {
+    const docs = createTabDocuments();
+    expect(docs.get("missing")).toBeUndefined();
+    const created = docs.getOrCreate("a");
+    expect(docs.get("a")).toBe(created);
+  });
 });

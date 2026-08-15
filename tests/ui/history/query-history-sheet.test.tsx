@@ -1,4 +1,6 @@
 /** @vitest-environment jsdom */
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -52,7 +54,8 @@ describe("QueryHistorySheet", () => {
     expect(screen.getByText(HistoryCopy.emptyHint)).toHaveTextContent(
       "Executed queries will appear here.",
     );
-    expect(screen.getByTestId(HistoryAccessibility.export)).toBeInTheDocument();
+    expect(screen.getByTestId("history.exports")).toBeInTheDocument();
+    expect(screen.getByTestId(HistoryAccessibility.exports)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: HistoryCopy.exportJson })).toBeDisabled();
     expect(screen.getByRole("button", { name: HistoryCopy.exportCsv })).toBeDisabled();
     expect(screen.getByRole("button", { name: HistoryCopy.exportSql })).toBeDisabled();
@@ -230,5 +233,17 @@ describe("QueryHistorySheet", () => {
     expect(sqlEl).not.toHaveAttribute("aria-hidden", "true");
     const row = screen.getByTestId(HistoryAccessibility.row("six"));
     expect(row.textContent).toMatch(/ago/i);
+  });
+
+  it("drops dead Export copy and CSS, and names the export group history.exports", () => {
+    const copy = readFileSync(join(process.cwd(), "src/ui/history/history-copy.ts"), "utf8");
+    const css = readFileSync(join(process.cwd(), "src/ui/history/history.css"), "utf8");
+    const a11y = readFileSync(
+      join(process.cwd(), "src/ui/history/history-accessibility.ts"),
+      "utf8",
+    );
+    expect(copy).not.toMatch(/export:\s*"Export"/);
+    expect(css).not.toMatch(/\.history-sheet__export,/);
+    expect(a11y).toMatch(/exports:\s*"history\.exports"/);
   });
 });

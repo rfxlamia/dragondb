@@ -40,7 +40,6 @@
   gap: 8px;
 }
 
-.history-sheet__export,
 .history-sheet__export-format,
 .history-sheet__copy,
 .history-sheet__done {
@@ -54,7 +53,6 @@
   padding: 4px 12px;
 }
 
-.history-sheet__export,
 .history-sheet__export-format,
 .history-sheet__copy {
   background: var(--neutral-100);
@@ -62,13 +60,11 @@
   color: var(--primary-700);
 }
 
-.history-sheet__export:hover:not(:disabled),
 .history-sheet__export-format:hover:not(:disabled),
 .history-sheet__copy:hover:not(:disabled) {
   background: var(--neutral-200);
 }
 
-.history-sheet__export:disabled,
 .history-sheet__export-format:disabled {
   color: var(--neutral-600);
   cursor: not-allowed;

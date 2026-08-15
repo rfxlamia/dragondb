@@ -37,6 +37,11 @@ describe("TabBar", () => {
       />,
     );
     expect(screen.getByTestId(TabBarAccessibility.strip)).toBeInTheDocument();
+    const items = screen.getByTestId(TabBarAccessibility.strip).querySelectorAll(".tab-bar__item");
+    expect(items.length).toBe(2);
+    for (const item of items) {
+      expect(item).toHaveAttribute("role", "presentation");
+    }
     expect(screen.getByRole("tab", { name: "One" })).toHaveAttribute("aria-selected", "false");
     expect(screen.getByRole("tab", { name: "Two" })).toHaveAttribute("aria-selected", "true");
     await user.click(screen.getByRole("tab", { name: "One" }));

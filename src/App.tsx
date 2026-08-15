@@ -174,6 +174,13 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
   }
 
   useLayoutEffect(() => {
+    if (activeTabId === null) return;
+    if (tabDocumentsRef.current.get(activeTabId) !== undefined) return;
+    tabDocumentsRef.current.getOrCreate(activeTabId);
+    setDocsEpoch((value) => value + 1);
+  }, [activeTabId]);
+
+  useLayoutEffect(() => {
     accelCtxRef.current = {
       newTab: handleNewTab,
       closeTab: () => {
@@ -259,7 +266,6 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
   function handleConnected(result: ConnectResult): void {
     if (stores.shouldRemountCanvasOnConnect(result.profileId)) {
       resetTabDocuments();
-      stores.bumpCanvasEpoch();
     }
     stores.acknowledgeConnect(result.profileId);
   }
@@ -270,7 +276,6 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
 
   function handleSwitchSuccess(result: ConnectResult): void {
     resetTabDocuments();
-    stores.bumpCanvasEpoch();
     stores.acknowledgeConnect(result.profileId);
   }
 
@@ -354,12 +359,13 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
     await stores.library.getState().deleteFolder(id, deleteQueries);
   }
 
+  const tabDocument = activeTabId === null ? undefined : tabDocumentsRef.current.get(activeTabId);
   const canvas =
-    workspaceReady && activeTabId !== null ? (
+    workspaceReady && tabDocument !== undefined ? (
       <VisualQueryCanvas
         key={`${activeTabId}:${docsEpoch}`}
         ref={canvasHandleRef}
-        document={tabDocumentsRef.current.getOrCreate(activeTabId)}
+        document={tabDocument}
         tables={tables}
         columnNames={columnNames}
         metadataErrorMessage={metadataErrorMessage}

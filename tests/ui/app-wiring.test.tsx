@@ -1008,6 +1008,10 @@ describe("App results pane (SP-4b first slice)", () => {
     expect(src).toMatch(/key=\{`\$\{activeTabId\}:\$\{docsEpoch\}`\}/);
     expect(src).not.toMatch(/<WorkspaceSplit[^>]*\bkey=\{canvasEpoch\}/);
     expect(src).not.toMatch(/<VisualQueryCanvas[^>]*\bkey=\{canvasEpoch\}/);
+    expect(src).not.toMatch(/bumpCanvasEpoch/);
+    expect(src).toMatch(/tabDocumentsRef\.current\.get\(activeTabId\)/);
+    expect(src).toMatch(/document=\{tabDocument\}/);
+    expect(src).not.toMatch(/document=\{tabDocumentsRef\.current\.getOrCreate\(/);
   });
 
   it("Start over during loading ignores a late runQuery success", async () => {

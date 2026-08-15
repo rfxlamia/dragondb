@@ -8,9 +8,13 @@ export type WelcomeViewProps = {
 
 export function WelcomeView({ onConnectToServer }: WelcomeViewProps): React.JSX.Element {
   return (
-    <section className="welcome-view" aria-label={WelcomeCopy.hello}>
+    <section className="welcome-view" aria-labelledby="welcome-hello">
       <img className="welcome-view__mascot" src="/onboarding.png" alt={WelcomeCopy.mascotAlt} />
-      <h1 className="welcome-view__hello" data-testid={WelcomeAccessibility.hello}>
+      <h1
+        id="welcome-hello"
+        className="welcome-view__hello"
+        data-testid={WelcomeAccessibility.hello}
+      >
         {WelcomeCopy.hello}
       </h1>
       <button

@@ -32,7 +32,6 @@ export function formatRelativeDate(iso: string, nowMs: number = Date.now()): str
 export const HistoryCopy = {
   empty: "No Query History",
   emptyHint: "Executed queries will appear here.",
-  export: "Export",
   exportJson: "Export JSON",
   exportCsv: "Export CSV",
   exportSql: "Export SQL",

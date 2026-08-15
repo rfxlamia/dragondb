@@ -688,4 +688,33 @@ describe("VisualQueryCanvas History sheet (SP-4b)", () => {
     await user.click(screen.getByTestId(VisualQueryAccessibility.history));
     expect(await screen.findByTestId(HistoryAccessibility.sheet)).toBeInTheDocument();
   });
+
+  it("hides History when historyStore is omitted", () => {
+    render(
+      <VisualQueryCanvas
+        tables={tables}
+        columnNames={[]}
+        metadataErrorMessage={null}
+        isConnected={true}
+        saveTextFile={vi.fn()}
+      />,
+    );
+    expect(screen.queryByTestId(VisualQueryAccessibility.history)).not.toBeInTheDocument();
+  });
+
+  it("hides History when saveTextFile is omitted", () => {
+    const historyStore = createHistoryStore({
+      listHistory: async () => [],
+    } as unknown as DragonIpc);
+    render(
+      <VisualQueryCanvas
+        tables={tables}
+        columnNames={[]}
+        metadataErrorMessage={null}
+        isConnected={true}
+        historyStore={historyStore}
+      />,
+    );
+    expect(screen.queryByTestId(VisualQueryAccessibility.history)).not.toBeInTheDocument();
+  });
 });

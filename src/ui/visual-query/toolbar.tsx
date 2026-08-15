@@ -38,14 +38,16 @@ export function VisualQueryToolbar(props: {
         </button>
       ) : null}
       {runHelpMessage ? <span className="vq-toolbar__help">{runHelpMessage}</span> : null}
-      <button
-        type="button"
-        className="vq-toolbar__history"
-        onClick={() => onHistory?.()}
-        data-testid={VisualQueryAccessibility.history}
-      >
-        {VisualQueryCopy.historyTitle}
-      </button>
+      {onHistory ? (
+        <button
+          type="button"
+          className="vq-toolbar__history"
+          onClick={onHistory}
+          data-testid={VisualQueryAccessibility.history}
+        >
+          {VisualQueryCopy.historyTitle}
+        </button>
+      ) : null}
       <button
         type="button"
         className="vq-toolbar__view-sql"

@@ -1,6 +1,7 @@
 import { QueryDocument } from "../../core";
 
 export type TabDocuments = {
+  get: (id: string) => QueryDocument | undefined;
   getOrCreate: (id: string) => QueryDocument;
   resetAll: (ids: string[]) => void;
   delete: (id: string) => void;
@@ -10,8 +11,12 @@ export type TabDocuments = {
 export function createTabDocuments(): TabDocuments {
   const documents = new Map<string, QueryDocument>();
 
+  function get(id: string): QueryDocument | undefined {
+    return documents.get(id);
+  }
+
   function getOrCreate(id: string): QueryDocument {
-    const existing = documents.get(id);
+    const existing = get(id);
     if (existing !== undefined) return existing;
     const created = new QueryDocument();
     documents.set(id, created);
@@ -30,6 +35,7 @@ export function createTabDocuments(): TabDocuments {
   }
 
   return {
+    get,
     getOrCreate,
     resetAll,
     delete: deleteEntry,

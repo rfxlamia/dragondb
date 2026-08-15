@@ -13,7 +13,7 @@ function sql(id: string): string {
 /** Stable accessibility identifiers for the query history sheet. */
 export const HistoryAccessibility = {
   sheet: "history.sheet",
-  export: "history.export",
+  exports: "history.exports",
   done: "history.done",
   loadError: "history.loadError",
   row,

@@ -281,9 +281,13 @@ export function VisualQueryCanvas(props: VisualQueryCanvasProps): React.JSX.Elem
         onViewGeneratedSQL={() => {
           setSqlDialogOpen(true);
         }}
-        onHistory={() => {
-          setHistoryOpen(true);
-        }}
+        onHistory={
+          historyStore !== undefined && saveTextFile !== undefined
+            ? () => {
+                setHistoryOpen(true);
+              }
+            : undefined
+        }
         runHelpMessage={runHelpMessage}
       />
 

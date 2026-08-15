@@ -6,9 +6,8 @@
   flex-direction: column;
   font-family: var(--font-sans);
   gap: 1.5rem;
-  height: 100vh;
+  height: 100%;
   justify-content: center;
-  min-height: 100vh;
   padding: 2rem;
   text-align: center;
 }

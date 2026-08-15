@@ -163,4 +163,19 @@ describe("VisualQueryToolbar History (SP-4b)", () => {
     expect(onHistory).toHaveBeenCalledOnce();
     expect(screen.getByRole("button", { name: VisualQueryCopy.historyTitle })).toBeInTheDocument();
   });
+
+  it("hides History when onHistory is omitted", () => {
+    render(
+      <VisualQueryToolbar
+        canStartOver={false}
+        onStartOver={() => {}}
+        isConnected={true}
+        canRunQuery={false}
+        onRunQuery={() => {}}
+        onViewGeneratedSQL={() => {}}
+        runHelpMessage={null}
+      />,
+    );
+    expect(screen.queryByTestId(VisualQueryAccessibility.history)).not.toBeInTheDocument();
+  });
 });
