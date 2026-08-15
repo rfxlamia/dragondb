@@ -5,7 +5,6 @@
  * `createStoreApi` singleton — ipc is constructor-injected (T1 pattern).
  *
  * clearHistory(profileId) is always per-profile (never global wipe).
- * No History UI in this module (Phase C).
  */
 import { createStore, type StoreApi } from "zustand/vanilla";
 import type { DragonIpc, HistoryDto, HistoryListOptions, ProfileId } from "../ipc/contract";

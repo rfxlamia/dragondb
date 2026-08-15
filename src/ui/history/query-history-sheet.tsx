@@ -87,7 +87,7 @@ export function QueryHistorySheet(props: QueryHistorySheetProps): React.JSX.Elem
             type="button"
             className="history-sheet__export"
             data-testid={HistoryAccessibility.export}
-            disabled={!hasRows}
+            disabled
           >
             {HistoryCopy.export}
           </button>
