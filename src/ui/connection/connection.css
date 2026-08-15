@@ -3,14 +3,15 @@
 .connection-panel {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 1.25rem;
 }
 
 .connection-panel h2 {
   color: var(--neutral-900);
   font-family: var(--font-sans);
-  font-size: 1rem;
+  font-size: 17px;
   font-weight: 600;
+  letter-spacing: -0.01em;
   margin: 0;
 }
 
@@ -54,13 +55,21 @@
   cursor: pointer;
   font-family: var(--font-sans);
   font-size: 13px;
-  padding: 6px 8px;
+  padding: 9px 10px;
   text-align: left;
+  transition:
+    border-color var(--duration-fast) var(--ease-standard),
+    background-color var(--duration-fast) var(--ease-standard);
   width: 100%;
 }
 
 .connection-panel__profiles li button:hover {
+  background: var(--primary-100);
   border-color: var(--neutral-400);
+}
+
+.connection-panel__profiles li button:active {
+  background: var(--primary-200);
 }
 
 .connection-panel__new {
@@ -72,18 +81,60 @@
   flex-shrink: 0;
   font-family: var(--font-sans);
   font-size: 12px;
+  font-weight: 500;
   padding: 4px 8px;
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard),
+    transform var(--duration-fast) var(--ease-out);
   white-space: nowrap;
 }
 
 .connection-panel__new:hover {
   background: var(--primary-100);
+  border-color: var(--primary-300);
+}
+
+.connection-panel__new:active {
+  transform: scale(0.97);
 }
 
 .connection-form {
   display: flex;
   flex-direction: column;
+  gap: 1.25rem;
+}
+
+.connection-form__group {
+  display: flex;
+  flex-direction: column;
   gap: 0.75rem;
+  padding-top: 1.25rem;
+  position: relative;
+}
+
+.connection-form__group:first-child {
+  padding-top: 0;
+}
+
+.connection-form__group:not(:first-child)::before {
+  background: var(--neutral-200);
+  content: "";
+  height: 1px;
+  left: 0;
+  position: absolute;
+  right: 0;
+  top: 0;
+}
+
+.connection-form__group-label {
+  color: var(--neutral-600);
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  margin: 0;
+  text-transform: uppercase;
 }
 
 .connection-form__field {
@@ -112,13 +163,22 @@
   font-family: var(--font-sans);
   font-size: 13px;
   line-height: 1.4;
-  padding: 6px 8px;
+  padding: 9px 10px;
+  transition:
+    border-color var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration-fast) var(--ease-standard);
   width: 100%;
 }
 
 .connection-form__field input:hover,
 .connection-form__field select:hover {
   border-color: var(--neutral-400);
+}
+
+.connection-form__field input:focus-visible,
+.connection-form__field select:focus-visible {
+  border-color: var(--primary-600);
+  outline-offset: 1px;
 }
 
 .connection-form__row {
@@ -142,7 +202,8 @@
 }
 
 .connection-form__ssh {
-  border: 1px solid var(--neutral-300);
+  background: var(--neutral-100);
+  border: 1px solid var(--neutral-200);
   border-radius: var(--radius);
   display: flex;
   flex-direction: column;
@@ -174,11 +235,20 @@
   cursor: pointer;
   font-family: var(--font-sans);
   font-size: 13px;
-  padding: 6px 10px;
+  font-weight: 500;
+  padding: 9px 14px;
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard),
+    transform var(--duration-fast) var(--ease-out);
 }
 
 .connection-panel__actions button:hover:not(:disabled) {
   border-color: var(--neutral-400);
+}
+
+.connection-panel__actions button:active:not(:disabled) {
+  transform: scale(0.97);
 }
 
 .connection-panel__actions button:disabled {
@@ -190,6 +260,7 @@
 .connection-panel__actions button.connection-panel__primary {
   background: var(--primary-600);
   border-color: var(--primary-600);
+  box-shadow: var(--shadow-sm);
   color: oklch(1 0 0);
 }
 
@@ -199,9 +270,10 @@
 }
 
 .connection-panel__confirm {
-  background: var(--neutral-100);
+  background: var(--warning-tint);
   border: 1px solid var(--neutral-300);
   border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
@@ -209,7 +281,7 @@
 }
 
 .connection-panel__confirm p {
-  color: var(--neutral-800);
+  color: var(--warning-text);
   font-family: var(--font-sans);
   font-size: 13px;
   margin: 0;
@@ -229,7 +301,7 @@
   cursor: pointer;
   font-family: var(--font-sans);
   font-size: 13px;
-  padding: 6px 10px;
+  padding: 8px 12px;
 }
 
 .connection-panel__status {
@@ -267,11 +339,16 @@
   border-radius: var(--radius);
   color: var(--neutral-900);
   cursor: default;
-  font-family: var(--font-sans);
+  font-family: var(--font-mono);
   font-size: 13px;
-  padding: 6px 8px;
+  padding: 9px 10px;
   text-align: left;
+  transition: border-color var(--duration-fast) var(--ease-standard);
   width: 100%;
+}
+
+.connection-tables-list li button:hover {
+  border-color: var(--neutral-400);
 }
 
 .connection-string-fields {
@@ -311,4 +388,9 @@
   font-family: var(--font-sans);
   font-size: 13px;
   padding: 6px 10px;
+  transition: border-color var(--duration-fast) var(--ease-standard);
+}
+
+.connection-string-fields button:hover {
+  border-color: var(--neutral-400);
 }

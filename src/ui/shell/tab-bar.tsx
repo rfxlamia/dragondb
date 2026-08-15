@@ -48,15 +48,20 @@ export function TabBar(props: TabBarProps): React.JSX.Element {
         </div>
       ) : null}
       {soloTab !== undefined ? (
-        <button
-          type="button"
-          className="tab-bar__close tab-bar__close--solo"
-          data-testid={TabBarAccessibility.closeTab}
-          aria-label={TabBarCopy.closeTab}
-          onClick={() => onCloseTab(soloTab.id)}
-        >
-          ×
-        </button>
+        <div className="tab-bar__item tab-bar__item--solo">
+          <span className="tab-bar__tab tab-bar__tab--active tab-bar__tab--solo">
+            {soloTab.title}
+          </span>
+          <button
+            type="button"
+            className="tab-bar__close"
+            data-testid={TabBarAccessibility.closeTab}
+            aria-label={TabBarCopy.closeTab}
+            onClick={() => onCloseTab(soloTab.id)}
+          >
+            ×
+          </button>
+        </div>
       ) : null}
       <button
         type="button"

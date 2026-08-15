@@ -301,6 +301,7 @@ export function VisualQueryCanvas(props: VisualQueryCanvasProps): React.JSX.Elem
             <legend className="vq-canvas__interaction__legend">Query builder</legend>
             {presentation.showsInitialAddButton ? (
               <div className="vq-canvas__empty">
+                <img className="vq-canvas__empty-mascot" src="/hello.png" alt="" />
                 <div className="vq-canvas__empty-title">{VisualQueryCopy.emptyCanvasTitle}</div>
                 <div className="vq-canvas__empty-body">{VisualQueryCopy.emptyCanvasBody}</div>
                 <div className="vq-canvas__empty-action">
