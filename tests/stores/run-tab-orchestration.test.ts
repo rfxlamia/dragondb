@@ -132,6 +132,28 @@ describe("run → executing tab orchestration", () => {
     expect(after?.compact).toBeNull();
   });
 
+  it("does not invoke onAppliedSuccess when a late apply does not land", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => {
+      release = r;
+    });
+    const ipc = composeIpc({
+      runQuery: vi.fn(async () => {
+        await gate;
+        return { columns: ["id"], rows: [[1]], rowsAffected: null, durationMs: 5 };
+      }),
+    });
+    const stores = composeAppStores(ipc);
+    await stores.session.getState().connect("P");
+    const tab = stores.tabs.getState().createTab();
+    const onAppliedSuccess = vi.fn();
+    const pending = runSelectOnActiveTab(stores, ipc, FIXTURE_SQL, onAppliedSuccess);
+    stores.tabs.getState().clearTabResults(tab.id);
+    release();
+    await pending;
+    expect(onAppliedSuccess).not.toHaveBeenCalled();
+  });
+
   it("Run failure applies error status then rethrows", async () => {
     const ipc = composeIpc({
       runQuery: vi.fn(async () => {

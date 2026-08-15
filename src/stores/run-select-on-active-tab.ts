@@ -48,8 +48,9 @@ export async function runSelectOnActiveTab(
   // run into status error / null raw (see tabs-store deleteTabState .catch).
   const { isConnected } = stores.session.getState();
   if (isConnected && gen !== null) {
+    let applied = false;
     try {
-      await stores.tabs.getState().applyRunSuccess(
+      applied = await stores.tabs.getState().applyRunSuccess(
         executingTabId,
         {
           columns: result.columns,
@@ -59,11 +60,14 @@ export async function runSelectOnActiveTab(
         gen,
       );
     } catch {
-      /* best-effort persist */
+      /* in-memory apply landed; persist is best-effort */
+      applied = true;
     }
-    const tab = stores.tabs.getState().tabs.find((t) => t.id === executingTabId);
-    if (tab !== undefined) {
-      onAppliedSuccess?.(tab);
+    if (applied) {
+      const tab = stores.tabs.getState().tabs.find((t) => t.id === executingTabId);
+      if (tab !== undefined) {
+        onAppliedSuccess?.(tab);
+      }
     }
   }
   return result;

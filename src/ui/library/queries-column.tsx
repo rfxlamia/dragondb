@@ -37,6 +37,8 @@ export function QueriesColumn(props: QueriesColumnProps): React.JSX.Element {
   const [sheet, setSheet] = useState<Sheet | null>(null);
 
   const selected = queries.find((query) => query.id === selectedQueryId) ?? null;
+  const selectedFolderId =
+    selected !== null && selected.folderId !== null ? selected.folderId : null;
   const unfiled = useMemo(() => queries.filter((query) => query.folderId === null), [queries]);
   const queriesByFolder = useMemo(() => {
     const grouped = new Map<string, SavedQueryDto[]>();
@@ -70,24 +72,22 @@ export function QueriesColumn(props: QueriesColumnProps): React.JSX.Element {
       {queries.length === 0 ? (
         <p className="queries-column__empty">{QueriesCopy.empty}</p>
       ) : (
-        <>
-          <ul className="queries-column__list">
-            {unfiled.map((query) => (
+        <ul className="queries-column__list">
+          {unfiled.map((query) => (
+            <li key={query.id}>{queryButton(query, selectedQueryId, onSelectQuery)}</li>
+          ))}
+        </ul>
+      )}
+      {folders.map((folder) => (
+        <div className="queries-column__folder" key={folder.id}>
+          <h3 className="queries-column__folder-name">{folder.name}</h3>
+          <ul className="queries-column__folder-queries">
+            {(queriesByFolder.get(folder.id) ?? []).map((query) => (
               <li key={query.id}>{queryButton(query, selectedQueryId, onSelectQuery)}</li>
             ))}
           </ul>
-          {folders.map((folder) => (
-            <div className="queries-column__folder" key={folder.id}>
-              <h3 className="queries-column__folder-name">{folder.name}</h3>
-              <ul className="queries-column__folder-queries">
-                {(queriesByFolder.get(folder.id) ?? []).map((query) => (
-                  <li key={query.id}>{queryButton(query, selectedQueryId, onSelectQuery)}</li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </>
-      )}
+        </div>
+      ))}
 
       {selected !== null ? (
         <div className="queries-column__actions">
@@ -105,10 +105,10 @@ export function QueriesColumn(props: QueriesColumnProps): React.JSX.Element {
               {QueriesCopy.move}
             </button>
           ) : null}
-          {selected.folderId !== null ? (
+          {selectedFolderId !== null ? (
             <button
               type="button"
-              onClick={() => setSheet({ kind: "delete-folder", folderId: selected.folderId ?? "" })}
+              onClick={() => setSheet({ kind: "delete-folder", folderId: selectedFolderId })}
             >
               {QueriesCopy.deleteFolder}
             </button>

@@ -39,6 +39,24 @@ describe("QueriesColumn", () => {
     expect(QueriesCopy.empty).toBe("No saved queries");
   });
 
+  it("shows folder headings when the query list is empty", () => {
+    render(
+      <QueriesColumn
+        queries={[]}
+        folders={[folder]}
+        selectedQueryId={null}
+        onSelectQuery={vi.fn()}
+        onNewQuery={vi.fn()}
+        onRenameQuery={vi.fn()}
+        onDeleteQuery={vi.fn()}
+        onMoveQuery={vi.fn()}
+        onDeleteFolder={vi.fn()}
+      />,
+    );
+    expect(screen.getByText(QueriesCopy.empty)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Folder" })).toBeInTheDocument();
+  });
+
   it("disables rename Save when the name is blank", async () => {
     const user = userEvent.setup();
     render(

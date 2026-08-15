@@ -52,7 +52,7 @@ export type TabsState = {
   hydrateFromDto: (dto: TabStateDto) => void;
   refresh: () => Promise<void>;
   beginRun: (tabId: string) => number | null;
-  applyRunSuccess: (tabId: string, result: TabRunResult, generation?: number) => Promise<void>;
+  applyRunSuccess: (tabId: string, result: TabRunResult, generation?: number) => Promise<boolean>;
   applyRunFailure: (tabId: string, message: string, generation?: number) => void;
   clearTabResults: (tabId: string) => void;
   clearInMemoryResults: () => void;
@@ -359,7 +359,7 @@ export function createTabsStore(ipc: DragonIpc, getters: TabsSessionGetters): St
       },
 
       async applyRunSuccess(tabId, result, generation) {
-        if (!canApplyRun(tabId, generation)) return;
+        if (!canApplyRun(tabId, generation)) return false;
         const raw: TabResultGrid = { columns: result.columns, rows: result.rows };
         const compact = compactGrid(raw);
         patchTab(tabId, {
@@ -374,8 +374,9 @@ export function createTabsStore(ipc: DragonIpc, getters: TabsSessionGetters): St
           cachedColumnNames: result.columns,
         });
         const tab = get().tabs.find((t) => t.id === tabId);
-        if (!tab) return;
+        if (!tab) return false;
         await get().persistTab(toTabStateDto(tab), { includeCachedResults: true });
+        return true;
       },
 
       applyRunFailure(tabId, message, generation) {

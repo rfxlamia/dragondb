@@ -638,7 +638,9 @@ describe("tabs-store", () => {
   });
 
   it("setSavedQueryId updates in-memory tab and persists metadata without changing compact/status", async () => {
-    const saveTabState = vi.fn(async () => undefined);
+    const saveTabState = vi.fn(
+      async (_dto: TabStateDto, _opts?: { includeCachedResults?: boolean }) => undefined,
+    );
     const ipc = {
       saveTabState,
       deleteTabState: vi.fn(async () => undefined),

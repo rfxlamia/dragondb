@@ -38,7 +38,7 @@ vi.mock("@tauri-apps/api/event", () => ({
 
 import type { UserEvent } from "@testing-library/user-event";
 import App from "../../src/App";
-import type { DragonIpc } from "../../src/ipc/contract";
+import type { DragonIpc, SavedQueryDto } from "../../src/ipc/contract";
 import {
   createMockDragonIpc,
   FIXTURE_CONNECTION_ID,
@@ -1517,20 +1517,7 @@ describe("App tab bar and in-session documents", () => {
   });
 });
 
-function savedQuery(
-  id: string,
-  name: string,
-  queryText: string,
-): {
-  id: string;
-  name: string;
-  queryText: string;
-  connectionId: null;
-  databaseName: null;
-  createdAt: string;
-  updatedAt: string;
-  folderId: null;
-} {
+function savedQuery(id: string, name: string, queryText: string): SavedQueryDto {
   return {
     id,
     name,
@@ -1576,7 +1563,7 @@ describe("App Queries column (SP-4b)", () => {
       savedQuery("q1", "Q1", "SELECT * FROM other"),
       savedQuery("q2", "Q2", "SELECT 2"),
     ];
-    vi.spyOn(ipc, "listSavedQueries").mockImplementation(async () => library);
+    vi.spyOn(ipc, "listSavedQueries").mockImplementation(async () => library.slice());
     vi.spyOn(ipc, "runQuery").mockResolvedValue({
       columns: ["id"],
       rows: Array.from({ length: 10 }, (_, i) => [i]),
@@ -1672,11 +1659,68 @@ describe("App Queries column (SP-4b)", () => {
     );
   });
 
+  it("selecting uncached Q2 clears Q1 rows and ignores a Run started before the switch", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    const library = [savedQuery("q1", "Q1", "SELECT 1"), savedQuery("q2", "Q2", "SELECT 2")];
+    vi.spyOn(ipc, "listSavedQueries").mockImplementation(async () => library.slice());
+    let release!: () => void;
+    const gate = new Promise<void>((r) => {
+      release = r;
+    });
+    let call = 0;
+    vi.spyOn(ipc, "runQuery").mockImplementation(async () => {
+      call += 1;
+      if (call === 1) {
+        return {
+          columns: ["id"],
+          rows: Array.from({ length: 10 }, (_, i) => [`q1-${i}`]),
+          rowsAffected: null,
+          durationMs: 8,
+        };
+      }
+      await gate;
+      return { columns: ["id"], rows: [["late-q1"]], rowsAffected: null, durationMs: 9 };
+    });
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
+    await addSelectFromUsers(user);
+    await user.click(await screen.findByRole("button", { name: "Q1" }));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.runQuery));
+    await waitFor(() => expect(screen.getByTestId(ResultsAccessibility.grid)).toBeInTheDocument());
+    expect(screen.getByTestId(ResultsAccessibility.grid).querySelectorAll("tbody tr")).toHaveLength(
+      10,
+    );
+    await user.click(screen.getByTestId(VisualQueryAccessibility.runQuery));
+    await waitFor(() =>
+      expect(screen.getByTestId(ResultsAccessibility.loading)).toBeInTheDocument(),
+    );
+    await user.click(screen.getByRole("button", { name: "Q2" }));
+    expect(screen.getByTestId(ResultsAccessibility.empty)).toHaveTextContent(
+      ResultsCopy.runQueryEmpty,
+    );
+    expect(screen.queryByTestId(ResultsAccessibility.grid)).toBeNull();
+    expect(screen.queryByText("q1-0")).toBeNull();
+    release();
+    await waitFor(() => {
+      expect(screen.getByTestId(ResultsAccessibility.empty)).toHaveTextContent(
+        ResultsCopy.runQueryEmpty,
+      );
+    });
+    expect(screen.queryByText("late-q1")).toBeNull();
+    expect(screen.queryByTestId(ResultsAccessibility.grid)).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Q2" }));
+    expect(screen.getByTestId(ResultsAccessibility.empty)).toHaveTextContent(
+      ResultsCopy.runQueryEmpty,
+    );
+    expect(screen.queryByText("late-q1")).toBeNull();
+  });
+
   it("Queries + selects a new Query yy-MM-dd H:mm:ss and clears the active canvas and grid", async () => {
     const user = userEvent.setup();
     const ipc = createMockDragonIpc("happy");
     const library = [savedQuery("q1", "Q1", "SELECT 1")];
-    vi.spyOn(ipc, "listSavedQueries").mockImplementation(async () => library);
+    vi.spyOn(ipc, "listSavedQueries").mockImplementation(async () => library.slice());
     vi.spyOn(ipc, "saveSavedQuery").mockImplementation(async (query) => {
       library.push(query);
       return query;
@@ -1684,6 +1728,11 @@ describe("App Queries column (SP-4b)", () => {
     render(<App ipc={ipc} />);
     await connectFirst(user, ipc);
     await addSelectFromUsers(user);
+    await user.click(screen.getByTestId(VisualQueryAccessibility.allColumnsToggle));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.selectColumnsPicker));
+    expect(
+      await screen.findByTestId(VisualQueryAccessibility.schemaPopoverItem("Columns", "id")),
+    ).toBeInTheDocument();
     await user.click(await screen.findByRole("button", { name: "Q1" }));
     await user.click(screen.getByTestId(QueriesAccessibility.newQuery));
     expect(screen.getByText(/^Query \d{2}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/)).toBeInTheDocument();
@@ -1692,6 +1741,14 @@ describe("App Queries column (SP-4b)", () => {
       ResultsCopy.runQueryEmpty,
     );
     expect(QueriesCopy.empty).toBe("No saved queries");
+    await user.click(screen.getByTestId(VisualQueryAccessibility.initialAddBlock));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("select")));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.allColumnsToggle));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.selectColumnsPicker));
+    expect(
+      screen.queryByTestId(VisualQueryAccessibility.schemaPopoverItem("Columns", "id")),
+    ).toBeNull();
+    expect(screen.queryByRole("button", { name: "id" })).toBeNull();
   });
 });
 
