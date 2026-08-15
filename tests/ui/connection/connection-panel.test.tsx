@@ -3,6 +3,7 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createMockDragonIpc, fixtureProfileFields } from "../../../src/ipc/mock";
+import { ConnectionAccessibility } from "../../../src/ui/connection/connection-accessibility";
 import { ConnectionCopy } from "../../../src/ui/connection/connection-copy";
 import { ConnectionPanel } from "../../../src/ui/connection/connection-panel";
 
@@ -521,5 +522,151 @@ describe("ConnectionPanel Save-then-Connect", () => {
     await user.click(screen.getByRole("button", { name: ConnectionCopy.confirmDelete }));
     await waitFor(() => expect(onFormVisibleChange).toHaveBeenCalledWith(false));
     expect(onProfilesLoaded).toHaveBeenCalledWith(0);
+  });
+
+  it("does not show table names or fail copy while disconnected", async () => {
+    const ipc = createMockDragonIpc("happy");
+    render(
+      <ConnectionPanel
+        ipc={ipc}
+        isConnected={false}
+        formVisible={true}
+        onFormVisibleChange={vi.fn()}
+        onProfilesLoaded={vi.fn()}
+        tables={[{ schema: "public", name: "users" }]}
+        tablesLoading={false}
+        tablesErrorMessage="tables_load_failed"
+        {...sessionPropsFromIpc(ipc)}
+        onConnected={vi.fn()}
+        onDisconnected={vi.fn()}
+        onSwitchSuccess={vi.fn()}
+        onSwitchFailure={vi.fn()}
+      />,
+    );
+    expect(screen.queryByRole("button", { name: "users" })).toBeNull();
+    expect(screen.queryByText(ConnectionCopy.tablesLoadError)).toBeNull();
+  });
+
+  it("Save in Connection String mode parses URI into host/user/database and keeps password in secrets", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    const saveSpy = vi.spyOn(ipc, "saveProfile");
+    render(
+      <ConnectionPanel
+        ipc={ipc}
+        isConnected={false}
+        formVisible={true}
+        onFormVisibleChange={vi.fn()}
+        onProfilesLoaded={vi.fn()}
+        {...sessionPropsFromIpc(ipc)}
+        onConnected={vi.fn()}
+        onDisconnected={vi.fn()}
+        onSwitchSuccess={vi.fn()}
+        onSwitchFailure={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByLabelText(ConnectionCopy.connectionStringMode));
+    await user.type(
+      screen.getByTestId(ConnectionAccessibility.connectionStringField),
+      "postgres://alice:s3cret@localhost:5432/app",
+    );
+    await user.click(screen.getByRole("button", { name: ConnectionCopy.save }));
+    await waitFor(() => expect(saveSpy).toHaveBeenCalled());
+    const input = saveSpy.mock.calls[0]?.[0];
+    expect(input?.profile.host).toBe("localhost");
+    expect(input?.profile.username).toBe("alice");
+    expect(input?.profile.database).toBe("app");
+    expect(input?.profile).not.toHaveProperty("password");
+    expect(input?.secrets.password).toBe("s3cret");
+  });
+
+  it("Save of a malformed URI shows a parser error and does not call saveProfile", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    const saveSpy = vi.spyOn(ipc, "saveProfile");
+    render(
+      <ConnectionPanel
+        ipc={ipc}
+        isConnected={false}
+        formVisible={true}
+        onFormVisibleChange={vi.fn()}
+        onProfilesLoaded={vi.fn()}
+        {...sessionPropsFromIpc(ipc)}
+        onConnected={vi.fn()}
+        onDisconnected={vi.fn()}
+        onSwitchSuccess={vi.fn()}
+        onSwitchFailure={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByLabelText(ConnectionCopy.connectionStringMode));
+    await user.type(screen.getByTestId(ConnectionAccessibility.connectionStringField), "not-a-url");
+    await user.click(screen.getByRole("button", { name: ConnectionCopy.save }));
+    expect(await screen.findByRole("status")).toBeInTheDocument();
+    expect(saveSpy).not.toHaveBeenCalled();
+  });
+
+  it("toggling back to individual fields before Save does not fill host/user/database from the URI", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    render(
+      <ConnectionPanel
+        ipc={ipc}
+        isConnected={false}
+        formVisible={true}
+        onFormVisibleChange={vi.fn()}
+        onProfilesLoaded={vi.fn()}
+        {...sessionPropsFromIpc(ipc)}
+        onConnected={vi.fn()}
+        onDisconnected={vi.fn()}
+        onSwitchSuccess={vi.fn()}
+        onSwitchFailure={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByLabelText(ConnectionCopy.connectionStringMode));
+    await user.type(
+      screen.getByTestId(ConnectionAccessibility.connectionStringField),
+      "postgres://alice@localhost:5432/app",
+    );
+    await user.click(screen.getByLabelText(ConnectionCopy.connectionStringMode));
+    expect(screen.getByLabelText(/host/i)).toHaveValue("");
+    expect(screen.getByLabelText(/username/i)).toHaveValue("");
+    expect(screen.getByLabelText(/database/i)).toHaveValue("");
+  });
+
+  it("edit mode Connection String URI is read-only and Copy uses YOUR_PASSWORD", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    await ipc.saveProfile({
+      profile: { ...baseProfileFields(), host: "localhost", username: "alice", database: "app" },
+      secrets: { password: "s3cret" },
+    });
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+    render(
+      <ConnectionPanel
+        ipc={ipc}
+        isConnected={false}
+        formVisible={true}
+        onFormVisibleChange={vi.fn()}
+        onProfilesLoaded={vi.fn()}
+        {...sessionPropsFromIpc(ipc)}
+        onConnected={vi.fn()}
+        onDisconnected={vi.fn()}
+        onSwitchSuccess={vi.fn()}
+        onSwitchFailure={vi.fn()}
+      />,
+    );
+    await user.click(await screen.findByRole("button", { name: /^dev$/i }));
+    await user.click(screen.getByLabelText(ConnectionCopy.connectionStringMode));
+    expect(screen.getByTestId(ConnectionAccessibility.connectionStringField)).toHaveAttribute(
+      "readonly",
+    );
+    await user.click(screen.getByRole("button", { name: ConnectionCopy.copyConnectionString }));
+    expect(writeText).toHaveBeenCalled();
+    expect(String(writeText.mock.calls[0]?.[0])).toContain("YOUR_PASSWORD");
+    expect(String(writeText.mock.calls[0]?.[0])).not.toContain("s3cret");
   });
 });

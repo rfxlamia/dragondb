@@ -157,4 +157,72 @@ describe("schema-store", () => {
     expect(store.getState().tables).toEqual([{ name: "users", schema: "public" }]);
     expect(store.getState().metadataErrorMessage).toBeNull();
   });
+
+  it("loadTables sets tablesLoading true before IPC resolves and false after success", async () => {
+    let resolveTables!: (rows: { name: string; schema: string }[]) => void;
+    const listTables = vi.fn(
+      () =>
+        new Promise<{ name: string; schema: string }[]>((resolve) => {
+          resolveTables = resolve;
+        }),
+    );
+    const ipc = { listTables } as unknown as DragonIpc;
+    const store = createSchemaStore(ipc);
+    const pending = store.getState().loadTables("c-a");
+    expect(store.getState().tablesLoading).toBe(true);
+    resolveTables([{ name: "users", schema: "public" }]);
+    await pending;
+    expect(store.getState().tablesLoading).toBe(false);
+    expect(store.getState().tables).toEqual([{ name: "users", schema: "public" }]);
+  });
+
+  it("loadTables reject sets tables_load_failed, tablesLoading false, and no stale names", async () => {
+    let rejectTables!: (error: Error) => void;
+    const listTables = vi.fn(
+      () =>
+        new Promise<never>((_resolve, reject) => {
+          rejectTables = reject;
+        }),
+    );
+    const ipc = { listTables } as unknown as DragonIpc;
+    const store = createSchemaStore(ipc);
+    const pending = store.getState().loadTables("c-a");
+    expect(store.getState().tablesLoading).toBe(true);
+    rejectTables(new Error("boom"));
+    await pending;
+    expect(store.getState().tablesLoading).toBe(false);
+    expect(store.getState().tablesErrorMessage).toBe("tables_load_failed");
+    expect(store.getState().tables).toEqual([]);
+  });
+
+  it("clear cancels a pending table load and resets tablesLoading", async () => {
+    let resolveTables!: (rows: { name: string; schema: string }[]) => void;
+    const listTables = vi.fn(
+      () =>
+        new Promise<{ name: string; schema: string }[]>((resolve) => {
+          resolveTables = resolve;
+        }),
+    );
+    const ipc = { listTables } as unknown as DragonIpc;
+    const store = createSchemaStore(ipc);
+    const pending = store.getState().loadTables("c-a");
+    expect(store.getState().tablesLoading).toBe(true);
+    store.getState().clear();
+    expect(store.getState().tablesLoading).toBe(false);
+    resolveTables([{ name: "stale", schema: "public" }]);
+    await pending;
+    expect(store.getState().tables).toEqual([]);
+  });
+
+  it("keeps a columns failure out of the tables error channel", async () => {
+    const ipc = {
+      listColumns: vi.fn(async () => {
+        throw new Error("columns boom");
+      }),
+    } as unknown as DragonIpc;
+    const store = createSchemaStore(ipc);
+    await store.getState().loadColumns("c-a", { schema: "public", name: "users" });
+    expect(store.getState().columnsErrorMessage).toBe("columns_load_failed");
+    expect(store.getState().tablesErrorMessage).toBeNull();
+  });
 });
