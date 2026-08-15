@@ -1797,6 +1797,57 @@ describe("App native menu and accelerators (SP-4b)", () => {
       new KeyboardEvent("keydown", { key: "Enter", ctrlKey: true, bubbles: true }),
     );
     await waitFor(() => expect(runQuery).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByTestId(ResultsAccessibility.grid)).toBeInTheDocument());
+  });
+
+  it("Accel+W closes the active tab when two tabs are open", async () => {
+    const ipc = createMockDragonIpc("happy");
+    await ipc.saveProfile({
+      profile: { ...fixtureProfileFields(), name: "dev" },
+      secrets: { password: "pw" },
+    });
+    render(<App ipc={ipc} />);
+    await screen.findByTestId(TabBarAccessibility.newTab);
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "t", ctrlKey: true, bubbles: true }));
+    expect(await screen.findByTestId(TabBarAccessibility.strip)).toBeInTheDocument();
+    expect(screen.getAllByRole("tab")).toHaveLength(2);
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "w", ctrlKey: true, bubbles: true }));
+    await waitFor(() => expect(screen.queryByTestId(TabBarAccessibility.strip)).toBeNull());
+  });
+
+  it("native menu new-tab and close-tab drive the same dispatcher as accelerators", async () => {
+    const ipc = createMockDragonIpc("happy");
+    await ipc.saveProfile({
+      profile: { ...fixtureProfileFields(), name: "dev" },
+      secrets: { password: "pw" },
+    });
+    render(<App ipc={ipc} />);
+    await screen.findByTestId(TabBarAccessibility.newTab);
+    emitTauriMenuForTest("new-tab");
+    expect(await screen.findByTestId(TabBarAccessibility.strip)).toBeInTheDocument();
+    expect(screen.getAllByRole("tab")).toHaveLength(2);
+    emitTauriMenuForTest("close-tab");
+    await waitFor(() => expect(screen.queryByTestId(TabBarAccessibility.strip)).toBeNull());
+  });
+
+  it("native menu run-query runs a SELECT once and no-ops when Run is disabled", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    await ipc.saveProfile({
+      profile: { ...fixtureProfileFields(), name: "dev" },
+      secrets: { password: "pw" },
+    });
+    const runQuery = vi.spyOn(ipc, "runQuery");
+    render(<App ipc={ipc} />);
+    await screen.findByTestId(VisualQueryAccessibility.runQuery);
+    expect(screen.getByTestId(VisualQueryAccessibility.runQuery)).toBeDisabled();
+    emitTauriMenuForTest("run-query");
+    expect(runQuery).not.toHaveBeenCalled();
+    await connectFirst(user, ipc);
+    await addSelectFromUsers(user);
+    emitTauriMenuForTest("run-query");
+    await waitFor(() => expect(runQuery).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByTestId(ResultsAccessibility.grid)).toBeInTheDocument());
   });
 
   it("welcome ignores Accel+T and still opens Help from the menu handler", async () => {

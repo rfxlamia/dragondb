@@ -3,6 +3,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it } from "vitest";
 import { loadDateFormat } from "../../../src/lib/date-format-setting";
+import { HelpAccessibility } from "../../../src/ui/help/help-accessibility";
 import { HelpCopy } from "../../../src/ui/help/help-copy";
 import { SettingsDialog } from "../../../src/ui/help/settings-dialog";
 
@@ -20,5 +21,6 @@ describe("SettingsDialog", () => {
     unmount();
     render(<SettingsDialog open={true} onOpenChange={() => {}} />);
     expect(screen.getByLabelText(HelpCopy.dateFormatUs)).toBeChecked();
+    expect(screen.getByTestId(HelpAccessibility.settingsDone)).toBeInTheDocument();
   });
 });

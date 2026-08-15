@@ -11,14 +11,10 @@ export const DATE_FORMAT_VALUES = [
 
 export type QueryResultsDateFormat = (typeof DATE_FORMAT_VALUES)[number];
 
+const DATE_FORMAT_SET: ReadonlySet<string> = new Set(DATE_FORMAT_VALUES);
+
 function isDateFormat(value: string | null): value is QueryResultsDateFormat {
-  return (
-    value === "iso8601" ||
-    value === "iso8601DateOnly" ||
-    value === "us" ||
-    value === "european" ||
-    value === "relative"
-  );
+  return value !== null && DATE_FORMAT_SET.has(value);
 }
 
 export function loadDateFormat(): QueryResultsDateFormat {

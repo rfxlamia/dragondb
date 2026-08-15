@@ -4,7 +4,9 @@ import {
   type QueryResultsDateFormat,
   saveDateFormat,
 } from "../../lib/date-format-setting";
+import { HelpAccessibility } from "./help-accessibility";
 import { HelpCopy } from "./help-copy";
+import { HelpDialogShell } from "./help-dialog-shell";
 import "./help.css";
 
 export type SettingsDialogProps = {
@@ -36,8 +38,11 @@ export function SettingsDialog(props: SettingsDialogProps): React.JSX.Element | 
   }
 
   return (
-    <div className="help-dialog" role="dialog" aria-label={HelpCopy.settingsTitle}>
-      <h2 className="help-dialog__title">{HelpCopy.settingsTitle}</h2>
+    <HelpDialogShell
+      title={HelpCopy.settingsTitle}
+      doneTestId={HelpAccessibility.settingsDone}
+      onDone={() => onOpenChange(false)}
+    >
       <div className="help-dialog__radios" role="radiogroup" aria-label={HelpCopy.settingsTitle}>
         {DATE_FORMAT_RADIOS.map((option) => (
           <label key={option.value} className="help-dialog__radio">
@@ -52,11 +57,6 @@ export function SettingsDialog(props: SettingsDialogProps): React.JSX.Element | 
           </label>
         ))}
       </div>
-      <div className="help-dialog__actions">
-        <button type="button" className="help-dialog__done" onClick={() => onOpenChange(false)}>
-          {HelpCopy.done}
-        </button>
-      </div>
-    </div>
+    </HelpDialogShell>
   );
 }

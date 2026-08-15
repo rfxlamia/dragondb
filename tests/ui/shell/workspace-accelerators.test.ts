@@ -30,6 +30,11 @@ describe("workspace-accelerators", () => {
       closeTab: "⌘W",
       runQuery: "⌘↵",
     });
+    expect(accelGlyphs("MacIntel")).toEqual({
+      newTab: "⌘T",
+      closeTab: "⌘W",
+      runQuery: "⌘↵",
+    });
   });
 
   it("Accel+T/W/Enter call ctx handlers; Enter no-ops when canRun is false", () => {

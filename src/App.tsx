@@ -1,5 +1,5 @@
 import { listen } from "@tauri-apps/api/event";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Group, Panel, Separator } from "react-resizable-panels";
 import { useStore } from "zustand";
 import type { ExecutableSQL, TableReference } from "./core";
@@ -173,21 +173,23 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
     tabDocumentsRef.current.delete(id);
   }
 
-  accelCtxRef.current = {
-    newTab: handleNewTab,
-    closeTab: () => {
-      const id = stores.tabs.getState().activeTabId;
-      if (id !== null) handleCloseTab(id);
-    },
-    runQuery: () => {
-      canvasHandleRef.current?.runIfRunnable();
-    },
-    canRun: () => canvasHandleRef.current?.canRun() ?? false,
-    welcome,
-    openHelp: () => setHelpOpen(true),
-    openShortcuts: () => setShortcutsOpen(true),
-    openSettings: () => setSettingsOpen(true),
-  };
+  useLayoutEffect(() => {
+    accelCtxRef.current = {
+      newTab: handleNewTab,
+      closeTab: () => {
+        const id = stores.tabs.getState().activeTabId;
+        if (id !== null) handleCloseTab(id);
+      },
+      runQuery: () => {
+        canvasHandleRef.current?.runIfRunnable();
+      },
+      canRun: () => canvasHandleRef.current?.canRun() ?? false,
+      welcome,
+      openHelp: () => setHelpOpen(true),
+      openShortcuts: () => setShortcutsOpen(true),
+      openSettings: () => setSettingsOpen(true),
+    };
+  });
 
   useEffect(() => {
     let cancelled = false;

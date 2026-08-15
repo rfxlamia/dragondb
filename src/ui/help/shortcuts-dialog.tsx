@@ -1,4 +1,6 @@
+import { HelpAccessibility } from "./help-accessibility";
 import { HelpCopy } from "./help-copy";
+import { HelpDialogShell } from "./help-dialog-shell";
 import { ShortcutRows } from "./shortcut-rows";
 import "./help.css";
 
@@ -12,14 +14,12 @@ export function ShortcutsDialog(props: ShortcutsDialogProps): React.JSX.Element 
   const { open, onOpenChange, platform } = props;
   if (!open) return null;
   return (
-    <div className="help-dialog" role="dialog" aria-label={HelpCopy.shortcutsTitle}>
-      <h2 className="help-dialog__title">{HelpCopy.shortcutsTitle}</h2>
+    <HelpDialogShell
+      title={HelpCopy.shortcutsTitle}
+      doneTestId={HelpAccessibility.shortcutsDone}
+      onDone={() => onOpenChange(false)}
+    >
       <ShortcutRows platform={platform} />
-      <div className="help-dialog__actions">
-        <button type="button" className="help-dialog__done" onClick={() => onOpenChange(false)}>
-          {HelpCopy.done}
-        </button>
-      </div>
-    </div>
+    </HelpDialogShell>
   );
 }

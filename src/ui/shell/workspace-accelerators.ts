@@ -18,7 +18,7 @@ export type AccelGlyphs = {
 };
 
 export function accelGlyphs(platform: string): AccelGlyphs {
-  if (platform === "Mac" || platform.startsWith("Mac")) {
+  if (platform.startsWith("Mac")) {
     return { newTab: "⌘T", closeTab: "⌘W", runQuery: "⌘↵" };
   }
   return { newTab: "Ctrl+T", closeTab: "Ctrl+W", runQuery: "Ctrl+Enter" };

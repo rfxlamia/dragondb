@@ -1,6 +1,7 @@
 /** @vitest-environment jsdom */
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { HelpAccessibility } from "../../../src/ui/help/help-accessibility";
 import { HelpCopy } from "../../../src/ui/help/help-copy";
 import { ShortcutsDialog } from "../../../src/ui/help/shortcuts-dialog";
 
@@ -13,5 +14,6 @@ describe("ShortcutsDialog", () => {
     expect(screen.getByText(HelpCopy.newTab)).toBeInTheDocument();
     expect(screen.getByText("⌘T")).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: HelpCopy.support })).toBeNull();
+    expect(screen.getByTestId(HelpAccessibility.shortcutsDone)).toBeInTheDocument();
   });
 });
