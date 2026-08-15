@@ -5,7 +5,7 @@
  * `createTabsStore(ipc, { getConnectionId, getDatabaseName })` uses zustand/vanilla.
  * Does NOT require `createStoreApi` singleton — ipc is constructor-injected (T1 pattern).
  *
- * No TabBar / App canvas wiring (Phase C).
+ * Hydration sets tabsReady after listTabStates; creates one empty tab if none remain.
  */
 import { createStore, type StoreApi } from "zustand/vanilla";
 import type { ConnectionId, DragonIpc, TabStateDto } from "../ipc/contract";
@@ -43,6 +43,7 @@ export type TabRunResult = {
 export type TabsState = {
   tabs: TabState[];
   activeTabId: string | null;
+  tabsReady: boolean;
   pendingDeletedIds: Set<string>;
   createTab: () => TabState;
   switchTab: (id: string) => void;
@@ -208,6 +209,7 @@ export function createTabsStore(ipc: DragonIpc, getters: TabsSessionGetters): St
     return {
       tabs: [],
       activeTabId: null,
+      tabsReady: false,
       pendingDeletedIds: new Set(),
 
       createTab() {
@@ -312,22 +314,30 @@ export function createTabsStore(ipc: DragonIpc, getters: TabsSessionGetters): St
       },
 
       async refresh() {
-        const dtos = await ipc.listTabStates();
-        for (const dto of dtos) {
-          try {
-            get().hydrateFromDto(dto);
-          } catch {
-            /* malformed cache must not abort remaining tabs */
+        try {
+          const dtos = await ipc.listTabStates();
+          for (const dto of dtos) {
+            try {
+              get().hydrateFromDto(dto);
+            } catch {
+              /* malformed cache must not abort remaining tabs */
+            }
           }
+          const { tabs, activeTabId } = get();
+          if (activeTabId === null || !tabs.some((t) => t.id === activeTabId)) {
+            const active = tabs.find((t) => t.isActive) ?? tabs[0];
+            if (active) {
+              set({ activeTabId: active.id });
+            }
+          }
+        } catch {
+          /* retain empty in-memory fallback below */
         }
-        const { tabs, activeTabId } = get();
-        if (activeTabId !== null && tabs.some((t) => t.id === activeTabId)) {
-          return;
+
+        if (get().tabs.length === 0) {
+          get().createTab();
         }
-        const active = tabs.find((t) => t.isActive) ?? tabs[0];
-        if (active) {
-          set({ activeTabId: active.id });
-        }
+        set({ tabsReady: true });
       },
 
       beginRun(tabId) {
