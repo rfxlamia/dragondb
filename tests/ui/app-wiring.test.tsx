@@ -22,6 +22,7 @@ import {
 import { ConnectionCopy } from "../../src/ui/connection/connection-copy";
 import { ResultsAccessibility } from "../../src/ui/results/results-accessibility";
 import { ResultsCopy } from "../../src/ui/results/results-copy";
+import { TabBarAccessibility } from "../../src/ui/shell/tab-bar-accessibility";
 import { VisualQueryAccessibility } from "../../src/ui/visual-query/accessibility";
 import { VisualQueryCopy } from "../../src/ui/visual-query/copy";
 import { WelcomeAccessibility } from "../../src/ui/welcome/welcome-accessibility";
@@ -71,11 +72,16 @@ describe("App production default (no runtime mock)", () => {
     expect(screen.getAllByTestId(VisualQueryAccessibility.runQuery)).toHaveLength(1);
   });
 
-  it("Phase C must not render TabBar / History browser / Export button", async () => {
+  it("workspace with 1 tab hides the tab strip, shows New Tab, and does not render History or Export", async () => {
     const ipc = createMockDragonIpc("happy");
+    await ipc.saveProfile({
+      profile: { ...fixtureProfileFields(), name: "dev" },
+      secrets: { password: "pw" },
+    });
     render(<App ipc={ipc} />);
-    expect(screen.queryByRole("tablist")).toBeNull();
-    expect(screen.queryByText(/history/i)).toBeNull();
+    expect(await screen.findByTestId(TabBarAccessibility.newTab)).toBeInTheDocument();
+    expect(screen.queryByTestId(TabBarAccessibility.strip)).toBeNull();
+    expect(screen.queryByRole("button", { name: /history/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /export/i })).toBeNull();
   });
 });
@@ -889,8 +895,9 @@ describe("App results pane (SP-4b first slice)", () => {
     const src = readFileSync(join(process.cwd(), "src/App.tsx"), "utf8");
     expect(src).toMatch(/className=["']app-main-column["']/);
     expect(src).toMatch(/<VisualQueryCanvas\b/);
-    expect(src).toMatch(/key=\{canvasEpoch\}/);
+    expect(src).toMatch(/key=\{`\$\{activeTabId\}:\$\{docsEpoch\}`\}/);
     expect(src).not.toMatch(/<WorkspaceSplit[^>]*\bkey=\{canvasEpoch\}/);
+    expect(src).not.toMatch(/<VisualQueryCanvas[^>]*\bkey=\{canvasEpoch\}/);
   });
 
   it("Start over during loading ignores a late runQuery success", async () => {
@@ -1246,5 +1253,156 @@ describe("App welcome gating", () => {
     expect(screen.queryByRole("button", { name: /queries/i })).toBeNull();
     release();
     expect(await screen.findByText(WelcomeCopy.hello)).toBeInTheDocument();
+  });
+});
+
+describe("App tab bar and in-session documents", () => {
+  it("New Tab creates an empty canvas and idle results while keeping tab 1 cards and the connection", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
+    await addSelectFromUsers(user);
+    await user.click(screen.getByTestId(TabBarAccessibility.newTab));
+    expect(screen.getByTestId(TabBarAccessibility.strip)).toBeInTheDocument();
+    expect(screen.getAllByRole("tab")).toHaveLength(2);
+    expect(screen.getByText(VisualQueryCopy.emptyCanvasTitle)).toBeInTheDocument();
+    expect(screen.getByTestId(ResultsAccessibility.empty)).toHaveTextContent(
+      ResultsCopy.runQueryEmpty,
+    );
+    expect(screen.getByTestId(VisualQueryAccessibility.initialAddBlock)).not.toBeDisabled();
+    await user.click(screen.getAllByRole("tab")[0]!);
+    expect(screen.getByTestId(VisualQueryAccessibility.clauseCard("select"))).toBeInTheDocument();
+    expect(screen.getByTestId(VisualQueryAccessibility.clauseCard("from"))).toBeInTheDocument();
+  });
+
+  it("background Run does not mark tab 2 loading and restores tab 1 rows on switch back", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    let releaseRun!: () => void;
+    const runGate = new Promise<void>((resolve) => {
+      releaseRun = resolve;
+    });
+    vi.spyOn(ipc, "runQuery").mockImplementation(async () => {
+      await runGate;
+      return { columns: ["id"], rows: [[1], [2]], rowsAffected: null, durationMs: 4 };
+    });
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
+    await addSelectFromUsers(user);
+    await user.click(screen.getByTestId(VisualQueryAccessibility.runQuery));
+    await user.click(screen.getByTestId(TabBarAccessibility.newTab));
+    expect(screen.queryByTestId(ResultsAccessibility.loading)).toBeNull();
+    expect(screen.getByTestId(ResultsAccessibility.empty)).toHaveTextContent(
+      ResultsCopy.runQueryEmpty,
+    );
+    releaseRun();
+    await user.click(screen.getAllByRole("tab")[0]!);
+    await waitFor(() => expect(screen.getByTestId(ResultsAccessibility.grid)).toBeInTheDocument());
+    expect(screen.getByTestId(VisualQueryAccessibility.clauseCard("from"))).toBeInTheDocument();
+  });
+
+  it("Start over clears only the active tab cards and grid", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
+    await addSelectFromUsers(user);
+    await user.click(screen.getByTestId(TabBarAccessibility.newTab));
+    await user.click(await screen.findByTestId(VisualQueryAccessibility.initialAddBlock));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("select")));
+    await user.click(screen.getAllByRole("tab")[0]!);
+    await user.click(screen.getByTestId(VisualQueryAccessibility.startOver));
+    expect(screen.getByText(VisualQueryCopy.emptyCanvasTitle)).toBeInTheDocument();
+    expect(screen.getByTestId(ResultsAccessibility.empty)).toHaveTextContent(
+      ResultsCopy.runQueryEmpty,
+    );
+    await user.click(screen.getAllByRole("tab")[1]!);
+    expect(screen.getByTestId(VisualQueryAccessibility.clauseCard("select"))).toBeInTheDocument();
+  });
+
+  it("disconnect keeps active-tab cards and locks mutate/Run", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
+    await addSelectFromUsers(user);
+    await user.click(screen.getByRole("button", { name: /disconnect/i }));
+    expect(screen.getByTestId(VisualQueryAccessibility.clauseCard("select"))).toBeInTheDocument();
+    expect(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock)).toBeDisabled();
+    expect(screen.getByTestId(VisualQueryAccessibility.runQuery)).toBeDisabled();
+  });
+
+  it("profile switch empties every tab's cards and grids", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    await ipc.saveProfile({
+      profile: {
+        name: "B",
+        host: "db-b",
+        port: 5432,
+        username: "postgres",
+        database: "app",
+        isFavorite: false,
+        sslMode: "prefer",
+        sshEnabled: false,
+        sshHost: null,
+        sshPort: null,
+        sshUsername: null,
+        sshAuthMethod: null,
+        sshPrivateKeyPath: null,
+      },
+      secrets: { password: "pw" },
+    });
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
+    await addSelectFromUsers(user);
+    await user.click(screen.getByTestId(TabBarAccessibility.newTab));
+    await user.click(await screen.findByTestId(VisualQueryAccessibility.initialAddBlock));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("select")));
+    await user.click(screen.getByRole("button", { name: /disconnect/i }));
+    await user.click(screen.getByRole("button", { name: /^B$/i }));
+    await user.click(await screen.findByRole("button", { name: /connect/i }));
+    await waitFor(() =>
+      expect(screen.getByText(VisualQueryCopy.emptyCanvasTitle)).toBeInTheDocument(),
+    );
+    expect(screen.getByTestId(ResultsAccessibility.empty)).toHaveTextContent(
+      ResultsCopy.runQueryEmpty,
+    );
+    await user.click(screen.getAllByRole("tab")[0]!);
+    expect(screen.queryByTestId(VisualQueryAccessibility.clauseCard("select"))).toBeNull();
+    expect(screen.getByText(VisualQueryCopy.emptyCanvasTitle)).toBeInTheDocument();
+  });
+
+  it("closing the last tab recreates an empty tab with empty canvas and grid", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
+    await addSelectFromUsers(user);
+    await user.click(screen.getByTestId(TabBarAccessibility.closeTab));
+    expect(screen.getByText(VisualQueryCopy.emptyCanvasTitle)).toBeInTheDocument();
+    expect(screen.getByTestId(ResultsAccessibility.empty)).toHaveTextContent(
+      ResultsCopy.runQueryEmpty,
+    );
+    expect(screen.queryByTestId(TabBarAccessibility.strip)).toBeNull();
+  });
+
+  it("closing an inactive tab among three leaves the active tab cards in place", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
+    await addSelectFromUsers(user);
+    await user.click(screen.getByTestId(TabBarAccessibility.newTab));
+    await user.click(screen.getByTestId(TabBarAccessibility.newTab));
+    expect(screen.getAllByRole("tab")).toHaveLength(3);
+    await user.click(screen.getAllByRole("tab")[1]!);
+    await user.click(await screen.findByTestId(VisualQueryAccessibility.initialAddBlock));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("select")));
+    const closeButtons = screen.getAllByRole("button", { name: /close tab/i });
+    await user.click(closeButtons[0]!);
+    expect(screen.getAllByRole("tab")).toHaveLength(2);
+    expect(screen.getByTestId(VisualQueryAccessibility.clauseCard("select"))).toBeInTheDocument();
   });
 });

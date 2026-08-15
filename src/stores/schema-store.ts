@@ -5,6 +5,9 @@ export type SchemaState = {
   tables: TableRef[];
   columnNames: string[];
   metadataErrorMessage: string | null;
+  tablesLoading: boolean;
+  tablesErrorMessage: string | null;
+  columnsErrorMessage: string | null;
   loadTables: (connectionId: ConnectionId) => Promise<void>;
   loadColumns: (connectionId: ConnectionId, table: TableRef) => Promise<void>;
   clearColumns: () => void;
@@ -23,16 +26,30 @@ export function createSchemaStore(ipc: DragonIpc): StoreApi<SchemaState> {
     tables: [],
     columnNames: [],
     metadataErrorMessage: null,
+    tablesLoading: false,
+    tablesErrorMessage: null,
+    columnsErrorMessage: null,
 
     async loadTables(connectionId) {
       const generation = ++tableGeneration;
+      set({ tablesLoading: true, tablesErrorMessage: null });
       try {
         const rows = await ipc.listTables(connectionId);
         if (generation !== tableGeneration) return;
-        set({ tables: rows, metadataErrorMessage: null });
+        set({
+          tables: rows,
+          tablesLoading: false,
+          tablesErrorMessage: null,
+          metadataErrorMessage: null,
+        });
       } catch {
         if (generation !== tableGeneration) return;
-        set({ tables: [], metadataErrorMessage: "tables_load_failed" });
+        set({
+          tables: [],
+          tablesLoading: false,
+          tablesErrorMessage: "tables_load_failed",
+          metadataErrorMessage: "tables_load_failed",
+        });
       }
     },
 
@@ -43,12 +60,14 @@ export function createSchemaStore(ipc: DragonIpc): StoreApi<SchemaState> {
         if (generation !== columnGeneration) return;
         set({
           columnNames: rows.map((column) => column.name),
+          columnsErrorMessage: null,
           metadataErrorMessage: null,
         });
       } catch {
         if (generation !== columnGeneration) return;
         set({
           columnNames: [],
+          columnsErrorMessage: "columns_load_failed",
           metadataErrorMessage: "columns_load_failed",
         });
       }
@@ -56,13 +75,20 @@ export function createSchemaStore(ipc: DragonIpc): StoreApi<SchemaState> {
 
     clearColumns() {
       columnGeneration += 1;
-      set({ columnNames: [], metadataErrorMessage: null });
+      set({ columnNames: [], columnsErrorMessage: null, metadataErrorMessage: null });
     },
 
     clear() {
       tableGeneration += 1;
       columnGeneration += 1;
-      set({ tables: [], columnNames: [], metadataErrorMessage: null });
+      set({
+        tables: [],
+        columnNames: [],
+        metadataErrorMessage: null,
+        tablesLoading: false,
+        tablesErrorMessage: null,
+        columnsErrorMessage: null,
+      });
     },
   }));
 }

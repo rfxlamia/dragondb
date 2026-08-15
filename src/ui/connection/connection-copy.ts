@@ -35,6 +35,11 @@ export const ConnectionCopy = {
   unnamedProfile: "Unnamed",
   connectHint: "Save the profile before connecting.",
   noConnections: "No connections",
+  tablesLoading: "Loading tables...",
+  noTablesFound: "No tables found",
+  tablesLoadError: "Could not load tables. You can still type a name.",
+  connectionStringMode: "Connection String",
+  copyConnectionString: "Copy",
 } as const;
 
 const CONNECTION_ERROR_FALLBACK =

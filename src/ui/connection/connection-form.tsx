@@ -5,6 +5,7 @@ import type {
   SslMode,
 } from "../../ipc/contract";
 import { ConnectionCopy } from "./connection-copy";
+import { ConnectionStringFields } from "./connection-string-fields";
 
 export type ConnectionFormProfileFields = Omit<ConnectionProfileDto, "id">;
 
@@ -85,8 +86,23 @@ function patchSecrets(
 export function ConnectionForm(props: {
   value: ConnectionFormValue;
   onChange: (next: ConnectionFormValue) => void;
+  connectionStringMode?: boolean;
+  onConnectionStringModeChange?: (next: boolean) => void;
+  connectionStringValue?: string;
+  onConnectionStringChange?: (next: string) => void;
+  connectionStringReadOnly?: boolean;
+  onCopyConnectionString?: () => void;
 }): React.JSX.Element {
-  const { value, onChange } = props;
+  const {
+    value,
+    onChange,
+    connectionStringMode = false,
+    onConnectionStringModeChange,
+    connectionStringValue = "",
+    onConnectionStringChange,
+    connectionStringReadOnly = false,
+    onCopyConnectionString,
+  } = props;
   const { profile, secrets } = value;
   const sslModes = profile.sshEnabled ? SSL_MODES_SSH : SSL_MODES_ALL;
   const sshAuth: SshAuthMethod = profile.sshAuthMethod ?? "password";
@@ -114,54 +130,75 @@ export function ConnectionForm(props: {
         />
       </label>
 
-      <div className="connection-form__row">
-        <label className="connection-form__field">
-          <span>{ConnectionCopy.host}</span>
-          <input
-            type="text"
-            value={profile.host}
-            onChange={(e) => onChange(patchProfile(value, { host: e.target.value }))}
-          />
-        </label>
-        <label className="connection-form__field">
-          <span>{ConnectionCopy.port}</span>
-          <input
-            type="number"
-            value={profile.port}
-            onChange={(e) =>
-              onChange(patchProfile(value, { port: Number.parseInt(e.target.value, 10) || 0 }))
-            }
-          />
-        </label>
-      </div>
-
-      <label className="connection-form__field">
-        <span>{ConnectionCopy.username}</span>
+      <label className="connection-form__check">
         <input
-          type="text"
-          value={profile.username}
-          onChange={(e) => onChange(patchProfile(value, { username: e.target.value }))}
+          type="checkbox"
+          checked={connectionStringMode}
+          onChange={(event) => onConnectionStringModeChange?.(event.target.checked)}
         />
+        <span>{ConnectionCopy.connectionStringMode}</span>
       </label>
 
-      <label className="connection-form__field">
-        <span>{ConnectionCopy.database}</span>
-        <input
-          type="text"
-          value={profile.database}
-          onChange={(e) => onChange(patchProfile(value, { database: e.target.value }))}
+      {connectionStringMode ? (
+        <ConnectionStringFields
+          value={connectionStringValue}
+          onChange={(next) => onConnectionStringChange?.(next)}
+          readOnly={connectionStringReadOnly}
+          errorMessage={null}
+          onCopy={() => onCopyConnectionString?.()}
         />
-      </label>
+      ) : (
+        <>
+          <div className="connection-form__row">
+            <label className="connection-form__field">
+              <span>{ConnectionCopy.host}</span>
+              <input
+                type="text"
+                value={profile.host}
+                onChange={(e) => onChange(patchProfile(value, { host: e.target.value }))}
+              />
+            </label>
+            <label className="connection-form__field">
+              <span>{ConnectionCopy.port}</span>
+              <input
+                type="number"
+                value={profile.port}
+                onChange={(e) =>
+                  onChange(patchProfile(value, { port: Number.parseInt(e.target.value, 10) || 0 }))
+                }
+              />
+            </label>
+          </div>
 
-      <label className="connection-form__field">
-        <span>{ConnectionCopy.password}</span>
-        <input
-          type="password"
-          autoComplete="off"
-          value={secrets.password ?? ""}
-          onChange={(e) => onChange(patchSecrets(value, { password: e.target.value }))}
-        />
-      </label>
+          <label className="connection-form__field">
+            <span>{ConnectionCopy.username}</span>
+            <input
+              type="text"
+              value={profile.username}
+              onChange={(e) => onChange(patchProfile(value, { username: e.target.value }))}
+            />
+          </label>
+
+          <label className="connection-form__field">
+            <span>{ConnectionCopy.database}</span>
+            <input
+              type="text"
+              value={profile.database}
+              onChange={(e) => onChange(patchProfile(value, { database: e.target.value }))}
+            />
+          </label>
+
+          <label className="connection-form__field">
+            <span>{ConnectionCopy.password}</span>
+            <input
+              type="password"
+              autoComplete="off"
+              value={secrets.password ?? ""}
+              onChange={(e) => onChange(patchSecrets(value, { password: e.target.value }))}
+            />
+          </label>
+        </>
+      )}
 
       <label className="connection-form__field">
         <span>{ConnectionCopy.ssl}</span>
