@@ -1488,6 +1488,32 @@ describe("App tab bar and in-session documents", () => {
     expect(screen.getByText(VisualQueryCopy.emptyCanvasTitle)).toBeInTheDocument();
   });
 
+  it("delete last profile while disconnected then connect a new profile starts with empty cards", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
+    await addSelectFromUsers(user);
+    await user.click(screen.getByRole("button", { name: /disconnect/i }));
+    expect(screen.getByTestId(VisualQueryAccessibility.clauseCard("from"))).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: ConnectionCopy.delete }));
+    await user.click(screen.getByRole("button", { name: ConnectionCopy.confirmDelete }));
+    expect(await screen.findByText(WelcomeCopy.hello)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: WelcomeCopy.connectToServer }));
+    await user.type(screen.getByLabelText(/host/i), "127.0.0.1");
+    await user.type(screen.getByLabelText(/username/i), "postgres");
+    await user.type(screen.getByLabelText(/database/i), "app");
+    await user.type(screen.getByLabelText(/^password$/i), "pw");
+    await user.click(screen.getByRole("button", { name: /save/i }));
+    await user.click(await screen.findByRole("button", { name: /connect/i }));
+    await waitFor(() =>
+      expect(screen.getByTestId(VisualQueryAccessibility.initialAddBlock)).not.toBeDisabled(),
+    );
+    expect(screen.queryByTestId(VisualQueryAccessibility.clauseCard("select"))).toBeNull();
+    expect(screen.queryByTestId(VisualQueryAccessibility.clauseCard("from"))).toBeNull();
+    expect(screen.getByText(VisualQueryCopy.emptyCanvasTitle)).toBeInTheDocument();
+  });
+
   it("closing the last tab recreates an empty tab with empty canvas and grid", async () => {
     const user = userEvent.setup();
     const ipc = createMockDragonIpc("happy");
@@ -1663,6 +1689,54 @@ describe("App Queries column (SP-4b)", () => {
     );
   });
 
+  it("profile switch empties the grid even if Q1 restored B′ after disconnect", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    await ipc.saveProfile({
+      profile: {
+        name: "B",
+        host: "db-b",
+        port: 5432,
+        username: "postgres",
+        database: "app",
+        isFavorite: false,
+        sslMode: "prefer",
+        sshEnabled: false,
+        sshHost: null,
+        sshPort: null,
+        sshUsername: null,
+        sshAuthMethod: null,
+        sshPrivateKeyPath: null,
+      },
+      secrets: { password: "pw" },
+    });
+    vi.spyOn(ipc, "listSavedQueries").mockResolvedValue([savedQuery("q1", "Q1", "SELECT 1")]);
+    vi.spyOn(ipc, "runQuery").mockResolvedValue({
+      columns: ["id"],
+      rows: [["from-a"]],
+      rowsAffected: null,
+      durationMs: 2,
+    });
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
+    await addSelectFromUsers(user);
+    await user.click(await screen.findByRole("button", { name: "Q1" }));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.runQuery));
+    await waitFor(() => expect(screen.getByText("from-a")).toBeInTheDocument());
+    await user.click(screen.getByRole("button", { name: /disconnect/i }));
+    await user.click(screen.getByRole("button", { name: "Q1" }));
+    expect(screen.getByText("from-a")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /^B$/i }));
+    await user.click(await screen.findByRole("button", { name: /connect/i }));
+    await waitFor(() =>
+      expect(screen.getByText(VisualQueryCopy.emptyCanvasTitle)).toBeInTheDocument(),
+    );
+    expect(screen.queryByText("from-a")).toBeNull();
+    expect(screen.getByTestId(ResultsAccessibility.empty)).toHaveTextContent(
+      ResultsCopy.runQueryEmpty,
+    );
+  });
+
   it("selecting uncached Q2 clears Q1 rows and ignores a Run started before the switch", async () => {
     const user = userEvent.setup();
     const ipc = createMockDragonIpc("happy");
@@ -1753,6 +1827,44 @@ describe("App Queries column (SP-4b)", () => {
       screen.queryByTestId(VisualQueryAccessibility.schemaPopoverItem("Columns", "id")),
     ).toBeNull();
     expect(screen.queryByRole("button", { name: "id" })).toBeNull();
+  });
+
+  it("Queries + clears the tab that was active when + was clicked even if the user switches tabs during save", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    const library = [savedQuery("q1", "Q1", "SELECT 1")];
+    vi.spyOn(ipc, "listSavedQueries").mockImplementation(async () => library.slice());
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    vi.spyOn(ipc, "saveSavedQuery").mockImplementation(async (query) => {
+      await gate;
+      library.push(query);
+      return query;
+    });
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
+    await addSelectFromUsers(user);
+    await user.click(await screen.findByRole("button", { name: "Q1" }));
+    await user.click(screen.getByTestId(QueriesAccessibility.newQuery));
+    await user.click(screen.getByTestId(TabBarAccessibility.newTab));
+    await user.click(await screen.findByTestId(VisualQueryAccessibility.initialAddBlock));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("select")));
+    expect(screen.getByTestId(VisualQueryAccessibility.clauseCard("select"))).toBeInTheDocument();
+    release();
+    expect(
+      await screen.findByText(/^Query \d{2}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId(VisualQueryAccessibility.clauseCard("select"))).toBeInTheDocument();
+    await user.click(screen.getAllByRole("tab")[0]!);
+    expect(screen.getByText(VisualQueryCopy.emptyCanvasTitle)).toBeInTheDocument();
+    expect(screen.getByTestId(ResultsAccessibility.empty)).toHaveTextContent(
+      ResultsCopy.runQueryEmpty,
+    );
+    expect(
+      screen.getByRole("button", { name: /^Query \d{2}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/ }),
+    ).toHaveAttribute("aria-pressed", "true");
   });
 });
 

@@ -230,6 +230,14 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
   }, []);
 
   useEffect(() => {
+    if (!welcome) return;
+    const ids = stores.tabs.getState().tabs.map((tab) => tab.id);
+    tabDocumentsRef.current.resetAll(ids);
+    savedQueryCacheRef.current.clear();
+    stores.tabs.getState().clearInMemoryResults();
+  }, [welcome, stores]);
+
+  useEffect(() => {
     if (!profilesReady || welcome) return;
     void stores.library
       .getState()
@@ -247,19 +255,21 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
     const ids = stores.tabs.getState().tabs.map((tab) => tab.id);
     tabDocumentsRef.current.resetAll(ids);
     savedQueryCacheRef.current.clear();
+    stores.tabs.getState().clearInMemoryResults();
     setDocsEpoch((value) => value + 1);
   }
 
-  function resetActiveTabDocument(): void {
-    const tabId = stores.tabs.getState().activeTabId;
-    if (tabId === null) return;
+  function resetTabDocument(tabId: string): void {
     const document = tabDocumentsRef.current.getOrCreate(tabId);
     const priorFrom = document.committedFromTable;
     document.startOver();
-    if (priorFrom !== null) {
+    const activeId = stores.tabs.getState().activeTabId;
+    if (tabId === activeId && priorFrom !== null) {
       stores.schema.getState().clearColumns();
     }
-    setDocsEpoch((value) => value + 1);
+    if (tabId === activeId) {
+      setDocsEpoch((value) => value + 1);
+    }
     stores.tabs.getState().restoreSavedQueryResult(tabId, null);
   }
 
@@ -334,7 +344,7 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
       folderId: null,
     });
     stores.tabs.getState().setSavedQueryId(tabId, id);
-    resetActiveTabDocument();
+    resetTabDocument(tabId);
   }
 
   async function handleRenameQuery(id: string, name: string): Promise<void> {
