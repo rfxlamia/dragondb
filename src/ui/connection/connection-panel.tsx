@@ -5,8 +5,10 @@ import type {
   DragonIpc,
   IpcError,
   ProfileId,
+  TableRef,
 } from "../../ipc/contract";
-import { ConnectionAccessibility } from "./connection-accessibility";
+import { ConnectionStringParseError, parseConnectionString } from "../../lib/connection-string";
+import { ConnectionConfirmDialog } from "./connection-confirm-dialog";
 import { ConnectionCopy, humanIpcErrorMessage, isIpcError } from "./connection-copy";
 import {
   ConnectionForm,
@@ -14,7 +16,10 @@ import {
   emptyConnectionFormValue,
   formValueFromProfile,
 } from "./connection-form";
+import { ConnectionPanelActions } from "./connection-panel-actions";
 import { ConnectionProfileList } from "./connection-profile-list";
+import { ConnectionTablesList } from "./connection-tables-list";
+import { copyUriForProfile, profileFromParsedUri } from "./connection-uri";
 import "./connection.css";
 
 export interface ConnectionPanelProps {
@@ -24,6 +29,9 @@ export interface ConnectionPanelProps {
   formVisible: boolean;
   onFormVisibleChange: (next: boolean) => void;
   onProfilesLoaded: (count: number) => void;
+  tables?: TableRef[];
+  tablesLoading?: boolean;
+  tablesErrorMessage?: string | null;
   /** Session connect via store (generation-guarded). Profile CRUD stays on ipc. */
   connectProfile: (id: ProfileId) => Promise<ConnectResult>;
   /** Session disconnect via store (orchestrator clear). Never raw ipc.disconnect for live session. */
@@ -47,6 +55,9 @@ export function ConnectionPanel(props: ConnectionPanelProps): React.JSX.Element 
     formVisible,
     onFormVisibleChange,
     onProfilesLoaded,
+    tables = [],
+    tablesLoading = false,
+    tablesErrorMessage = null,
     connectProfile,
     disconnectSession,
     onConnected,
@@ -68,6 +79,8 @@ export function ConnectionPanel(props: ConnectionPanelProps): React.JSX.Element 
   const [pendingSwitchId, setPendingSwitchId] = useState<ProfileId | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<ProfileId | null>(null);
   const [busy, setBusy] = useState(false);
+  const [connectionStringMode, setConnectionStringMode] = useState(false);
+  const [connectionStringDraft, setConnectionStringDraft] = useState("");
 
   const canConnect = selectedId !== null && !dirty && !sessionClaimed && !busy;
 
@@ -109,6 +122,11 @@ export function ConnectionPanel(props: ConnectionPanelProps): React.JSX.Element 
     };
   }, [ipc, activeProfileId]);
 
+  function resetUriMode(): void {
+    setConnectionStringMode(false);
+    setConnectionStringDraft("");
+  }
+
   function updateForm(next: ConnectionFormValue): void {
     setForm(next);
     setDirty(true);
@@ -122,6 +140,7 @@ export function ConnectionPanel(props: ConnectionPanelProps): React.JSX.Element 
     setErrorMessage(null);
     setPendingSwitchId(null);
     setPendingDeleteId(null);
+    resetUriMode();
     onFormVisibleChange(true);
   }
 
@@ -138,24 +157,44 @@ export function ConnectionPanel(props: ConnectionPanelProps): React.JSX.Element 
     setForm(formValueFromProfile(profile));
     setDirty(false);
     setPendingSwitchId(null);
+    resetUriMode();
     onFormVisibleChange(true);
+  }
+
+  async function handleCopyConnectionString(): Promise<void> {
+    const uri = selectedId !== null ? copyUriForProfile(form.profile) : connectionStringDraft;
+    await navigator.clipboard.writeText(uri);
   }
 
   async function handleSave(): Promise<void> {
     setBusy(true);
     setErrorMessage(null);
     try {
+      let profile = form.profile;
+      let secrets = form.secrets;
+      if (connectionStringMode && selectedId === null) {
+        const parsed = parseConnectionString(connectionStringDraft);
+        profile = profileFromParsedUri(form.profile, parsed);
+        secrets = {
+          ...form.secrets,
+          ...(parsed.password !== undefined ? { password: parsed.password } : {}),
+        };
+      }
       const saved = await ipc.saveProfile({
         id: selectedId ?? undefined,
-        profile: form.profile,
-        secrets: form.secrets,
+        profile,
+        secrets,
       });
       setSelectedId(saved.id);
       setForm(formValueFromProfile(saved));
       setDirty(false);
       await refreshProfiles();
     } catch (error) {
-      setErrorMessage(humanIpcErrorMessage(error));
+      if (error instanceof ConnectionStringParseError) {
+        setErrorMessage(error.message);
+      } else {
+        setErrorMessage(humanIpcErrorMessage(error));
+      }
     } finally {
       setBusy(false);
     }
@@ -222,6 +261,7 @@ export function ConnectionPanel(props: ConnectionPanelProps): React.JSX.Element 
         setForm(formValueFromProfile(target));
         setDirty(false);
       }
+      resetUriMode();
       onSwitchSuccess(result);
     } catch (error) {
       setSessionClaimed(false);
@@ -256,6 +296,7 @@ export function ConnectionPanel(props: ConnectionPanelProps): React.JSX.Element 
         setForm(emptyConnectionFormValue());
         setDirty(false);
         setErrorMessage(null);
+        resetUriMode();
       }
       if (list.length === 0) {
         onFormVisibleChange(false);
@@ -278,81 +319,73 @@ export function ConnectionPanel(props: ConnectionPanelProps): React.JSX.Element 
         onNewProfile={startNewProfile}
       />
 
+      {sessionClaimed ? (
+        <ConnectionTablesList
+          tables={tables}
+          tablesLoading={tablesLoading}
+          tablesErrorMessage={tablesErrorMessage}
+        />
+      ) : null}
+
       {formVisible ? (
         <>
-          <ConnectionForm value={form} onChange={updateForm} />
+          <ConnectionForm
+            value={form}
+            onChange={updateForm}
+            connectionStringMode={connectionStringMode}
+            onConnectionStringModeChange={(next) => {
+              setConnectionStringMode(next);
+              setErrorMessage(null);
+            }}
+            connectionStringValue={
+              selectedId !== null ? copyUriForProfile(form.profile) : connectionStringDraft
+            }
+            onConnectionStringChange={(next) => {
+              setConnectionStringDraft(next);
+              setDirty(true);
+              setErrorMessage(null);
+            }}
+            connectionStringReadOnly={selectedId !== null}
+            onCopyConnectionString={() => void handleCopyConnectionString()}
+          />
 
-          <div className="connection-panel__actions">
-            <button type="button" onClick={() => void handleSave()} disabled={busy}>
-              {ConnectionCopy.save}
-            </button>
-
-            {sessionClaimed ? (
-              <button type="button" onClick={() => void handleDisconnect()} disabled={busy}>
-                {ConnectionCopy.disconnect}
-              </button>
-            ) : (
-              <button
-                type="button"
-                className="connection-panel__primary"
-                onClick={() => void handleConnect()}
-                disabled={!canConnect}
-              >
-                {ConnectionCopy.connect}
-              </button>
-            )}
-
-            {selectedId !== null ? (
-              <button
-                type="button"
-                onClick={() => {
-                  setPendingDeleteId(selectedId);
-                  setPendingSwitchId(null);
-                }}
-                disabled={busy}
-              >
-                {ConnectionCopy.delete}
-              </button>
-            ) : null}
-
-            <button
-              type="button"
-              data-testid={ConnectionAccessibility.formCancel}
-              onClick={() => onFormVisibleChange(false)}
-              disabled={busy}
-            >
-              {ConnectionCopy.cancel}
-            </button>
-          </div>
+          <ConnectionPanelActions
+            busy={busy}
+            canConnect={canConnect}
+            sessionClaimed={sessionClaimed}
+            selectedId={selectedId}
+            onSave={() => void handleSave()}
+            onConnect={() => void handleConnect()}
+            onDisconnect={() => void handleDisconnect()}
+            onRequestDelete={() => {
+              setPendingDeleteId(selectedId);
+              setPendingSwitchId(null);
+            }}
+            onCancel={() => onFormVisibleChange(false)}
+          />
         </>
       ) : null}
 
       {pendingSwitchId !== null ? (
-        <div className="connection-panel__confirm" role="dialog" aria-label="Switch connection">
-          <p>{ConnectionCopy.switchPrompt}</p>
-          <div className="connection-panel__confirm-actions">
-            <button type="button" onClick={() => void confirmSwitch()} disabled={busy}>
-              {ConnectionCopy.confirmSwitch}
-            </button>
-            <button type="button" onClick={() => setPendingSwitchId(null)} disabled={busy}>
-              {ConnectionCopy.cancel}
-            </button>
-          </div>
-        </div>
+        <ConnectionConfirmDialog
+          title="Switch connection"
+          prompt={ConnectionCopy.switchPrompt}
+          confirmLabel={ConnectionCopy.confirmSwitch}
+          busy={busy}
+          onConfirm={() => void confirmSwitch()}
+          onCancel={() => setPendingSwitchId(null)}
+        />
       ) : null}
 
       {pendingDeleteId !== null ? (
-        <div className="connection-panel__confirm" role="dialog" aria-label="Delete profile">
-          <p>{ConnectionCopy.deletePrompt}</p>
-          <div className="connection-panel__confirm-actions">
-            <button type="button" onClick={() => void confirmDelete()} disabled={busy}>
-              {ConnectionCopy.confirmDelete}
-            </button>
-            <button type="button" onClick={() => setPendingDeleteId(null)} disabled={busy}>
-              {ConnectionCopy.cancel}
-            </button>
-          </div>
-        </div>
+        <ConnectionConfirmDialog
+          title="Delete profile"
+          prompt={ConnectionCopy.deletePrompt}
+          confirmLabel={ConnectionCopy.confirmDelete}
+          busy={busy}
+          onConfirm={() => void confirmDelete()}
+          onCancel={() => setPendingDeleteId(null)}
+        />
       ) : null}
 
       {errorMessage ? (
