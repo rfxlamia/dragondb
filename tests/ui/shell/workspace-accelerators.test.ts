@@ -96,6 +96,6 @@ describe("workspace-accelerators", () => {
     const src = readFileSync(join(process.cwd(), "src-tauri/src/lib.rs"), "utf8");
     expect(src).toMatch(/CmdOrCtrl\+T/);
     expect(src).toMatch(/CmdOrCtrl\+W/);
-    expect(src).toMatch(/CmdOrCtrl\+Return/);
+    expect(src).toMatch(/\.accelerator\("CmdOrCtrl\+Enter"\)/);
   });
 });
