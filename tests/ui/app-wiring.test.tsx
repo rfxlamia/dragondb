@@ -80,12 +80,21 @@ async function connectFirst(user: UserEvent, _ipc: DragonIpc): Promise<void> {
   if (connectToServer) {
     await user.click(connectToServer);
   }
+  const disconnect = screen.queryByRole("button", { name: /disconnect/i });
+  if (disconnect) {
+    await user.click(disconnect);
+    await waitFor(() => expect(screen.queryByRole("button", { name: /disconnect/i })).toBeNull());
+  }
+  const newProfile = screen.queryByRole("button", { name: ConnectionCopy.newProfile });
+  if (newProfile) {
+    await user.click(newProfile);
+  }
   await user.type(screen.getByLabelText(/host/i), "127.0.0.1");
   await user.type(screen.getByLabelText(/username/i), "postgres");
-  await user.type(screen.getByLabelText(/database/i), "app");
+  await user.type(screen.getByLabelText(ConnectionCopy.database), "app");
   await user.type(screen.getByLabelText(/^password$/i), "pw");
   await user.click(screen.getByRole("button", { name: /save/i }));
-  await user.click(await screen.findByRole("button", { name: /connect/i }));
+  await user.click(await screen.findByRole("button", { name: ConnectionCopy.connectNow }));
   await waitFor(() =>
     expect(screen.getByTestId(VisualQueryAccessibility.initialAddBlock)).not.toBeDisabled(),
   );
@@ -1506,7 +1515,7 @@ describe("App tab bar and in-session documents", () => {
     await user.type(screen.getByLabelText(/database/i), "app");
     await user.type(screen.getByLabelText(/^password$/i), "pw");
     await user.click(screen.getByRole("button", { name: /save/i }));
-    await user.click(await screen.findByRole("button", { name: /connect/i }));
+    await user.click(await screen.findByRole("button", { name: ConnectionCopy.connectNow }));
     await waitFor(() =>
       expect(screen.getByTestId(VisualQueryAccessibility.initialAddBlock)).not.toBeDisabled(),
     );
@@ -1992,5 +2001,42 @@ describe("App native menu and accelerators (SP-4b)", () => {
     render(<App ipc={ipc} />);
     emitTauriMenuForTest("settings");
     expect(await screen.findByLabelText(HelpCopy.dateFormatEuropean)).toBeChecked();
+  });
+});
+
+describe("App overlay, collapse, and title (SP-4b last slice T6)", () => {
+  it("collapse hides Connection and keeps Queries | canvas; title follows picker", async () => {
+    const ipc = createMockDragonIpc("happy");
+    const user = userEvent.setup();
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
+    expect(screen.getByText(ConnectionCopy.panelTitle)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: ConnectionCopy.collapseConnection }));
+    expect(screen.queryByText(ConnectionCopy.panelTitle)).toBeNull();
+    expect(screen.getByTestId(QueriesAccessibility.column)).toBeInTheDocument();
+    expect(screen.getByTestId(VisualQueryAccessibility.initialAddBlock)).toBeInTheDocument();
+  });
+
+  it("window title follows the selected database", async () => {
+    const ipc = createMockDragonIpc("happy");
+    const user = userEvent.setup();
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
+    expect(document.title).toBe("app");
+  });
+
+  it("launch connect failure ends overlay and shows Connection Error", async () => {
+    const ipc = createMockDragonIpc("happy");
+    await ipc.saveProfile({
+      profile: { ...fixtureProfileFields(), name: "dev" },
+      secrets: { password: "pw" },
+    });
+    vi.spyOn(ipc, "connectProfile").mockRejectedValueOnce({
+      kind: "connection",
+      message: "refused",
+    });
+    render(<App ipc={ipc} />);
+    expect(await screen.findByText(/Connection Error/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Initializing/)).toBeNull();
   });
 });

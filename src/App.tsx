@@ -9,6 +9,7 @@ import { createTauriDragonIpc } from "./ipc/tauri-client";
 import { newSavedQueryName } from "./lib/new-saved-query-name";
 import { type AppStores, composeAppStores } from "./stores/compose-app-stores";
 import { runSelectOnActiveTab } from "./stores/run-select-on-active-tab";
+import { ConnectionCopy, humanIpcErrorMessage } from "./ui/connection/connection-copy";
 import { ConnectionPanel } from "./ui/connection/connection-panel";
 import { HelpDialog } from "./ui/help/help-dialog";
 import { SettingsDialog } from "./ui/help/settings-dialog";
@@ -16,6 +17,7 @@ import { ShortcutsDialog } from "./ui/help/shortcuts-dialog";
 import { QueriesColumn } from "./ui/library/queries-column";
 import { createSavedQueryResultCache } from "./ui/library/saved-query-result-cache";
 import { QueryResultsPane } from "./ui/results/query-results-pane";
+import { LoadingOverlay } from "./ui/shell/loading-overlay";
 import { TabBar } from "./ui/shell/tab-bar";
 import { TabBarCopy } from "./ui/shell/tab-bar-copy";
 import {
@@ -65,6 +67,7 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
   const isConnected = useStore(stores.session, (s) => s.isConnected);
   const connectionId = useStore(stores.session, (s) => s.connectionId);
   const profileId = useStore(stores.session, (s) => s.profileId);
+  const databaseName = useStore(stores.session, (s) => s.databaseName);
   const tableRefs = useStore(stores.schema, (s) => s.tables);
   const tablesLoading = useStore(stores.schema, (s) => s.tablesLoading);
   const tablesErrorMessage = useStore(stores.schema, (s) => s.tablesErrorMessage);
@@ -91,6 +94,7 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
   /** Last live profile id — store clears before panel calls onDisconnected. */
   const lastProfileIdRef = useRef<ProfileId | null>(null);
   const formVisibilityTouchedRef = useRef(false);
+  const restoreAttemptedRef = useRef(false);
   const tabDocumentsRef = useRef(createTabDocuments());
   const savedQueryCacheRef = useRef(createSavedQueryResultCache());
   const [profilesReady, setProfilesReady] = useState(false);
@@ -100,6 +104,10 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
   const [helpOpen, setHelpOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [overlayPhase, setOverlayPhase] = useState<string | null>(null);
+  const [launchError, setLaunchError] = useState<string | null>(null);
+  const [connectionCollapsed, setConnectionCollapsed] = useState(false);
+  const [missingDatabase, setMissingDatabase] = useState(false);
   const canvasHandleRef = useRef<VisualQueryCanvasHandle | null>(null);
   const accelCtxRef = useRef<WorkspaceAccelContext>({
     newTab: () => {},
@@ -143,8 +151,91 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
     };
   }, [ipc]);
 
+  useEffect(() => {
+    if (!profilesReady || profileCount === 0 || isConnected) return;
+    if (restoreAttemptedRef.current || formVisibilityTouchedRef.current) return;
+    restoreAttemptedRef.current = true;
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        if (cancelled || formVisibilityTouchedRef.current) return;
+        if (stores.session.getState().isConnected) return;
+        setOverlayPhase("Initializing…");
+        await stores.tabs
+          .getState()
+          .refresh()
+          .catch(() => {
+            /* best-effort hydrate */
+          });
+        if (cancelled || formVisibilityTouchedRef.current) {
+          setOverlayPhase(null);
+          return;
+        }
+        setOverlayPhase("Restoring tabs…");
+        const list = await ipc.listProfiles();
+        const tabState = stores.tabs.getState();
+        const active = tabState.tabs.find((tab) => tab.id === tabState.activeTabId);
+        const byTab = active?.connectionId
+          ? list.find((profile) => profile.id === active.connectionId)
+          : undefined;
+        const profileToConnect = byTab ?? list[0];
+        if (profileToConnect === undefined) {
+          setOverlayPhase(null);
+          return;
+        }
+        if (cancelled || formVisibilityTouchedRef.current) {
+          setOverlayPhase(null);
+          return;
+        }
+        setOverlayPhase("Connecting to database…");
+        try {
+          const result = await stores.session.getState().connect(profileToConnect.id);
+          if (cancelled || formVisibilityTouchedRef.current) {
+            const live = stores.session.getState();
+            if (
+              formVisibilityTouchedRef.current &&
+              !cancelled &&
+              live.profileId === profileToConnect.id
+            ) {
+              await live.disconnect().catch(() => {
+                /* user started a new profile; drop the restore session */
+              });
+            }
+            setOverlayPhase(null);
+            return;
+          }
+          stores.acknowledgeConnect(result.profileId);
+          setOverlayPhase("Loading databases…");
+          const databases = await ipc.listDatabases(result.connectionId);
+          const wanted = active?.databaseName;
+          if (wanted && databases.includes(wanted)) {
+            await stores.session.getState().switchDatabase(wanted);
+            setMissingDatabase(false);
+          } else if (wanted) {
+            setMissingDatabase(true);
+          }
+          setOverlayPhase("Loading tables…");
+          setOverlayPhase(null);
+        } catch (error) {
+          if (cancelled) return;
+          setOverlayPhase(null);
+          setLaunchError(humanIpcErrorMessage(error));
+        }
+      })();
+    }, 200);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [profilesReady, profileCount, isConnected, ipc, stores]);
+
+  useEffect(() => {
+    if (databaseName) document.title = databaseName;
+  }, [databaseName]);
+
   const handleFormVisibleChange = useCallback((next: boolean) => {
     formVisibilityTouchedRef.current = true;
+    setOverlayPhase(null);
     setFormVisible(next);
   }, []);
 
@@ -398,6 +489,14 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
   );
 
   if (!profilesReady) {
+    if (overlayPhase) {
+      return (
+        <>
+          <LoadingOverlay phase={overlayPhase} />
+          {chromeDialogs}
+        </>
+      );
+    }
     return (
       <>
         <main aria-busy="true" className="app-startup" />
@@ -418,65 +517,89 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
   }
 
   return (
-    <main className="app-shell">
-      <ConnectionPanel
-        ipc={ipc}
-        isConnected={isConnected}
-        activeProfileId={profileId ?? undefined}
-        formVisible={formVisible}
-        onFormVisibleChange={handleFormVisibleChange}
-        onProfilesLoaded={handleProfilesLoaded}
-        tables={tableRefs}
-        tablesLoading={tablesLoading}
-        tablesErrorMessage={tablesErrorMessage}
-        connectProfile={(id) => stores.session.getState().connect(id)}
-        disconnectSession={() => stores.session.getState().disconnect()}
-        onConnected={handleConnected}
-        onDisconnected={handleDisconnected}
-        onSwitchSuccess={handleSwitchSuccess}
-        onSwitchFailure={handleSwitchFailure}
-      />
-      <div className="app-main-column" aria-busy={workspaceReady ? undefined : true}>
-        <Group orientation="horizontal" className="app-workspace-split">
-          <Panel className="app-workspace-split__queries" defaultSize={220} minSize={160}>
-            <QueriesColumn
-              queries={libraryQueries}
-              folders={libraryFolders}
-              selectedQueryId={savedQueryId}
-              onSelectQuery={handleSelectQuery}
-              onNewQuery={handleNewQuery}
-              onRenameQuery={handleRenameQuery}
-              onDeleteQuery={handleDeleteQuery}
-              onMoveQuery={handleMoveQuery}
-              onDeleteFolder={handleDeleteFolder}
-            />
-          </Panel>
-          <Separator className="app-workspace-split__separator" />
-          <Panel className="app-workspace-split__main" minSize={400}>
-            <div className="app-workspace-main">
-              {workspaceReady ? (
-                <>
-                  <TabBar
-                    tabs={tabs.map((tab) => ({
-                      id: tab.id,
-                      title: TabBarCopy.untitled,
-                      isActive: tab.id === activeTabId,
-                    }))}
-                    onNewTab={handleNewTab}
-                    onSwitchTab={(id) => stores.tabs.getState().switchTab(id)}
-                    onCloseTab={handleCloseTab}
-                  />
-                  <WorkspaceSplit
-                    canvas={canvas}
-                    results={<QueryResultsPane status={status} compact={compact} />}
-                  />
-                </>
-              ) : null}
-            </div>
-          </Panel>
-        </Group>
-      </div>
-      {chromeDialogs}
-    </main>
+    <>
+      {overlayPhase ? <LoadingOverlay phase={overlayPhase} /> : null}
+      <main className={connectionCollapsed ? "app-shell app-shell--collapsed" : "app-shell"}>
+        {launchError ? (
+          <div className="app-connection-error" role="alert">
+            <strong>{ConnectionCopy.connectionError}</strong>
+            <p>{launchError}</p>
+          </div>
+        ) : null}
+        {connectionCollapsed ? (
+          <button
+            type="button"
+            className="app-show-connection"
+            onClick={() => setConnectionCollapsed(false)}
+          >
+            {ConnectionCopy.showConnection}
+          </button>
+        ) : (
+          <ConnectionPanel
+            ipc={ipc}
+            isConnected={isConnected}
+            activeProfileId={profileId ?? undefined}
+            formVisible={formVisible}
+            onFormVisibleChange={handleFormVisibleChange}
+            onProfilesLoaded={handleProfilesLoaded}
+            tables={tableRefs}
+            tablesLoading={tablesLoading}
+            tablesErrorMessage={tablesErrorMessage}
+            connectionId={connectionId}
+            databaseName={databaseName}
+            onSwitchDatabase={(name) => stores.session.getState().switchDatabase(name)}
+            onCollapse={() => setConnectionCollapsed(true)}
+            missingDatabase={missingDatabase}
+            connectProfile={(id) => stores.session.getState().connect(id)}
+            disconnectSession={() => stores.session.getState().disconnect()}
+            onConnected={handleConnected}
+            onDisconnected={handleDisconnected}
+            onSwitchSuccess={handleSwitchSuccess}
+            onSwitchFailure={handleSwitchFailure}
+          />
+        )}
+        <div className="app-main-column" aria-busy={workspaceReady ? undefined : true}>
+          <Group orientation="horizontal" className="app-workspace-split">
+            <Panel className="app-workspace-split__queries" defaultSize={220} minSize={160}>
+              <QueriesColumn
+                queries={libraryQueries}
+                folders={libraryFolders}
+                selectedQueryId={savedQueryId}
+                onSelectQuery={handleSelectQuery}
+                onNewQuery={handleNewQuery}
+                onRenameQuery={handleRenameQuery}
+                onDeleteQuery={handleDeleteQuery}
+                onMoveQuery={handleMoveQuery}
+                onDeleteFolder={handleDeleteFolder}
+              />
+            </Panel>
+            <Separator className="app-workspace-split__separator" />
+            <Panel className="app-workspace-split__main" minSize={400}>
+              <div className="app-workspace-main">
+                {workspaceReady ? (
+                  <>
+                    <TabBar
+                      tabs={tabs.map((tab) => ({
+                        id: tab.id,
+                        title: TabBarCopy.untitled,
+                        isActive: tab.id === activeTabId,
+                      }))}
+                      onNewTab={handleNewTab}
+                      onSwitchTab={(id) => stores.tabs.getState().switchTab(id)}
+                      onCloseTab={handleCloseTab}
+                    />
+                    <WorkspaceSplit
+                      canvas={canvas}
+                      results={<QueryResultsPane status={status} compact={compact} />}
+                    />
+                  </>
+                ) : null}
+              </div>
+            </Panel>
+          </Group>
+        </div>
+        {chromeDialogs}
+      </main>
+    </>
   );
 }

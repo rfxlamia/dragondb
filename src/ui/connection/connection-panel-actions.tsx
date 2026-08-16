@@ -7,6 +7,7 @@ export function ConnectionPanelActions(props: {
   canConnect: boolean;
   sessionClaimed: boolean;
   selectedId: ProfileId | null;
+  hideConnect?: boolean;
   onSave: () => void;
   onConnect: () => void;
   onDisconnect: () => void;
@@ -18,6 +19,7 @@ export function ConnectionPanelActions(props: {
     canConnect,
     sessionClaimed,
     selectedId,
+    hideConnect = false,
     onSave,
     onConnect,
     onDisconnect,
@@ -34,7 +36,7 @@ export function ConnectionPanelActions(props: {
         <button type="button" onClick={onDisconnect} disabled={busy}>
           {ConnectionCopy.disconnect}
         </button>
-      ) : (
+      ) : hideConnect ? null : (
         <button
           type="button"
           className="connection-panel__primary"

@@ -1,9 +1,11 @@
+import { useState } from "react";
 import type {
   ConnectionProfileDto,
   ProfileSecretsInput,
   SshAuthMethod,
   SslMode,
 } from "../../ipc/contract";
+import { ConnectionAccessibility } from "./connection-accessibility";
 import { ConnectionCopy } from "./connection-copy";
 import { ConnectionStringFields } from "./connection-string-fields";
 
@@ -92,6 +94,7 @@ export function ConnectionForm(props: {
   onConnectionStringChange?: (next: string) => void;
   connectionStringReadOnly?: boolean;
   onCopyConnectionString?: () => void;
+  onTest?: () => void | Promise<void>;
 }): React.JSX.Element {
   const {
     value,
@@ -102,10 +105,12 @@ export function ConnectionForm(props: {
     onConnectionStringChange,
     connectionStringReadOnly = false,
     onCopyConnectionString,
+    onTest,
   } = props;
   const { profile, secrets } = value;
   const sslModes = profile.sshEnabled ? SSL_MODES_SSH : SSL_MODES_ALL;
   const sshAuth: SshAuthMethod = profile.sshAuthMethod ?? "password";
+  const [showPassword, setShowPassword] = useState(false);
 
   async function onPrivateKeyFile(file: File | undefined): Promise<void> {
     if (!file) return;
@@ -196,18 +201,37 @@ export function ConnectionForm(props: {
               />
             </label>
 
-            <label className="connection-form__field">
-              <span>{ConnectionCopy.password}</span>
-              <input
-                type="password"
-                autoComplete="off"
-                value={secrets.password ?? ""}
-                onChange={(e) => onChange(patchSecrets(value, { password: e.target.value }))}
-              />
-            </label>
+            <div className="connection-form__password-row">
+              <label className="connection-form__field">
+                <span>{ConnectionCopy.password}</span>
+                <input
+                  type={showPassword ? "text" : "password"}
+                  autoComplete="off"
+                  value={secrets.password ?? ""}
+                  onChange={(e) => onChange(patchSecrets(value, { password: e.target.value }))}
+                />
+              </label>
+              <button
+                type="button"
+                data-testid={ConnectionAccessibility.showPassword}
+                onClick={() => setShowPassword((next) => !next)}
+              >
+                {ConnectionCopy.showPassword}
+              </button>
+            </div>
           </div>
         </>
       )}
+
+      <div className="connection-form__test">
+        <button
+          type="button"
+          data-testid={ConnectionAccessibility.testButton}
+          onClick={() => void onTest?.()}
+        >
+          {ConnectionCopy.test}
+        </button>
+      </div>
 
       <div className="connection-form__group">
         <p className="connection-form__group-label">{ConnectionCopy.groupOptions}</p>

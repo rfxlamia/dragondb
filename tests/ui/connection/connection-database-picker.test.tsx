@@ -1,0 +1,96 @@
+/** @vitest-environment jsdom */
+import { cleanup, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { ConnectionCopy } from "../../../src/ui/connection/connection-copy";
+import { ConnectionDatabasePicker } from "../../../src/ui/connection/connection-database-picker";
+
+afterEach(() => cleanup());
+
+describe("ConnectionDatabasePicker", () => {
+  it("is disabled until connected", () => {
+    render(
+      <ConnectionDatabasePicker
+        isConnected={false}
+        databases={["postgres"]}
+        selected={null}
+        onSelect={vi.fn()}
+        profileDatabase="postgres"
+      />,
+    );
+    expect(screen.getByRole("combobox")).toBeDisabled();
+  });
+
+  it("switch calls onSelect(shop) without rewriting profileDatabase", async () => {
+    const user = userEvent.setup();
+    const onSelect = vi.fn();
+    render(
+      <ConnectionDatabasePicker
+        isConnected={true}
+        databases={["postgres", "shop"]}
+        selected="postgres"
+        onSelect={onSelect}
+        profileDatabase="postgres"
+      />,
+    );
+    await user.selectOptions(screen.getByRole("combobox"), "shop");
+    expect(onSelect).toHaveBeenCalledWith("shop");
+    expect(screen.getByText("postgres")).toBeInTheDocument();
+  });
+
+  it("missing selected database shows pulse Select DB", () => {
+    render(
+      <ConnectionDatabasePicker
+        isConnected={true}
+        databases={["postgres"]}
+        selected={null}
+        onSelect={vi.fn()}
+        profileDatabase="postgres"
+        missingFromList
+      />,
+    );
+    expect(screen.getByText(ConnectionCopy.selectDbPulse)).toBeInTheDocument();
+  });
+
+  it("create failure leaves selected database unchanged", async () => {
+    const user = userEvent.setup();
+    const onCreate = vi.fn(async () => {
+      throw new Error("create failed");
+    });
+    render(
+      <ConnectionDatabasePicker
+        isConnected={true}
+        databases={["postgres"]}
+        selected="postgres"
+        onSelect={vi.fn()}
+        onCreateDatabase={onCreate}
+        profileDatabase="postgres"
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: ConnectionCopy.createDatabase }));
+    await user.type(screen.getByLabelText(ConnectionCopy.databaseName), "shop");
+    await user.click(screen.getByRole("button", { name: ConnectionCopy.create }));
+    expect(screen.getByRole("combobox")).toHaveValue("postgres");
+  });
+
+  it("delete failure rolls picker back to the pre-delete snapshot", async () => {
+    const user = userEvent.setup();
+    const onDelete = vi.fn(async () => {
+      throw new Error("drop failed");
+    });
+    render(
+      <ConnectionDatabasePicker
+        isConnected={true}
+        databases={["postgres", "shop"]}
+        selected="shop"
+        onSelect={vi.fn()}
+        onDeleteDatabase={onDelete}
+        profileDatabase="postgres"
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: ConnectionCopy.deleteDatabase }));
+    await user.click(screen.getByRole("button", { name: ConnectionCopy.confirmDelete }));
+    expect(screen.getByRole("combobox")).toHaveValue("shop");
+    expect(screen.getByText(ConnectionCopy.deleteDatabaseError)).toBeInTheDocument();
+  });
+});

@@ -15,6 +15,25 @@
   margin: 0;
 }
 
+.connection-panel__header {
+  align-items: center;
+  display: flex;
+  gap: 0.75rem;
+  justify-content: space-between;
+}
+
+.connection-panel__header button {
+  background: transparent;
+  border: 1px solid var(--neutral-300);
+  border-radius: var(--radius);
+  color: var(--primary-700);
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 4px 8px;
+}
+
 .connection-panel h3 {
   color: var(--neutral-700);
   font-family: var(--font-sans);
@@ -393,4 +412,91 @@
 
 .connection-string-fields button:hover {
   border-color: var(--neutral-400);
+}
+
+.connection-form__password-row {
+  align-items: end;
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.connection-form__password-row button,
+.connection-form__test button,
+.connection-database-picker__actions button {
+  background: oklch(1 0 0);
+  border: 1px solid var(--neutral-300);
+  border-radius: var(--radius);
+  color: var(--neutral-900);
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 9px 12px;
+}
+
+.connection-form__test {
+  display: flex;
+}
+
+.connection-status-banner {
+  border-radius: var(--radius);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  margin: 0;
+  padding: 8px 10px;
+}
+
+.connection-status-banner--testing,
+.connection-status-banner--testingSSH {
+  background: var(--info-tint, var(--primary-100));
+  color: var(--neutral-800);
+}
+
+.connection-status-banner--success {
+  background: var(--success-tint);
+  color: var(--success-text);
+}
+
+.connection-status-banner--error {
+  background: var(--error-tint);
+  color: var(--error-text);
+}
+
+.connection-database-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.connection-database-picker__profile {
+  color: var(--neutral-600);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  margin: 0;
+}
+
+.connection-database-picker__pulse {
+  animation: connection-select-db-pulse 1.2s ease-in-out infinite;
+  color: var(--warning-text);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.connection-database-picker__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+@keyframes connection-select-db-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
 }

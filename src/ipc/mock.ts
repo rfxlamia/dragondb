@@ -157,6 +157,7 @@ export function createMockDragonIpc(mode: MockMode = "happy"): DragonIpc {
   let connectedProfileId: ProfileId | null = null;
   let connectionId: ConnectionId | null = null;
   let connectionSeq = 0;
+  let databases: string[] = ["app"];
 
   return {
     async listProfiles(): Promise<ConnectionProfileDto[]> {
@@ -290,24 +291,25 @@ export function createMockDragonIpc(mode: MockMode = "happy"): DragonIpc {
       throw err;
     },
 
-    // SP-4b last slice — picker surface returns []; Rust-backed commands stub.
+    // SP-4b last slice — picker + test probe happy stubs (restore/overlay/title wiring).
     async listDatabases(_c: ConnectionId): Promise<string[]> {
-      return [];
+      const connected = connectedProfileId ? profiles.get(connectedProfileId) : undefined;
+      const current = connected?.database ?? "app";
+      if (!databases.includes(current)) databases.push(current);
+      return [...databases];
     },
-    async testConnection(_input: TestConnectionInput): Promise<void> {
-      throw notImplemented("testConnection");
-    },
+    async testConnection(_input: TestConnectionInput): Promise<void> {},
     async cancelQuery(_c: ConnectionId): Promise<void> {
       throw notImplemented("cancelQuery");
     },
-    async switchDatabase(_c: ConnectionId, _name: string): Promise<void> {
-      throw notImplemented("switchDatabase");
+    async switchDatabase(_c: ConnectionId, name: string): Promise<void> {
+      if (!databases.includes(name)) databases.push(name);
     },
-    async createDatabase(_name: string): Promise<void> {
-      throw notImplemented("createDatabase");
+    async createDatabase(name: string): Promise<void> {
+      if (!databases.includes(name)) databases.push(name);
     },
-    async deleteDatabase(_name: string): Promise<void> {
-      throw notImplemented("deleteDatabase");
+    async deleteDatabase(name: string): Promise<void> {
+      databases = databases.filter((item) => item !== name);
     },
     async truncateTable(_table: TableRef): Promise<void> {
       throw notImplemented("truncateTable");
