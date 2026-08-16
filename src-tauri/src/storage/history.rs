@@ -109,12 +109,18 @@ pub fn delete_history(conn: &Connection, id: &str) -> SqliteResult<()> {
     Ok(())
 }
 
-/// Clear all history rows for a profile (never a global wipe).
+/// Clear all history rows for a profile. Global wipe is exclusively [`clear_all`].
 pub fn clear_history_for_profile(conn: &Connection, profile_id: &str) -> SqliteResult<()> {
     conn.execute(
         "DELETE FROM query_history WHERE profile_id = ?1",
         params![profile_id],
     )?;
+    Ok(())
+}
+
+/// Clear history for every profile.
+pub fn clear_all(conn: &Connection) -> SqliteResult<()> {
+    conn.execute("DELETE FROM query_history", [])?;
     Ok(())
 }
 
@@ -223,6 +229,16 @@ mod tests {
         assert_eq!(after.len(), 1);
         assert_eq!(after[0].id, h3);
         assert!(!after.iter().any(|r| r.id == h2));
+    }
+
+    #[test]
+    fn clear_all_deletes_every_profile() {
+        let conn = Connection::open_in_memory().unwrap();
+        migrate(&conn).unwrap();
+        seed(&conn, "P", "SELECT p");
+        seed(&conn, "Q", "SELECT q");
+        clear_all(&conn).unwrap();
+        assert!(list_history(&conn, 10, None).unwrap().is_empty());
     }
 
     #[test]

@@ -24,6 +24,7 @@ pub struct TabStateRow {
     pub selected_schema_filter: Option<String>,
     pub cached_results_data: Option<Vec<u8>>,
     pub cached_column_names: Option<String>,
+    pub visual_document_json: Option<String>,
 }
 
 /// Write input for upsert_tab_state.
@@ -46,6 +47,7 @@ pub struct TabStateWrite {
     pub include_cached_results: bool,
     pub cached_results_data: Option<Vec<u8>>,
     pub cached_column_names: Option<String>,
+    pub visual_document_json: Option<String>,
 }
 
 fn utc_now_millis() -> String {
@@ -73,12 +75,13 @@ fn map_tab_row(row: &rusqlite::Row<'_>) -> SqliteResult<TabStateRow> {
         selected_schema_filter: row.get(11)?,
         cached_results_data: row.get(12)?,
         cached_column_names: row.get(13)?,
+        visual_document_json: row.get(14)?,
     })
 }
 
 const TAB_SELECT: &str = "id, connection_id, database_name, query_text, saved_query_id, \
     is_active, order_index, created_at, last_accessed_at, selected_table_schema, \
-    selected_table_name, selected_schema_filter, cached_results_data, cached_column_names";
+    selected_table_name, selected_schema_filter, cached_results_data, cached_column_names, visual_document_json";
 
 /// Insert or update tab metadata. When `include_cached_results` is false, blob columns
 /// are left unchanged on update.
@@ -109,9 +112,10 @@ pub fn upsert_tab_state(conn: &Connection, write: TabStateWrite) -> SqliteResult
                     selected_table_schema = ?8,
                     selected_table_name = ?9,
                     selected_schema_filter = ?10,
-                    cached_results_data = ?11,
-                    cached_column_names = ?12
-                WHERE id = ?13
+                    visual_document_json = ?11,
+                    cached_results_data = ?12,
+                    cached_column_names = ?13
+                WHERE id = ?14
                 "#,
                 params![
                     write.connection_id,
@@ -124,6 +128,7 @@ pub fn upsert_tab_state(conn: &Connection, write: TabStateWrite) -> SqliteResult
                     write.selected_table_schema,
                     write.selected_table_name,
                     write.selected_schema_filter,
+                    write.visual_document_json,
                     write.cached_results_data,
                     write.cached_column_names,
                     id,
@@ -143,7 +148,8 @@ pub fn upsert_tab_state(conn: &Connection, write: TabStateWrite) -> SqliteResult
                     selected_table_schema = ?8,
                     selected_table_name = ?9,
                     selected_schema_filter = ?10
-                WHERE id = ?11
+                    , visual_document_json = ?11
+                WHERE id = ?12
                 "#,
                 params![
                     write.connection_id,
@@ -156,6 +162,7 @@ pub fn upsert_tab_state(conn: &Connection, write: TabStateWrite) -> SqliteResult
                     write.selected_table_schema,
                     write.selected_table_name,
                     write.selected_schema_filter,
+                    write.visual_document_json,
                     id,
                 ],
             )?
@@ -182,8 +189,8 @@ pub fn upsert_tab_state(conn: &Connection, write: TabStateWrite) -> SqliteResult
                 id, connection_id, database_name, query_text, saved_query_id,
                 is_active, order_index, created_at, last_accessed_at,
                 selected_table_schema, selected_table_name, selected_schema_filter,
-                cached_results_data, cached_column_names
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
+                cached_results_data, cached_column_names, visual_document_json
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)
             "#,
             params![
                 id,
@@ -200,6 +207,7 @@ pub fn upsert_tab_state(conn: &Connection, write: TabStateWrite) -> SqliteResult
                 write.selected_schema_filter,
                 blob,
                 cols,
+                write.visual_document_json,
             ],
         )?;
         Ok(id)
@@ -234,8 +242,8 @@ pub fn insert_tab_state_with_id(
             id, connection_id, database_name, query_text, saved_query_id,
             is_active, order_index, created_at, last_accessed_at,
             selected_table_schema, selected_table_name, selected_schema_filter,
-            cached_results_data, cached_column_names
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
+            cached_results_data, cached_column_names, visual_document_json
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)
         "#,
         params![
             id,
@@ -252,6 +260,7 @@ pub fn insert_tab_state_with_id(
             write.selected_schema_filter,
             blob,
             cols,
+            write.visual_document_json,
         ],
     )?;
     Ok(())
@@ -334,6 +343,7 @@ mod tests {
                 include_cached_results: false,
                 cached_results_data: None,
                 cached_column_names: None,
+                visual_document_json: None,
             },
         )
         .unwrap();
@@ -375,6 +385,7 @@ mod tests {
                 include_cached_results: false,
                 cached_results_data: None,
                 cached_column_names: None,
+                visual_document_json: None,
             },
         )
         .unwrap();
@@ -400,5 +411,21 @@ mod tests {
         let conn = open();
         let err = update_tab_cached_results(&conn, "missing", None, None).expect_err("0-row");
         assert!(matches!(err, rusqlite::Error::QueryReturnedNoRows));
+    }
+
+    #[test]
+    fn visual_document_json_round_trips_without_clobbering_query_text() {
+        let conn = open();
+        let id = upsert_tab_state(&conn, TabStateWrite {
+            id: None, connection_id: Some("c1".into()), database_name: Some("app".into()),
+            query_text: "SELECT 1".into(), saved_query_id: None, is_active: true, order_index: 0,
+            created_at: Some("10".into()), last_accessed_at: Some("20".into()),
+            selected_table_schema: None, selected_table_name: None, selected_schema_filter: None,
+            include_cached_results: false, cached_results_data: None, cached_column_names: None,
+            visual_document_json: Some(r#"{"from":"orders"}"#.into()),
+        }).unwrap();
+        let row = get_tab_state(&conn, &id).unwrap().unwrap();
+        assert_eq!(row.query_text, "SELECT 1");
+        assert_eq!(row.visual_document_json.as_deref(), Some(r#"{"from":"orders"}"#));
     }
 }
