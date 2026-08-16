@@ -22,11 +22,19 @@ export type TabRunStatus =
   | { kind: "ok"; rowCount: number; durationMs: number }
   | { kind: "error"; message: string };
 
+export type MutationToast = {
+  title: string;
+  tableName: string | null;
+  queryType: string;
+  sql: string;
+};
+
 /** In-memory tab = persist DTO fields + dual raw/compact + run status. */
 export type TabState = TabStateDto & {
   raw?: TabResultGrid | null;
   compact?: TabResultGrid | null;
   status?: TabRunStatus;
+  mutationToast?: MutationToast | null;
 };
 
 export type TabsSessionGetters = {
@@ -51,8 +59,19 @@ export type TabsState = {
   persistTab: (dto: TabStateDto, opts?: { includeCachedResults?: boolean }) => Promise<void>;
   hydrateFromDto: (dto: TabStateDto) => void;
   refresh: () => Promise<void>;
-  beginRun: (tabId: string) => number | null;
-  applyRunSuccess: (tabId: string, result: TabRunResult, generation?: number) => Promise<boolean>;
+  beginRun: (tabId: string, options?: { preserveResults?: boolean }) => number | null;
+  applyRunSuccess: (
+    tabId: string,
+    result: TabRunResult,
+    generation?: number,
+    options?: { displayRowLimit?: number; selectedTable?: { schema?: string; name: string } },
+  ) => Promise<boolean>;
+  applyMutationSuccess: (
+    tabId: string,
+    toast: MutationToast,
+    previousStatus: TabRunStatus | undefined,
+    generation?: number,
+  ) => boolean;
   applyRunFailure: (tabId: string, message: string, generation?: number) => void;
   clearTabResults: (tabId: string) => void;
   clearInMemoryResults: () => void;
@@ -171,7 +190,7 @@ function mruId(tabs: TabState[]): string | null {
 }
 
 function toTabStateDto(tab: TabState): TabStateDto {
-  const { raw: _raw, compact: _compact, status: _status, ...dto } = tab;
+  const { raw: _raw, compact: _compact, status: _status, mutationToast: _toast, ...dto } = tab;
   return dto;
 }
 
@@ -348,23 +367,28 @@ export function createTabsStore(ipc: DragonIpc, getters: TabsSessionGetters): St
         set({ tabsReady: true });
       },
 
-      beginRun(tabId) {
+      beginRun(tabId, options) {
         const { tabs, pendingDeletedIds } = get();
         if (pendingDeletedIds.has(tabId)) return null;
         if (!tabs.some((t) => t.id === tabId)) return null;
         const generation = bumpRunGeneration(tabId);
-        patchTab(tabId, {
-          raw: null,
-          compact: null,
-          status: { kind: "running" },
-        });
+        patchTab(
+          tabId,
+          options?.preserveResults
+            ? { status: { kind: "running" } }
+            : { raw: null, compact: null, status: { kind: "running" } },
+        );
         return generation;
       },
 
-      async applyRunSuccess(tabId, result, generation) {
+      async applyRunSuccess(tabId, result, generation, options) {
         if (!canApplyRun(tabId, generation)) return false;
         const raw: TabResultGrid = { columns: result.columns, rows: result.rows };
-        const compact = compactGrid(raw);
+        const displayRows =
+          options?.displayRowLimit === undefined
+            ? raw.rows
+            : raw.rows.slice(0, options.displayRowLimit);
+        const compact = compactGrid({ columns: raw.columns, rows: displayRows });
         patchTab(tabId, {
           raw,
           compact,
@@ -375,10 +399,25 @@ export function createTabsStore(ipc: DragonIpc, getters: TabsSessionGetters): St
           },
           cachedResultsData: JSON.stringify(raw),
           cachedColumnNames: result.columns,
+          ...(options?.selectedTable === undefined
+            ? {}
+            : {
+                selectedTableSchema: options.selectedTable.schema ?? null,
+                selectedTableName: options.selectedTable.name,
+              }),
         });
         const tab = get().tabs.find((t) => t.id === tabId);
         if (!tab) return false;
         await get().persistTab(toTabStateDto(tab), { includeCachedResults: true });
+        return true;
+      },
+
+      applyMutationSuccess(tabId, toast, previousStatus, generation) {
+        if (!canApplyRun(tabId, generation)) return false;
+        patchTab(tabId, {
+          mutationToast: toast,
+          status: previousStatus ?? { kind: "idle" },
+        });
         return true;
       },
 

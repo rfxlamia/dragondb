@@ -25,6 +25,37 @@ function baseTab(overrides: Partial<TabStateDto> = {}): TabStateDto {
 }
 
 describe("tabs-store", () => {
+  it("persistTab includeCachedResults false does not wipe an existing results blob", async () => {
+    const saveTabState = vi.fn(
+      async (_dto: TabStateDto, _opts?: { includeCachedResults?: boolean }) => undefined,
+    );
+    const ipc = {
+      saveTabState,
+      deleteTabState: vi.fn(async () => undefined),
+      listTabStates: vi.fn(async () => []),
+    } as unknown as DragonIpc;
+    const store = createTabsStore(ipc, {
+      getConnectionId: () => "c1",
+      getDatabaseName: () => "app",
+    });
+    const blob = JSON.stringify({ columns: ["c"], rows: [["kept"]] });
+    await store.getState().persistTab(
+      baseTab({
+        id: "T",
+        queryText: "SELECT 1",
+        cachedResultsData: blob,
+        cachedColumnNames: ["c"],
+        visualDocumentJson: null,
+      }),
+      { includeCachedResults: false },
+    );
+    expect(saveTabState).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "T", queryText: "SELECT 1" }),
+      { includeCachedResults: false },
+    );
+    expect(saveTabState.mock.calls[0]?.[1]).toEqual({ includeCachedResults: false });
+  });
+
   it("createTab inherits connection/databaseName, empty queryText, order = max+1", () => {
     const ipc = {
       saveTabState: vi.fn(async () => undefined),

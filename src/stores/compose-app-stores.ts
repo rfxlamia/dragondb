@@ -39,6 +39,7 @@ export function composeAppStores(ipc: DragonIpc): AppStores {
 
   const session = createSessionStore(ipc, {
     onConnected: ({ connectionId }) => schema.getState().loadTables(connectionId),
+    onDatabaseSwitched: (connectionId) => schema.getState().reloadTables(connectionId),
     onDisconnected: () => {
       schema.getState().clear();
       tabs.getState().clearInMemoryResults();
