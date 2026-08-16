@@ -12,6 +12,39 @@
   padding: 8px 12px;
 }
 
+.vq-toolbar__modes {
+  display: inline-flex;
+  border: 1px solid var(--neutral-300);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.vq-toolbar__mode {
+  align-items: center;
+  background: oklch(1 0 0);
+  color: var(--neutral-800);
+  cursor: pointer;
+  display: flex;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  gap: 6px;
+  line-height: 1.4;
+  padding: 4px 10px;
+}
+
+.vq-toolbar__mode:has(input:checked) {
+  background: var(--primary-100);
+  color: var(--primary-700);
+}
+
+.vq-toolbar__mode input {
+  accent-color: var(--primary-600);
+  height: 0.85rem;
+  margin: 0;
+  width: 0.85rem;
+}
+
 .vq-toolbar__start-over {
   background: transparent;
   border: none;

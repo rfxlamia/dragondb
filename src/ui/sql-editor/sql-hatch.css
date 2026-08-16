@@ -1,0 +1,100 @@
+.sql-hatch {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+
+.sql-hatch__editor {
+  background: oklch(1 0 0);
+  border: 1px solid var(--neutral-300);
+  border-radius: var(--radius);
+  min-height: 160px;
+  overflow: auto;
+}
+
+.sql-hatch__editor .cm-editor {
+  height: 100%;
+}
+
+.sql-hatch__actions {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.sql-hatch__run {
+  background: var(--primary-600);
+  border: none;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  color: oklch(1 0 0);
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+  padding: 7px 16px;
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    transform var(--duration-fast) var(--ease-out);
+}
+
+.sql-hatch__run:hover {
+  background: var(--primary-700);
+}
+
+.sql-hatch__run:active {
+  transform: scale(0.97);
+}
+
+.sql-hatch__stop {
+  background: var(--neutral-100);
+  border: 1px solid var(--neutral-300);
+  border-radius: var(--radius);
+  color: var(--neutral-900);
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.4;
+  padding: 6px 12px;
+}
+
+.sql-hatch__stop:hover {
+  background: var(--neutral-200);
+  border-color: var(--neutral-400);
+}
+
+.sql-hatch__alert {
+  background: var(--error-tint);
+  border-radius: var(--radius);
+  color: var(--error-text);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.4;
+  margin: 0;
+  padding: 8px 12px;
+}
+
+.sql-hatch__timeout {
+  background: var(--warning-tint);
+  border-radius: var(--radius);
+  color: var(--warning-text);
+  display: flex;
+  flex-direction: column;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  gap: 8px;
+  line-height: 1.4;
+  padding: 12px;
+}
+
+.sql-hatch__timeout p {
+  margin: 0;
+}
+
+.sql-hatch__timeout-actions {
+  display: flex;
+  gap: 8px;
+}

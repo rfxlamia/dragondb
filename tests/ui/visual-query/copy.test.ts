@@ -11,19 +11,13 @@ describe("VisualQueryCopy", () => {
     expect(VisualQueryCopy.helperForClause("limit").toLowerCase()).toContain("row");
   });
 
-  it("statement menu marks update and delete coming soon", () => {
+  it("statement menu is SELECT-only (CREATE/UPDATE/DELETE hidden, kinds remain in core)", () => {
     const items = VisualQueryCopy.statementMenuItems();
-    const select = items.find((item) => item.kind === "select");
-    const create = items.find((item) => item.kind === "createTable");
-    const update = items.find((item) => item.kind === "update");
-    const deleteItem = items.find((item) => item.kind === "delete");
-
-    expect(select?.isRunnable).toBe(true);
-    expect(create?.isRunnable).toBe(true);
-    expect(update?.isRunnable).toBe(false);
-    expect(deleteItem?.isRunnable).toBe(false);
-    expect(update?.badge?.toLowerCase()).toContain("coming soon");
-    expect(deleteItem?.badge?.toLowerCase()).toContain("coming soon");
+    expect(items).toHaveLength(1);
+    expect(items[0]?.kind).toBe("select");
+    expect(items.find((item) => item.kind === "createTable")).toBeUndefined();
+    expect(items.find((item) => item.kind === "update")).toBeUndefined();
+    expect(items.find((item) => item.kind === "delete")).toBeUndefined();
   });
 
   it("lifecycle chrome copy exists", () => {

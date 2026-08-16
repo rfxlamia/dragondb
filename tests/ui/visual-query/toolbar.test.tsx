@@ -179,3 +179,25 @@ describe("VisualQueryToolbar History (SP-4b)", () => {
     expect(screen.queryByTestId(VisualQueryAccessibility.history)).not.toBeInTheDocument();
   });
 });
+
+describe("VisualQueryToolbar Visual | SQL (SP-4b T9)", () => {
+  it("Visual | SQL segmented toggle defaults to Visual and reports SQL", async () => {
+    const user = userEvent.setup();
+    const onModeChange = vi.fn();
+    render(
+      <VisualQueryToolbar
+        canStartOver={false}
+        onStartOver={() => {}}
+        isConnected={true}
+        canRunQuery={true}
+        onRunQuery={() => {}}
+        onViewGeneratedSQL={() => {}}
+        runHelpMessage={null}
+        editorMode="visual"
+        onEditorModeChange={onModeChange}
+      />,
+    );
+    await user.click(screen.getByRole("radio", { name: /sql/i }));
+    expect(onModeChange).toHaveBeenCalledWith("sql");
+  });
+});

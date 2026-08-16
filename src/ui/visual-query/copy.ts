@@ -90,27 +90,6 @@ function statementMenuItems(): StatementMenuItem[] {
       isRunnable: true,
       badge: null,
     },
-    {
-      kind: "createTable",
-      title: "CREATE",
-      helper: "Create a new table",
-      isRunnable: true,
-      badge: null,
-    },
-    {
-      kind: "update",
-      title: statementTitle("update"),
-      helper: statementHelper("update"),
-      isRunnable: false,
-      badge: "Coming soon",
-    },
-    {
-      kind: "delete",
-      title: statementTitle("delete"),
-      helper: statementHelper("delete"),
-      isRunnable: false,
-      badge: "Coming soon",
-    },
   ];
 }
 
@@ -175,6 +154,8 @@ export const VisualQueryCopy = {
   statementMenuItems,
   nextClauseOptions,
   clauseMenuItems,
+  editorModeVisual: "Visual",
+  editorModeSql: "SQL",
   startOverTitle: "Start over",
   deleteClauseTitle: "Delete",
   columnPopoverNeedsFromMessage: "Choose a table in FROM first.",
