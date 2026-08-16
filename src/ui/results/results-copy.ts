@@ -5,4 +5,22 @@ export const ResultsCopy = {
   loadingResults: "Loading results...",
   queryFailedTitle: "Query Failed",
   nullToken: "NULL",
+  multipleRowsSelected: "Multiple Rows Selected",
+  selectOnlyOneRow: "Please select only one row to edit at a time.",
+  filterPlaceholder: "Filter results",
+  viewJson: "View JSON",
+  copyJson: "Copy JSON",
+  copied: "Copied",
+  downloadCsv: "Download CSV",
+  edit: "Edit",
+  delete: "Delete",
+  save: "Save",
+  cancel: "Cancel",
+  setNull: "NULL",
+  nextPage: "Next",
+  prevPage: "Previous",
 } as const;
+
+export function deleteRowsPrompt(count: number): string {
+  return `Delete ${count} row(s)?`;
+}

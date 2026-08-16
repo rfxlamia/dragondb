@@ -6,6 +6,11 @@ export const ResultsAccessibility = {
   error: "queryResults.error",
   empty: "queryResults.empty",
   splitSeparator: "queryResults.splitSeparator",
+  filter: "queryResults.filter",
+  toolbar: "queryResults.toolbar",
+  jsonViewer: "queryResults.jsonViewer",
+  rowEditor: "queryResults.rowEditor",
+  pagination: "queryResults.pagination",
   get allIdentifiers() {
     return [
       ResultsAccessibility.pane,

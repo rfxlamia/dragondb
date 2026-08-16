@@ -3,7 +3,11 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { cleanup, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it } from "vitest";
+import { toCsv } from "../../../src/lib/csv-exporter";
+import { determineEditability } from "../../../src/lib/query-editability";
+import { compactCell } from "../../../src/lib/result-compactor";
 import type { TabResultGrid, TabRunStatus } from "../../../src/stores/tabs-store";
 import { QueryResultsPane } from "../../../src/ui/results/query-results-pane";
 import { ResultsAccessibility } from "../../../src/ui/results/results-accessibility";
@@ -111,5 +115,70 @@ describe("QueryResultsPane", () => {
     );
     expect(screen.getAllByRole("columnheader")).toHaveLength(3);
     expect(screen.getAllByRole("cell")).toHaveLength(3);
+  });
+
+  it("filters ALP case-insensitively and sorts nulls last", async () => {
+    const user = userEvent.setup();
+    render(
+      <QueryResultsPane
+        status={{ kind: "ok", rowCount: 3, durationMs: 1 }}
+        compact={{ columns: ["x"], rows: [["alpha"], ["beta"], [null]] }}
+        raw={{ columns: ["x"], rows: [["alpha"], ["beta"], [null]] }}
+      />,
+    );
+    await user.type(screen.getByRole("searchbox"), "ALP");
+    expect(screen.getByText("alpha")).toBeInTheDocument();
+    expect(screen.queryByText("beta")).toBeNull();
+    await user.clear(screen.getByRole("searchbox"));
+    await user.click(screen.getByRole("columnheader", { name: "x" }));
+    const cells = screen.getAllByRole("cell").map((c) => c.textContent);
+    expect(cells.slice(0, 3)).toEqual(["alpha", "beta", ResultsCopy.nullToken]);
+  });
+
+  it("formats a date cell with the Settings US pattern", () => {
+    render(
+      <QueryResultsPane
+        status={{ kind: "ok", rowCount: 1, durationMs: 1 }}
+        compact={{ columns: ["created"], rows: [["2026-08-15T12:00:00Z"]] }}
+        raw={{ columns: ["created"], rows: [["2026-08-15T12:00:00Z"]] }}
+        dateFormat="us"
+      />,
+    );
+    expect(screen.getByText(/8\/15\/2026/)).toBeInTheDocument();
+  });
+
+  it("Download CSV uses raw RFC4180 via toCsv, not compact cells", () => {
+    const raw = "x".repeat(3000);
+    const csv = toCsv(["body"], [[raw]]);
+    expect(csv).toContain(raw);
+    expect(csv).not.toContain(compactCell(raw));
+  });
+
+  it("JOIN without leftover selectedTable disables edit with Swift title", () => {
+    const result = determineEditability("SELECT * FROM a JOIN b ON a.id = b.id", {});
+    expect(result.isEditable).toBe(false);
+    expect(result.reason?.title).toBe("Can't Edit Joined Results");
+  });
+
+  it("leftover selectedTable after JOIN hatch stays editable (Swift short-circuit)", () => {
+    const result = determineEditability("SELECT * FROM a JOIN b ON a.id = b.id", {
+      sourceTable: { schema: "public", name: "orders" },
+    });
+    expect(result.isEditable).toBe(true);
+    expect(result.tableName).toBe("orders");
+  });
+
+  it("Space opens JSON viewer when a row is selected", async () => {
+    const user = userEvent.setup();
+    render(
+      <QueryResultsPane
+        status={{ kind: "ok", rowCount: 1, durationMs: 1 }}
+        compact={{ columns: ["id"], rows: [["1"]] }}
+        raw={{ columns: ["id"], rows: [["1"]] }}
+      />,
+    );
+    await user.click(screen.getAllByRole("row")[1]!);
+    await user.keyboard(" ");
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
 });
