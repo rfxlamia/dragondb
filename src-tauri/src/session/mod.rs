@@ -18,7 +18,9 @@ use crate::postgres::{
     collapse_ssl_mode, connect as pg_connect, delete_rows as pg_delete_rows,
     create_database as pg_create_database, drop_database as pg_drop_database,
     list_databases as pg_list_databases, maintenance_database,
+    drop_table as pg_drop_table, generate_table_ddl as pg_generate_table_ddl,
     list_columns as pg_list_columns, list_tables as pg_list_tables, run_query as pg_run_query,
+    set_search_path as pg_set_search_path, truncate_table as pg_truncate_table,
     update_row as pg_update_row, ColumnInfoRow, ConnectParams, IpcErrorKind, MappedIpcError,
     CancelRegistry, QueryResultData, RowOperationError, RowOperationErrorKind, TableRefRow,
 };
@@ -27,6 +29,7 @@ use crate::ssh::{
     build_auth_method, PreparedAuth, SshAuthInput, TunnelError, TunnelHandle, TunnelRequest,
 };
 use crate::storage::{
+    clear_all_history as storage_clear_all_history,
     clear_history_for_profile as storage_clear_history_for_profile,
     create_folder as storage_create_folder, delete_folder as storage_delete_folder,
     delete_history as storage_delete_history, delete_profile as storage_delete_profile,
@@ -38,9 +41,8 @@ use crate::storage::{
     insert_tab_state_with_id as storage_insert_tab_state_with_id,
     list_folders as storage_list_folders, list_history as storage_list_history,
     list_profiles as storage_list_profiles, list_saved_queries as storage_list_saved_queries,
-    list_tab_states as storage_list_tab_states,
-    move_saved_query as storage_move_saved_query, open_db,
-    rename_folder as storage_rename_folder, save_saved_query as storage_save_saved_query,
+    list_tab_states as storage_list_tab_states, move_saved_query as storage_move_saved_query,
+    open_db, rename_folder as storage_rename_folder, save_saved_query as storage_save_saved_query,
     upsert_profile, upsert_tab_state as storage_upsert_tab_state, FolderRow, HistoryInsert,
     HistoryRow, ProfileRow, SavedQueryRow, SavedQueryWrite, TabStateRow, TabStateWrite,
 };
@@ -390,10 +392,7 @@ impl AppSession {
 
     /// Keep oneshot reconnect cache aligned with the last successful save of the live profile.
     fn sync_active_after_profile_save(&mut self, row: &ProfileRow) {
-        let is_active = self
-            .active
-            .as_ref()
-            .is_some_and(|a| a.profile_id == row.id);
+        let is_active = self.active.as_ref().is_some_and(|a| a.profile_id == row.id);
         if !is_active {
             return;
         }
@@ -418,9 +417,7 @@ impl AppSession {
             Backend::Production { db, keyring } => {
                 // Delete keyring first so a keyring failure cannot orphan secrets
                 // after the sqlite row is already gone.
-                keyring
-                    .delete_all_for_profile(id)
-                    .map_err(keyring_err)?;
+                keyring.delete_all_for_profile(id).map_err(keyring_err)?;
                 {
                     let guard = db.lock().map_err(|_| MappedIpcError {
                         kind: IpcErrorKind::Unknown,
@@ -638,7 +635,10 @@ impl AppSession {
         }
     }
 
-    async fn list_tables_once(&mut self, is_fake: bool) -> Result<Vec<TableRefRow>, MappedIpcError> {
+    async fn list_tables_once(
+        &mut self,
+        is_fake: bool,
+    ) -> Result<Vec<TableRefRow>, MappedIpcError> {
         if !self.has_live_handle() {
             return Err(not_connected());
         }
@@ -697,6 +697,89 @@ impl AppSession {
             .and_then(|a| a.client.as_ref())
             .ok_or_else(not_connected)?;
         pg_list_columns(client, schema, table_name).await
+    }
+
+    pub async fn truncate_table(
+        &mut self,
+        connection_id: &str,
+        table: &TableRefArg,
+    ) -> Result<(), MappedIpcError> {
+        self.require_live(connection_id)?;
+        if matches!(self.backend, Backend::Fake(_)) {
+            return Ok(());
+        }
+        let client = self
+            .active
+            .as_ref()
+            .and_then(|a| a.client.as_ref())
+            .ok_or_else(not_connected)?;
+        pg_truncate_table(
+            client,
+            table.schema.as_deref().unwrap_or("public"),
+            &table.name,
+        )
+        .await
+    }
+
+    pub async fn drop_table(
+        &mut self,
+        connection_id: &str,
+        table: &TableRefArg,
+    ) -> Result<(), MappedIpcError> {
+        self.require_live(connection_id)?;
+        if matches!(self.backend, Backend::Fake(_)) {
+            return Ok(());
+        }
+        let client = self
+            .active
+            .as_ref()
+            .and_then(|a| a.client.as_ref())
+            .ok_or_else(not_connected)?;
+        pg_drop_table(
+            client,
+            table.schema.as_deref().unwrap_or("public"),
+            &table.name,
+        )
+        .await
+    }
+
+    pub async fn generate_table_ddl(
+        &mut self,
+        connection_id: &str,
+        table: &TableRefArg,
+    ) -> Result<String, MappedIpcError> {
+        self.require_live(connection_id)?;
+        if matches!(self.backend, Backend::Fake(_)) {
+            return Ok(String::new());
+        }
+        let client = self
+            .active
+            .as_ref()
+            .and_then(|a| a.client.as_ref())
+            .ok_or_else(not_connected)?;
+        pg_generate_table_ddl(
+            client,
+            table.schema.as_deref().unwrap_or("public"),
+            &table.name,
+        )
+        .await
+    }
+
+    pub async fn set_search_path(
+        &mut self,
+        connection_id: &str,
+        schema: Option<&str>,
+    ) -> Result<(), MappedIpcError> {
+        self.require_live(connection_id)?;
+        if matches!(self.backend, Backend::Fake(_)) {
+            return Ok(());
+        }
+        let client = self
+            .active
+            .as_ref()
+            .and_then(|a| a.client.as_ref())
+            .ok_or_else(not_connected)?;
+        pg_set_search_path(client, schema).await
     }
 
     pub async fn run_query(
@@ -888,9 +971,8 @@ impl AppSession {
         connection_id: &str,
         fail_kind: RowOperationErrorKind,
     ) -> Result<(), RowOperationError> {
-        self.require_live(connection_id).map_err(|e| {
-            RowOperationError::new(fail_kind, e.message)
-        })?;
+        self.require_live(connection_id)
+            .map_err(|e| RowOperationError::new(fail_kind, e.message))?;
         if !self.has_live_handle() {
             return Err(RowOperationError::new(
                 fail_kind,
@@ -1025,8 +1107,9 @@ impl AppSession {
             }
             Backend::Fake(_) => Err(MappedIpcError {
                 kind: IpcErrorKind::Unknown,
-                message: "Library IPC requires production storage (temp AppSession::open in tests)."
-                    .into(),
+                message:
+                    "Library IPC requires production storage (temp AppSession::open in tests)."
+                        .into(),
                 position: None,
             }),
         }
@@ -1043,17 +1126,16 @@ impl AppSession {
     }
 
     /// Create (id absent in DB) or update (id present). UPDATE matching 0 rows → error.
-    pub fn save_saved_query(&self, query: SavedQueryWriteInput) -> Result<SavedQueryRow, MappedIpcError> {
+    pub fn save_saved_query(
+        &self,
+        query: SavedQueryWriteInput,
+    ) -> Result<SavedQueryRow, MappedIpcError> {
         self.with_production_db(|db| {
             let exists = storage_get_saved_query(db, &query.id)
                 .map_err(sqlite_err)?
                 .is_some();
             let write = SavedQueryWrite {
-                id: if exists {
-                    Some(query.id.clone())
-                } else {
-                    None
-                },
+                id: if exists { Some(query.id.clone()) } else { None },
                 name: query.name.clone(),
                 query_text: query.query_text.clone(),
                 connection_id: query.connection_id.clone(),
@@ -1115,7 +1197,11 @@ impl AppSession {
         })
     }
 
-    pub fn move_saved_query(&self, id: &str, folder_id: Option<&str>) -> Result<(), MappedIpcError> {
+    pub fn move_saved_query(
+        &self,
+        id: &str,
+        folder_id: Option<&str>,
+    ) -> Result<(), MappedIpcError> {
         self.with_production_db(|db| {
             storage_move_saved_query(db, id, folder_id).map_err(sqlite_err)
         })
@@ -1175,6 +1261,10 @@ impl AppSession {
         })
     }
 
+    pub fn clear_all_history(&self) -> Result<(), MappedIpcError> {
+        self.with_production_db(|db| storage_clear_all_history(db).map_err(sqlite_err))
+    }
+
     // --- Tabs thin wrappers -------------------------------------------------
 
     pub fn list_tab_states(&self) -> Result<Vec<TabStateRow>, MappedIpcError> {
@@ -1197,7 +1287,8 @@ impl AppSession {
         include_cached_results: bool,
     ) -> Result<(), MappedIpcError> {
         self.with_production_db(|db| {
-            let write = tab_write_from_input(&input, include_cached_results, /* for_update */ true)?;
+            let write =
+                tab_write_from_input(&input, include_cached_results, /* for_update */ true)?;
             match storage_upsert_tab_state(db, write) {
                 Ok(_) => Ok(()),
                 Err(rusqlite::Error::QueryReturnedNoRows) => Err(MappedIpcError {
@@ -1221,7 +1312,8 @@ impl AppSession {
         include_cached_results: bool,
     ) -> Result<(), MappedIpcError> {
         self.with_production_db(|db| {
-            let write = tab_write_from_input(&input, include_cached_results, /* for_update */ false)?;
+            let write =
+                tab_write_from_input(&input, include_cached_results, /* for_update */ false)?;
             storage_insert_tab_state_with_id(db, &input.id, write).map_err(sqlite_err)
         })
     }
@@ -1264,6 +1356,7 @@ fn tab_write_from_input(
         include_cached_results,
         cached_results_data: cached_bytes,
         cached_column_names: cached_cols,
+        visual_document_json: input.visual_document_json.clone(),
     })
 }
 
@@ -1289,6 +1382,7 @@ pub struct TabStateWriteInput {
     /// Opaque JSON string; stored as UTF-8 bytes (not base64).
     pub cached_results_data: Option<String>,
     pub cached_column_names: Option<Vec<String>>,
+    pub visual_document_json: Option<String>,
 }
 
 /// IPC write body for save_saved_query (mirrors TS SavedQueryDto fields used on write).
@@ -1349,14 +1443,11 @@ async fn establish_live(
                 passphrase: secrets.ssh_passphrase.clone(),
             },
             _ => SshAuthInput::Password {
-                password: secrets
-                    .ssh_password
-                    .clone()
-                    .ok_or_else(|| MappedIpcError {
-                        kind: IpcErrorKind::Auth,
-                        message: "SSH password is missing from keyring.".into(),
-                        position: None,
-                    })?,
+                password: secrets.ssh_password.clone().ok_or_else(|| MappedIpcError {
+                    kind: IpcErrorKind::Auth,
+                    message: "SSH password is missing from keyring.".into(),
+                    position: None,
+                })?,
             },
         };
         let prepared: PreparedAuth = build_auth_method(auth_input).map_err(|e| MappedIpcError {
@@ -1642,10 +1733,7 @@ impl FakeDeps {
                     .storage
                     .get_profile(profile_id)
                     .unwrap_or_else(|| sample_row(profile_id, ssh_enabled));
-                let secrets = self
-                    .keyring
-                    .get_secrets(profile_id)
-                    .unwrap_or_default();
+                let secrets = self.keyring.get_secrets(profile_id).unwrap_or_default();
                 Some(ActiveSession {
                     connection_id: connection_id.clone(),
                     profile_id: profile_id.clone(),
@@ -1759,7 +1847,8 @@ impl FakePostgres {
         self.connect_calls.fetch_add(1, Ordering::SeqCst);
         let prev = self.fail_connect_remaining.load(Ordering::SeqCst);
         if prev > 0 {
-            self.fail_connect_remaining.store(prev - 1, Ordering::SeqCst);
+            self.fail_connect_remaining
+                .store(prev - 1, Ordering::SeqCst);
             return Err(MappedIpcError {
                 kind: IpcErrorKind::Connection,
                 message: "Connection error: injected connect failure.".into(),
@@ -1784,11 +1873,7 @@ impl FakePostgres {
                 position: None,
             });
         }
-        let cleared = self
-            .dead_cleared
-            .lock()
-            .map(|g| *g)
-            .unwrap_or(false);
+        let cleared = self.dead_cleared.lock().map(|g| *g).unwrap_or(false);
         if self.dead_socket && !cleared {
             return Err(MappedIpcError {
                 kind: IpcErrorKind::Connection,
@@ -1832,10 +1917,7 @@ impl FakeStorage {
     }
 
     pub fn last_history(&self) -> Option<HistoryInsert> {
-        self.history
-            .lock()
-            .ok()
-            .and_then(|g| g.last().cloned())
+        self.history.lock().ok().and_then(|g| g.last().cloned())
     }
 
     fn list_profiles(&self) -> Vec<ProfileRow> {
@@ -1846,10 +1928,7 @@ impl FakeStorage {
     }
 
     fn get_profile(&self, id: &str) -> Option<ProfileRow> {
-        self.profiles
-            .lock()
-            .ok()
-            .and_then(|g| g.get(id).cloned())
+        self.profiles.lock().ok().and_then(|g| g.get(id).cloned())
     }
 
     fn upsert(&self, row: &ProfileRow) {
@@ -2020,7 +2099,10 @@ mod tests {
     #[tokio::test]
     async fn wrong_connection_id_rejects_without_reconnect() {
         let mut session = AppSession::with_fakes(FakeDeps::connected_direct());
-        let live = session.active_connection_id().expect("connected").to_string();
+        let live = session
+            .active_connection_id()
+            .expect("connected")
+            .to_string();
         let err = session
             .list_tables("not-the-live-id")
             .await
@@ -2043,7 +2125,9 @@ mod tests {
     fn map_tunnel_error_maps_connection_and_io_to_connection_kind() {
         let conn = map_tunnel_error(TunnelError::Connection("SSH handshake failed".into()));
         assert_eq!(conn.kind, IpcErrorKind::Connection);
-        let io = map_tunnel_error(TunnelError::Io("Failed to bind local tunnel listener".into()));
+        let io = map_tunnel_error(TunnelError::Io(
+            "Failed to bind local tunnel listener".into(),
+        ));
         assert_eq!(io.kind, IpcErrorKind::Connection);
     }
 
@@ -2087,7 +2171,10 @@ mod tests {
     async fn missing_live_handle_while_connected_triggers_oneshot_on_run_query() {
         let mut session = AppSession::with_fakes(FakeDeps::connected_direct());
         session.strip_live_handle_for_test();
-        let cid = session.active_connection_id().expect("still connected").to_string();
+        let cid = session
+            .active_connection_id()
+            .expect("still connected")
+            .to_string();
         session
             .run_query(
                 &cid,
@@ -2155,7 +2242,10 @@ mod tests {
             })
             .await
             .expect_err("keyring fail");
-        assert!(matches!(err.kind, IpcErrorKind::Unknown | IpcErrorKind::Auth));
+        assert!(matches!(
+            err.kind,
+            IpcErrorKind::Unknown | IpcErrorKind::Auth
+        ));
         assert_eq!(session.fake_storage().profile_count(), 0);
     }
 
@@ -2350,15 +2440,17 @@ mod tests {
                 },
             )
             .await;
-        let row = session.fake_storage().last_history().expect("failed history");
+        let row = session
+            .fake_storage()
+            .last_history()
+            .expect("failed history");
         assert!(!row.success);
-        assert!(
-            row.error_message
-                .as_deref()
-                .unwrap_or("")
-                .to_lowercase()
-                .contains("syntax")
-        );
+        assert!(row
+            .error_message
+            .as_deref()
+            .unwrap_or("")
+            .to_lowercase()
+            .contains("syntax"));
         assert_eq!(row.sql, "SELECT * FROM secrets");
     }
 

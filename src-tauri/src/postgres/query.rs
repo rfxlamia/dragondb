@@ -54,6 +54,65 @@ pub async fn run_query(
     params: &[JsonValue],
 ) -> Result<QueryResultData, MappedIpcError> {
     let started = Instant::now();
+    let statements = split_sql_statements(sql);
+    if statements.is_empty() {
+        return Ok(QueryResultData {
+            columns: vec![],
+            rows: vec![],
+            rows_affected: Some(0),
+            duration_ms: 0,
+        });
+    }
+    let wrap = statements.len() > 1
+        && should_wrap_transaction(&statements.iter().map(String::as_str).collect::<Vec<_>>());
+    if wrap {
+        client
+            .batch_execute("BEGIN")
+            .await
+            .map_err(|e| map_tokio_postgres_error(&e))?;
+    }
+    let mut last = QueryResultData {
+        columns: vec![],
+        rows: vec![],
+        rows_affected: Some(0),
+        duration_ms: 0,
+    };
+    let mut saw_row_result = false;
+    for (index, statement) in statements.iter().enumerate() {
+        let statement_params = if statements.len() == 1 { params } else { &[] };
+        match run_single_query(client, statement, statement_params, started).await {
+            Ok(result) => {
+                if !result.columns.is_empty() {
+                    saw_row_result = true;
+                    last = result;
+                } else if !saw_row_result && index + 1 == statements.len() {
+                    last = result;
+                }
+            }
+            Err(error) => {
+                if wrap {
+                    let _ = client.batch_execute("ROLLBACK").await;
+                }
+                return Err(error);
+            }
+        }
+    }
+    if wrap {
+        client
+            .batch_execute("COMMIT")
+            .await
+            .map_err(|e| map_tokio_postgres_error(&e))?;
+    }
+    last.duration_ms = started.elapsed().as_millis() as u64;
+    Ok(last)
+}
+
+async fn run_single_query(
+    client: &Client,
+    sql: &str,
+    params: &[JsonValue],
+    started: Instant,
+) -> Result<QueryResultData, MappedIpcError> {
     let owned = json_params_to_owned(params)?;
     let binds: Vec<&(dyn ToSql + Sync)> = owned
         .iter()
@@ -78,11 +137,7 @@ pub async fn run_query(
         let duration = started.elapsed();
         let mapped_rows: Vec<Vec<Value>> = rows
             .iter()
-            .map(|row| {
-                (0..row.len())
-                    .map(|i| cell_value(row, i))
-                    .collect()
-            })
+            .map(|row| (0..row.len()).map(|i| cell_value(row, i)).collect())
             .collect();
         Ok(map_query_rows(
             MappedRowSet {
@@ -103,6 +158,121 @@ pub async fn run_query(
             duration_ms: started.elapsed().as_millis() as u64,
         })
     }
+}
+
+/// Mirrors `src/lib/sql-statement-splitter.ts`.
+pub fn split_sql_statements(sql: &str) -> Vec<String> {
+    let chars: Vec<char> = sql.chars().collect();
+    let mut result = Vec::new();
+    let mut current = String::new();
+    let mut i = 0;
+    while i < chars.len() {
+        let c = chars[i];
+        if c == '$' {
+            if let Some(end) = dollar_tag_end(&chars, i) {
+                let tag: String = chars[i..=end].iter().collect();
+                current.push_str(&tag);
+                i = end + 1;
+                while i < chars.len() {
+                    if chars[i] == '$' {
+                        if let Some(close) = dollar_tag_end(&chars, i) {
+                            let candidate: String = chars[i..=close].iter().collect();
+                            if candidate == tag {
+                                current.push_str(&tag);
+                                i = close + 1;
+                                break;
+                            }
+                        }
+                    }
+                    current.push(chars[i]);
+                    i += 1;
+                }
+                continue;
+            }
+        }
+        if c == '\'' || c == '"' {
+            let quote = c;
+            current.push(c);
+            i += 1;
+            while i < chars.len() {
+                current.push(chars[i]);
+                if chars[i] == quote {
+                    if i + 1 < chars.len() && chars[i + 1] == quote {
+                        current.push(quote);
+                        i += 2;
+                        continue;
+                    }
+                    i += 1;
+                    break;
+                }
+                i += 1;
+            }
+            continue;
+        }
+        if c == '-' && chars.get(i + 1) == Some(&'-') {
+            current.push_str("--");
+            i += 2;
+            while i < chars.len() && chars[i] != '\n' {
+                current.push(chars[i]);
+                i += 1;
+            }
+            continue;
+        }
+        if c == '/' && chars.get(i + 1) == Some(&'*') {
+            let mut depth = 1;
+            current.push_str("/*");
+            i += 2;
+            while i < chars.len() && depth > 0 {
+                if chars[i] == '/' && chars.get(i + 1) == Some(&'*') {
+                    current.push_str("/*");
+                    depth += 1;
+                    i += 2;
+                } else if chars[i] == '*' && chars.get(i + 1) == Some(&'/') {
+                    current.push_str("*/");
+                    depth -= 1;
+                    i += 2;
+                } else {
+                    current.push(chars[i]);
+                    i += 1;
+                }
+            }
+            continue;
+        }
+        if c == ';' {
+            push_statement(&mut result, &mut current);
+            i += 1;
+            continue;
+        }
+        current.push(c);
+        i += 1;
+    }
+    push_statement(&mut result, &mut current);
+    result
+}
+
+pub fn should_wrap_transaction(statements: &[&str]) -> bool {
+    !statements.iter().any(|sql| {
+        let s = strip_leading_sql_noise(sql);
+        ["begin", "start transaction", "commit", "rollback"]
+            .iter()
+            .any(|k| s.to_ascii_lowercase().starts_with(k))
+    })
+}
+
+fn dollar_tag_end(chars: &[char], start: usize) -> Option<usize> {
+    let mut j = start + 1;
+    while j < chars.len() && (chars[j].is_ascii_alphanumeric() || chars[j] == '_') {
+        j += 1;
+    }
+    (j < chars.len() && chars[j] == '$').then_some(j)
+}
+
+fn push_statement(result: &mut Vec<String>, current: &mut String) {
+    let cleaned = strip_leading_sql_noise(current).trim().to_string();
+    if !cleaned.is_empty() {
+        result.push(cleaned);
+    }
+    current.clear();
 }
 
 /// Convert JSON IPC params into owned `ToSql` values for tokio-postgres.
@@ -288,7 +458,9 @@ mod tests {
         assert!(looks_like_select("  select id from t"));
         assert!(looks_like_select("-- comment\nSELECT 1"));
         assert!(looks_like_select("/* block */\nSELECT 1"));
-        assert!(looks_like_select("WITH cte AS (SELECT 1) SELECT * FROM cte"));
+        assert!(looks_like_select(
+            "WITH cte AS (SELECT 1) SELECT * FROM cte"
+        ));
         assert!(!looks_like_select("INSERT INTO t VALUES (1)"));
         assert!(!looks_like_select("UPDATE t SET x = 1"));
         assert!(!looks_like_select("SELECTIVE_NAME"));
@@ -310,5 +482,33 @@ mod tests {
     fn json_params_to_owned_rejects_object_and_array() {
         assert!(json_params_to_owned(&[JsonValue::Array(vec![])]).is_err());
         assert!(json_params_to_owned(&[JsonValue::Object(Default::default())]).is_err());
+    }
+
+    #[test]
+    fn split_sql_statements_last_select_wins() {
+        let parts = split_sql_statements("SELECT 1 AS a; SELECT 2 AS b");
+        assert_eq!(parts, vec!["SELECT 1 AS a", "SELECT 2 AS b"]);
+    }
+
+    #[test]
+    fn wrap_transaction_unless_user_already_has_begin() {
+        assert!(should_wrap_transaction(&["SELECT 1", "SELECT 2"]));
+        assert!(!should_wrap_transaction(&["BEGIN", "SELECT 1", "COMMIT"]));
+    }
+
+    #[test]
+    fn split_sql_statements_mirrors_ts_quote_and_comment_cases() {
+        assert_eq!(
+            split_sql_statements("SELECT 'a;b'; SELECT 2"),
+            vec!["SELECT 'a;b'", "SELECT 2"]
+        );
+        assert_eq!(
+            split_sql_statements("SELECT $$ a;b $$; SELECT 2"),
+            vec!["SELECT $$ a;b $$", "SELECT 2"]
+        );
+        assert_eq!(
+            split_sql_statements("SELECT 1; -- trailing; still comment\nSELECT 2"),
+            vec!["SELECT 1", "SELECT 2"]
+        );
     }
 }

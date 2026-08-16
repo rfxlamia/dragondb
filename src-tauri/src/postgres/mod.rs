@@ -12,6 +12,7 @@ pub mod error;
 pub mod query;
 pub mod row_ops;
 pub mod ssl;
+pub mod table_admin;
 
 pub use cancel::CancelRegistry;
 pub use connection::{build_connect_config, connect, ConnectConfig, ConnectParams};
@@ -30,3 +31,4 @@ pub use row_ops::{
     validate_update_preconditions, RowOperationError, RowOperationErrorKind,
 };
 pub use ssl::{collapse_ssl_mode, make_tls_connector, EffectiveTls};
+pub use table_admin::{drop_table, generate_table_ddl, set_search_path, truncate_table};

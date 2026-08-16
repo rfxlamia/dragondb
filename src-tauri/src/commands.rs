@@ -13,8 +13,8 @@ use crate::postgres::{
     ProbeConfig, QueryResultData, RowOperationError, TableRefRow,
 };
 use crate::session::{
-    AppSession, ConnectResult, ExecutableSql, ProfileFields, ProfileSecretsInput,
-    SaveProfileInput, SavedQueryWriteInput, TabStateWriteInput, TableRefArg,
+    AppSession, ConnectResult, ExecutableSql, ProfileFields, ProfileSecretsInput, SaveProfileInput,
+    SavedQueryWriteInput, TabStateWriteInput, TableRefArg,
 };
 use crate::storage::{FolderRow, HistoryRow, ProfileRow, SavedQueryRow, TabStateRow};
 
@@ -283,6 +283,54 @@ pub async fn run_query(
     session.run_query(&connection_id, sql).await
 }
 
+#[tauri::command(rename_all = "camelCase")]
+pub async fn truncate_table(
+    state: State<'_, Mutex<AppSession>>,
+    connection_id: String,
+    table: TableRefArg,
+) -> Result<(), MappedIpcError> {
+    state
+        .lock()
+        .await
+        .truncate_table(&connection_id, &table)
+        .await
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn drop_table(
+    state: State<'_, Mutex<AppSession>>,
+    connection_id: String,
+    table: TableRefArg,
+) -> Result<(), MappedIpcError> {
+    state.lock().await.drop_table(&connection_id, &table).await
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn generate_table_ddl(
+    state: State<'_, Mutex<AppSession>>,
+    connection_id: String,
+    table: TableRefArg,
+) -> Result<String, MappedIpcError> {
+    state
+        .lock()
+        .await
+        .generate_table_ddl(&connection_id, &table)
+        .await
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn set_search_path(
+    state: State<'_, Mutex<AppSession>>,
+    connection_id: String,
+    schema: Option<String>,
+) -> Result<(), MappedIpcError> {
+    state
+        .lock()
+        .await
+        .set_search_path(&connection_id, schema.as_deref())
+        .await
+}
+
 // --- Library commands (no &Connection; AppSession thin wrappers) ------------
 
 #[tauri::command]
@@ -438,6 +486,11 @@ pub async fn clear_history(
     session.clear_history_for_profile(&profile_id)
 }
 
+#[tauri::command]
+pub async fn clear_all_history(state: State<'_, Mutex<AppSession>>) -> Result<(), MappedIpcError> {
+    state.lock().await.clear_all_history()
+}
+
 // --- Tabs commands (no &Connection; AppSession thin wrappers) ---------------
 
 /// Tab IPC DTO — TS `order` ↔ Rust `order_index`; `cachedResultsData` is UTF-8 JSON text.
@@ -459,16 +512,17 @@ pub struct TabStateDto {
     /// Opaque JSON string (UTF-8 bytes on the wire to sqlite BLOB — not base64).
     pub cached_results_data: Option<String>,
     pub cached_column_names: Option<Vec<String>>,
+    pub visual_document_json: Option<String>,
 }
 
 impl From<TabStateRow> for TabStateDto {
     fn from(row: TabStateRow) -> Self {
-        let cached_results_data = row.cached_results_data.and_then(|bytes| {
-            String::from_utf8(bytes).ok()
-        });
-        let cached_column_names = row.cached_column_names.and_then(|s| {
-            serde_json::from_str(&s).ok()
-        });
+        let cached_results_data = row
+            .cached_results_data
+            .and_then(|bytes| String::from_utf8(bytes).ok());
+        let cached_column_names = row
+            .cached_column_names
+            .and_then(|s| serde_json::from_str(&s).ok());
         Self {
             id: row.id,
             connection_id: row.connection_id,
@@ -484,6 +538,7 @@ impl From<TabStateRow> for TabStateDto {
             selected_schema_filter: row.selected_schema_filter,
             cached_results_data,
             cached_column_names,
+            visual_document_json: row.visual_document_json,
         }
     }
 }
@@ -504,6 +559,7 @@ fn tab_write_input_from_dto(dto: TabStateDto) -> TabStateWriteInput {
         selected_schema_filter: dto.selected_schema_filter,
         cached_results_data: dto.cached_results_data,
         cached_column_names: dto.cached_column_names,
+        visual_document_json: dto.visual_document_json,
     }
 }
 
@@ -683,6 +739,7 @@ mod tests {
             selected_schema_filter: None,
             cached_results_data: None,
             cached_column_names: None,
+            visual_document_json: None,
         }
     }
 
@@ -834,7 +891,10 @@ mod tests {
             row_count: Some(1),
             created_at: "1".into(),
         });
-        assert!(skipped.is_none(), "NULL profile_id must be skipped, not coerced to \"\"");
+        assert!(
+            skipped.is_none(),
+            "NULL profile_id must be skipped, not coerced to \"\""
+        );
 
         let kept = history_dto_from_row(HistoryRow {
             id: "h1".into(),
@@ -962,7 +1022,10 @@ mod tests {
         let dto = TabStateDto::from(row);
         assert_eq!(dto.cached_results_data.as_deref(), Some(json));
         assert_eq!(dto.order, 0); // order ↔ order_index
-        assert_eq!(dto.cached_column_names.as_deref(), Some(&["c".to_string()][..]));
+        assert_eq!(
+            dto.cached_column_names.as_deref(),
+            Some(&["c".to_string()][..])
+        );
     }
 
     #[test]
