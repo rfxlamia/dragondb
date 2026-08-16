@@ -742,4 +742,33 @@ describe("tabs-store", () => {
     expect(store.getState().tabs[0]?.compact).toBeNull();
     expect(store.getState().tabs[0]?.status).toEqual({ kind: "idle" });
   });
+
+  it("persistTab sends visualDocumentJson and does not stuff IR into queryText", async () => {
+    const saveTabState = vi.fn(
+      async (_dto: TabStateDto, _opts?: { includeCachedResults?: boolean }) => undefined,
+    );
+    const ipc = {
+      saveTabState,
+      deleteTabState: vi.fn(async () => undefined),
+      listTabStates: vi.fn(async () => []),
+    } as unknown as DragonIpc;
+    const store = createTabsStore(ipc, {
+      getConnectionId: () => "c1",
+      getDatabaseName: () => "app",
+    });
+    const ir = JSON.stringify({ statementKind: "select", from: "orders" });
+    await store.getState().persistTab(
+      baseTab({
+        id: "T",
+        queryText: "SELECT 1",
+        visualDocumentJson: ir,
+      }),
+      { includeCachedResults: false },
+    );
+    expect(saveTabState).toHaveBeenCalledWith(
+      expect.objectContaining({ queryText: "SELECT 1", visualDocumentJson: ir }),
+      expect.any(Object),
+    );
+    expect(saveTabState.mock.calls[0]?.[0]?.queryText).not.toBe(ir);
+  });
 });

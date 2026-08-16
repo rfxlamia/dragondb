@@ -4,7 +4,8 @@
  * `createHistoryStore(ipc)` uses zustand/vanilla. Does NOT require
  * `createStoreApi` singleton — ipc is constructor-injected (T1 pattern).
  *
- * clearHistory(profileId) is always per-profile (never global wipe).
+ * clearHistory(profileId) is always per-profile.
+ * clearAllHistory() wipes every profile via ipc.clearAllHistory (never a loop of clearHistory).
  */
 import { createStore, type StoreApi } from "zustand/vanilla";
 import type { DragonIpc, HistoryDto, HistoryListOptions, ProfileId } from "../ipc/contract";
@@ -17,6 +18,7 @@ export type HistoryState = {
   refresh: (opts?: HistoryListOptions) => Promise<void>;
   deleteHistory: (id: string) => Promise<void>;
   clearHistory: (profileId: ProfileId) => Promise<void>;
+  clearAllHistory: () => Promise<void>;
 };
 
 function messageFromUnknown(err: unknown): string {
@@ -56,6 +58,11 @@ export function createHistoryStore(ipc: DragonIpc): StoreApi<HistoryState> {
 
     async clearHistory(profileId) {
       await ipc.clearHistory(profileId);
+      await get().refresh(lastOpts);
+    },
+
+    async clearAllHistory() {
+      await ipc.clearAllHistory();
       await get().refresh(lastOpts);
     },
   }));

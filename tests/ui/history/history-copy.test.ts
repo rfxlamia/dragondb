@@ -40,4 +40,10 @@ describe("formatRelativeDate", () => {
   it("passes through invalid dates", () => {
     expect(formatRelativeDate("not-a-date", NOW)).toBe("not-a-date");
   });
+
+  it("parses epoch-millis strings instead of echoing raw digits", () => {
+    const label = formatRelativeDate("1723700000000", Date.parse("2026-08-15T12:00:00.000Z"));
+    expect(label).not.toBe("1723700000000");
+    expect(label).toMatch(/ago|just now/);
+  });
 });

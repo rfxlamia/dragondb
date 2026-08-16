@@ -6,6 +6,7 @@ export type TabBarItem = {
   id: string;
   title: string;
   isActive: boolean;
+  pendingClose?: boolean;
 };
 
 export type TabBarProps = {
@@ -31,9 +32,12 @@ export function TabBar(props: TabBarProps): React.JSX.Element {
                 role="tab"
                 className={tab.isActive ? "tab-bar__tab tab-bar__tab--active" : "tab-bar__tab"}
                 aria-selected={tab.isActive}
-                onClick={() => onSwitchTab(tab.id)}
+                onClick={() => {
+                  if (tab.pendingClose) return;
+                  onSwitchTab(tab.id);
+                }}
               >
-                {tab.title}
+                {tab.pendingClose ? TabBarCopy.closing : tab.title}
               </button>
               <button
                 type="button"

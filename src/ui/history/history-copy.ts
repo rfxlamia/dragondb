@@ -1,6 +1,14 @@
 /** English chrome copy for the query history sheet. */
+function parseHistoryTimestamp(value: string): number {
+  if (/^\d+$/.test(value)) {
+    const millis = Number(value);
+    if (millis >= 1e12) return millis;
+  }
+  return Date.parse(value);
+}
+
 export function formatRelativeDate(iso: string, nowMs: number = Date.now()): string {
-  const then = Date.parse(iso);
+  const then = parseHistoryTimestamp(iso);
   if (Number.isNaN(then)) return iso;
   const diffMs = nowMs - then;
   const minutes = Math.round(diffMs / 60_000);
@@ -41,4 +49,8 @@ export const HistoryCopy = {
   failed: "Failed",
   databaseNa: "N/A",
   exportFailed: "Failed to export history",
+  delete: "Delete",
+  clear: "Clear",
+  confirmClear: "Confirm clear",
+  copied: "Copied",
 } as const;

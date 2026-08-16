@@ -96,4 +96,19 @@ describe("history-store", () => {
     expect(store.getState().loadError?.length).toBeGreaterThan(0);
     expect(store.getState().entries).toEqual([]);
   });
+
+  it("clearAllHistory wipes every profile, not clearHistory(profileId)", async () => {
+    const clearAllHistory = vi.fn(async () => undefined);
+    const clearHistory = vi.fn(async () => undefined);
+    listHistory
+      .mockResolvedValueOnce([row({ id: "ha", profileId: "A" }), row({ id: "hb", profileId: "B" })])
+      .mockResolvedValueOnce([]);
+    ipc = { listHistory, deleteHistory, clearHistory, clearAllHistory } as unknown as DragonIpc;
+    const store = createHistoryStore(ipc);
+    await store.getState().refresh({ limit: 50 });
+    await store.getState().clearAllHistory();
+    expect(clearAllHistory).toHaveBeenCalledOnce();
+    expect(clearHistory).not.toHaveBeenCalled();
+    expect(store.getState().entries).toEqual([]);
+  });
 });

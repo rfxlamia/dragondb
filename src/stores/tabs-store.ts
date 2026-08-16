@@ -302,7 +302,14 @@ export function createTabsStore(ipc: DragonIpc, getters: TabsSessionGetters): St
 
       async persistTab(dto, opts) {
         if (get().pendingDeletedIds.has(dto.id)) return;
-        await ipc.saveTabState(dto, opts);
+        await ipc.saveTabState(
+          {
+            ...dto,
+            queryText: dto.queryText,
+            visualDocumentJson: dto.visualDocumentJson ?? null,
+          },
+          opts,
+        );
         // Compensating delete if close raced past the pre-check.
         if (get().pendingDeletedIds.has(dto.id)) {
           await ipc.deleteTabState(dto.id).catch(() => {

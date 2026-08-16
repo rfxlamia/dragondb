@@ -56,6 +56,8 @@
 
 .history-sheet__export-format,
 .history-sheet__copy,
+.history-sheet__delete,
+.history-sheet__clear,
 .history-sheet__done {
   border: none;
   border-radius: var(--radius);
@@ -69,14 +71,18 @@
 }
 
 .history-sheet__export-format,
-.history-sheet__copy {
+.history-sheet__copy,
+.history-sheet__delete,
+.history-sheet__clear {
   background: var(--neutral-100);
   border: 1px solid var(--neutral-300);
   color: var(--primary-700);
 }
 
 .history-sheet__export-format:hover:not(:disabled),
-.history-sheet__copy:hover:not(:disabled) {
+.history-sheet__copy:hover:not(:disabled),
+.history-sheet__delete:hover:not(:disabled),
+.history-sheet__clear:hover:not(:disabled) {
   background: var(--neutral-200);
 }
 
@@ -176,7 +182,14 @@
   white-space: pre-wrap;
 }
 
+.history-sheet__row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .history-sheet__actions {
   display: flex;
+  gap: 8px;
   justify-content: flex-end;
 }

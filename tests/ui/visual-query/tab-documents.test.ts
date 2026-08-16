@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { QueryDocument } from "../../../src/core";
-import { createTabDocuments } from "../../../src/ui/visual-query/tab-documents";
+import {
+  createTabDocuments,
+  hydrateQueryDocument,
+  serializeQueryDocument,
+} from "../../../src/ui/visual-query/tab-documents";
 
 describe("createTabDocuments", () => {
   it("returns a stable QueryDocument per id and resetAll replaces with empty documents", () => {
@@ -25,5 +29,17 @@ describe("createTabDocuments", () => {
     expect(docs.get("missing")).toBeUndefined();
     const created = docs.getOrCreate("a");
     expect(docs.get("a")).toBe(created);
+  });
+
+  it("serializes visual cards to JSON and hydrates without using queryText", () => {
+    const doc = new QueryDocument();
+    doc.chooseStatement("select");
+    doc.addClause("from");
+    doc.selectFromTable("orders", "public");
+    const json = serializeQueryDocument(doc);
+    expect(json).not.toMatch(/^SELECT /);
+    const restored = hydrateQueryDocument(json);
+    expect(restored.fromTable).toEqual({ schema: "public", name: "orders" });
+    expect(restored.statementKind).toBe("select");
   });
 });

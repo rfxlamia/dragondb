@@ -14,6 +14,7 @@ import { formatRelativeDate, HistoryCopy } from "./history-copy";
 import "./history.css";
 
 const SQL_PREVIEW_LINES = 5;
+const COPY_CHECKMARK_MS = 1200;
 
 export type QueryHistorySheetProps = {
   open: boolean;
@@ -28,11 +29,13 @@ export function QueryHistorySheet(props: QueryHistorySheetProps): React.JSX.Elem
   const loadError = useStore(historyStore, (s) => s.loadError);
   const [ready, setReady] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
+  const [confirmingClear, setConfirmingClear] = useState(false);
 
   useEffect(() => {
     if (!open) {
       setReady(false);
       setExportError(null);
+      setConfirmingClear(false);
       return;
     }
     let cancelled = false;
@@ -150,13 +153,41 @@ export function QueryHistorySheet(props: QueryHistorySheetProps): React.JSX.Elem
         {hasRows ? (
           <ol className="history-sheet__list">
             {entries.map((entry) => (
-              <HistoryRow key={entry.id} entry={entry} />
+              <HistoryRow
+                key={entry.id}
+                entry={entry}
+                onDelete={(id) => {
+                  void historyStore.getState().deleteHistory(id);
+                }}
+              />
             ))}
           </ol>
         ) : null}
       </div>
 
       <div className="history-sheet__actions">
+        {hasRows ? (
+          confirmingClear ? (
+            <button
+              type="button"
+              className="history-sheet__clear"
+              onClick={() => {
+                void historyStore.getState().clearAllHistory();
+                setConfirmingClear(false);
+              }}
+            >
+              {HistoryCopy.confirmClear}
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="history-sheet__clear"
+              onClick={() => setConfirmingClear(true)}
+            >
+              {HistoryCopy.clear}
+            </button>
+          )
+        ) : null}
         <button
           type="button"
           className="history-sheet__done"
@@ -170,9 +201,19 @@ export function QueryHistorySheet(props: QueryHistorySheetProps): React.JSX.Elem
   );
 }
 
-function HistoryRow(props: { entry: HistoryDto }): React.JSX.Element {
-  const { entry } = props;
+function HistoryRow(props: {
+  entry: HistoryDto;
+  onDelete: (id: string) => void;
+}): React.JSX.Element {
+  const { entry, onDelete } = props;
   const preview = entry.sql.split("\n").slice(0, SQL_PREVIEW_LINES).join("\n");
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (!copied) return;
+    const timer = window.setTimeout(() => setCopied(false), COPY_CHECKMARK_MS);
+    return () => window.clearTimeout(timer);
+  }, [copied]);
 
   async function handleCopy(): Promise<void> {
     try {
@@ -180,6 +221,7 @@ function HistoryRow(props: { entry: HistoryDto }): React.JSX.Element {
     } catch {
       // Keep the sheet open; Copy is best-effort.
     }
+    setCopied(true);
   }
 
   return (
@@ -195,14 +237,19 @@ function HistoryRow(props: { entry: HistoryDto }): React.JSX.Element {
       <pre className="history-sheet__sql" data-testid={HistoryAccessibility.sql(entry.id)}>
         {preview}
       </pre>
-      <button
-        type="button"
-        className="history-sheet__copy"
-        data-testid={HistoryAccessibility.copy(entry.id)}
-        onClick={() => void handleCopy()}
-      >
-        {HistoryCopy.copy}
-      </button>
+      <div className="history-sheet__row-actions">
+        <button
+          type="button"
+          className="history-sheet__copy"
+          data-testid={HistoryAccessibility.copy(entry.id)}
+          onClick={() => void handleCopy()}
+        >
+          {copied ? HistoryCopy.copied : HistoryCopy.copy}
+        </button>
+        <button type="button" className="history-sheet__delete" onClick={() => onDelete(entry.id)}>
+          {HistoryCopy.delete}
+        </button>
+      </div>
     </li>
   );
 }

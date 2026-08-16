@@ -246,4 +246,41 @@ describe("QueryHistorySheet", () => {
     expect(css).not.toMatch(/\.history-sheet__export,/);
     expect(a11y).toMatch(/exports:\s*"history\.exports"/);
   });
+
+  it("Clear confirms and calls clearAllHistory; per-row delete remains", async () => {
+    const user = userEvent.setup();
+    const deleteHistory = vi.fn(async () => undefined);
+    const clearAllHistory = vi.fn(async () => undefined);
+    const listHistory = vi
+      .fn()
+      .mockResolvedValueOnce([
+        historyRow({ id: "h1", profileId: "A" }),
+        historyRow({ id: "h2", profileId: "B" }),
+        historyRow({ id: "h3", profileId: "A" }),
+      ])
+      .mockResolvedValueOnce([
+        historyRow({ id: "h2", profileId: "B" }),
+        historyRow({ id: "h3", profileId: "A" }),
+      ])
+      .mockResolvedValueOnce([]);
+    const store = createHistoryStore({
+      listHistory,
+      deleteHistory,
+      clearAllHistory,
+    } as unknown as DragonIpc);
+    render(
+      <QueryHistorySheet
+        open={true}
+        onOpenChange={vi.fn()}
+        historyStore={store}
+        saveTextFile={vi.fn()}
+      />,
+    );
+    await screen.findAllByText("SELECT 1");
+    await user.click(screen.getAllByRole("button", { name: HistoryCopy.delete })[0]!);
+    expect(deleteHistory).toHaveBeenCalledWith("h1");
+    await user.click(screen.getByRole("button", { name: HistoryCopy.clear }));
+    await user.click(screen.getByRole("button", { name: HistoryCopy.confirmClear }));
+    expect(clearAllHistory).toHaveBeenCalledOnce();
+  });
 });
