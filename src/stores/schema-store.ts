@@ -14,6 +14,8 @@ export type SchemaState = {
   loadTables: (connectionId: ConnectionId) => Promise<void>;
   reloadTables: (connectionId: ConnectionId) => Promise<void>;
   loadColumns: (connectionId: ConnectionId, table: TableRef) => Promise<void>;
+  /** Named schema vs All Schemas (`null`). Reloads tables after the dedicated IPC. */
+  setSearchPath: (connectionId: ConnectionId, schema: string | null) => Promise<void>;
   clearColumns: () => void;
   clear: () => void;
 };
@@ -60,6 +62,11 @@ export function createSchemaStore(ipc: DragonIpc): StoreApi<SchemaState> {
     async reloadTables(connectionId) {
       columnGeneration += 1;
       set({ columnNames: [], columnsErrorMessage: null });
+      await get().loadTables(connectionId);
+    },
+
+    async setSearchPath(connectionId, schema) {
+      await ipc.setSearchPath(schema);
       await get().loadTables(connectionId);
     },
 

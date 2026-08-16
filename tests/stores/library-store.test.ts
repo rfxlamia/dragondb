@@ -74,4 +74,22 @@ describe("library-store", () => {
     expect(deleteFolder).toHaveBeenCalledWith("f1", true);
     expect(store.getState().queries).toEqual([]);
   });
+
+  it("duplicateSavedQuery copies SQL into a new row", async () => {
+    const duplicateSavedQuery = vi.fn(async () =>
+      query({ id: "q2", name: "Report copy", queryText: "SELECT 9" }),
+    );
+    ipc = {
+      ...ipc,
+      duplicateSavedQuery,
+      listSavedQueries: vi.fn(async () => [
+        query({ id: "q1", name: "Report", queryText: "SELECT 9" }),
+        query({ id: "q2", name: "Report copy", queryText: "SELECT 9" }),
+      ]),
+    } as unknown as DragonIpc;
+    const store = createLibraryStore(ipc);
+    const duplicated = await store.getState().duplicateSavedQuery("q1");
+    expect(duplicateSavedQuery).toHaveBeenCalledWith("q1");
+    expect(duplicated.queryText).toBe("SELECT 9");
+  });
 });

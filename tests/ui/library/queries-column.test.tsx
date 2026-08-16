@@ -143,4 +143,93 @@ describe("QueriesColumn", () => {
     await user.click(screen.getByRole("button", { name: QueriesCopy.deleteFolderAndQueries }));
     expect(onDeleteFolder).toHaveBeenCalledWith("f1", true);
   });
+
+  it("filter zzz shows No matching queries", async () => {
+    const user = userEvent.setup();
+    render(
+      <QueriesColumn
+        queries={[
+          { ...q1, name: "Alpha" },
+          { ...q1, id: "q2", name: "Beta" },
+        ]}
+        folders={[]}
+        selectedQueryId={null}
+        onSelectQuery={vi.fn()}
+        onNewQuery={vi.fn()}
+        onRenameQuery={vi.fn()}
+        onDeleteQuery={vi.fn()}
+        onMoveQuery={vi.fn()}
+        onDeleteFolder={vi.fn()}
+      />,
+    );
+    await user.type(screen.getByRole("searchbox"), "zzz");
+    expect(screen.getByText(QueriesCopy.noMatchingQueries)).toBeInTheDocument();
+  });
+
+  it("deselect clears savedQueryId via onSelectQuery(null)", async () => {
+    const user = userEvent.setup();
+    const onSelectQuery = vi.fn();
+    render(
+      <QueriesColumn
+        queries={[q1]}
+        folders={[]}
+        selectedQueryId="q1"
+        onSelectQuery={onSelectQuery}
+        onNewQuery={vi.fn()}
+        onRenameQuery={vi.fn()}
+        onDeleteQuery={vi.fn()}
+        onMoveQuery={vi.fn()}
+        onDeleteFolder={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: QueriesCopy.deselect }));
+    expect(onSelectQuery).toHaveBeenCalledWith(null);
+  });
+
+  it("deletes an empty folder from the folder row", async () => {
+    const user = userEvent.setup();
+    const onDeleteFolder = vi.fn();
+    render(
+      <QueriesColumn
+        queries={[]}
+        folders={[{ id: "f-empty", name: "Laporan", createdAt: "1", updatedAt: "1" }]}
+        selectedQueryId={null}
+        onSelectQuery={vi.fn()}
+        onNewQuery={vi.fn()}
+        onRenameQuery={vi.fn()}
+        onDeleteQuery={vi.fn()}
+        onMoveQuery={vi.fn()}
+        onDeleteFolder={onDeleteFolder}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: QueriesCopy.deleteFolder }));
+    await user.click(screen.getByRole("button", { name: QueriesCopy.confirmDelete }));
+    expect(onDeleteFolder).toHaveBeenCalledWith("f-empty", false);
+  });
+
+  it("refresh overlay is visible for at least 0.45s", async () => {
+    vi.useFakeTimers();
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    const onRefresh = vi.fn(async () => undefined);
+    render(
+      <QueriesColumn
+        queries={[]}
+        folders={[]}
+        selectedQueryId={null}
+        onSelectQuery={vi.fn()}
+        onNewQuery={vi.fn()}
+        onRenameQuery={vi.fn()}
+        onDeleteQuery={vi.fn()}
+        onMoveQuery={vi.fn()}
+        onDeleteFolder={vi.fn()}
+        onRefresh={onRefresh}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: QueriesCopy.refresh }));
+    expect(screen.getByText(QueriesCopy.refreshing)).toBeInTheDocument();
+    await vi.advanceTimersByTimeAsync(449);
+    expect(screen.getByText(QueriesCopy.refreshing)).toBeInTheDocument();
+    await vi.advanceTimersByTimeAsync(2);
+    vi.useRealTimers();
+  });
 });

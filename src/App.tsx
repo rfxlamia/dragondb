@@ -1,5 +1,5 @@
 import { listen } from "@tauri-apps/api/event";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Group, Panel, Separator } from "react-resizable-panels";
 import { useStore } from "zustand";
 import type { ExecutableSQL, TableReference } from "./core";
@@ -15,7 +15,9 @@ import { HelpDialog } from "./ui/help/help-dialog";
 import { SettingsDialog } from "./ui/help/settings-dialog";
 import { ShortcutsDialog } from "./ui/help/shortcuts-dialog";
 import { QueriesColumn } from "./ui/library/queries-column";
+import { QueriesCopy } from "./ui/library/queries-copy";
 import { createSavedQueryResultCache } from "./ui/library/saved-query-result-cache";
+import { useSavedQueryAutosave } from "./ui/library/use-saved-query-autosave";
 import { QueryResultsPane } from "./ui/results/query-results-pane";
 import { LoadingOverlay } from "./ui/shell/loading-overlay";
 import { TabBar } from "./ui/shell/tab-bar";
@@ -80,6 +82,10 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
     stores.tabs,
     (s) => s.tabs.find((t) => t.id === s.activeTabId)?.savedQueryId ?? null,
   );
+  const queryText = useStore(
+    stores.tabs,
+    (s) => s.tabs.find((t) => t.id === s.activeTabId)?.queryText ?? "",
+  );
   const status = useStore(
     stores.tabs,
     (s) => s.tabs.find((t) => t.id === s.activeTabId)?.status ?? IDLE_STATUS,
@@ -108,6 +114,8 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
   const [launchError, setLaunchError] = useState<string | null>(null);
   const [connectionCollapsed, setConnectionCollapsed] = useState(false);
   const [missingDatabase, setMissingDatabase] = useState(false);
+  const [selectedSchema, setSelectedSchema] = useState<string | null>(null);
+  const [schemaError, setSchemaError] = useState<string | null>(null);
   const canvasHandleRef = useRef<VisualQueryCanvasHandle | null>(null);
   const accelCtxRef = useRef<WorkspaceAccelContext>({
     newTab: () => {},
@@ -118,6 +126,25 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
     openHelp: () => {},
     openShortcuts: () => {},
     openSettings: () => {},
+  });
+
+  const schemaNames = useMemo(() => {
+    const names = new Set<string>();
+    for (const table of tableRefs) {
+      if (table.schema !== undefined) names.add(table.schema);
+    }
+    return [...names].sort();
+  }, [tableRefs]);
+  const visibleTables = selectedSchema
+    ? tableRefs.filter((table) => table.schema === selectedSchema)
+    : tableRefs;
+  const executingQueryId = status.kind === "running" ? savedQueryId : null;
+
+  useSavedQueryAutosave({
+    stores,
+    ipc,
+    queryText,
+    isRestoring: overlayPhase !== null || !tabsReady,
   });
 
   useEffect(() => {
@@ -373,6 +400,8 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
 
   function handleDisconnected(): void {
     stores.noteCanvasDisconnect(lastProfileIdRef.current);
+    setSelectedSchema(null);
+    setSchemaError(null);
   }
 
   function handleSwitchSuccess(result: ConnectResult): void {
@@ -411,10 +440,14 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
     stores.tabs.getState().clearTabResults(tabId);
   }
 
-  function handleSelectQuery(queryId: string): void {
+  function handleSelectQuery(queryId: string | null): void {
     const tabId = stores.tabs.getState().activeTabId;
     if (tabId === null) return;
     stores.tabs.getState().setSavedQueryId(tabId, queryId);
+    if (queryId === null) {
+      stores.tabs.getState().restoreSavedQueryResult(tabId, null);
+      return;
+    }
     stores.tabs.getState().restoreSavedQueryResult(tabId, savedQueryCacheRef.current.read(queryId));
   }
 
@@ -452,12 +485,32 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
     await stores.library.getState().deleteSavedQueries([id]);
   }
 
-  async function handleMoveQuery(id: string, folderId: string): Promise<void> {
+  async function handleMoveQuery(id: string, folderId: string | null): Promise<void> {
     await stores.library.getState().moveSavedQuery(id, folderId);
   }
 
   async function handleDeleteFolder(id: string, deleteQueries: boolean): Promise<void> {
     await stores.library.getState().deleteFolder(id, deleteQueries);
+  }
+
+  async function handleLibraryRefresh(): Promise<void> {
+    await stores.library.getState().refresh();
+    const liveId = stores.session.getState().connectionId;
+    if (liveId === null) return;
+    await stores.schema.getState().reloadTables(liveId);
+    await ipc.listDatabases(liveId).catch(() => undefined);
+  }
+
+  async function handleSelectSchema(schema: string | null): Promise<void> {
+    const liveId = stores.session.getState().connectionId;
+    if (liveId === null) return;
+    try {
+      await stores.schema.getState().setSearchPath(liveId, schema);
+      setSelectedSchema(schema);
+      setSchemaError(null);
+    } catch {
+      setSchemaError(QueriesCopy.schemaError);
+    }
   }
 
   const tabDocument = activeTabId === null ? undefined : tabDocumentsRef.current.get(activeTabId);
@@ -542,7 +595,7 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
             formVisible={formVisible}
             onFormVisibleChange={handleFormVisibleChange}
             onProfilesLoaded={handleProfilesLoaded}
-            tables={tableRefs}
+            tables={visibleTables}
             tablesLoading={tablesLoading}
             tablesErrorMessage={tablesErrorMessage}
             connectionId={connectionId}
@@ -571,6 +624,23 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
                 onDeleteQuery={handleDeleteQuery}
                 onMoveQuery={handleMoveQuery}
                 onDeleteFolder={handleDeleteFolder}
+                onRefresh={handleLibraryRefresh}
+                onDuplicateQuery={(id) => {
+                  void stores.library.getState().duplicateSavedQuery(id);
+                }}
+                onRenameFolder={(id, name) => {
+                  void stores.library.getState().renameQueryFolder(id, name);
+                }}
+                onCreateFolder={(name) => stores.library.getState().createQueryFolder(name)}
+                hasCachedResult={(id) => savedQueryCacheRef.current.read(id) !== null}
+                executingQueryId={executingQueryId}
+                schemas={schemaNames}
+                selectedSchema={selectedSchema}
+                onSelectSchema={(schema) => {
+                  void handleSelectSchema(schema);
+                }}
+                schemaError={schemaError}
+                onDismissSchemaError={() => setSchemaError(null)}
               />
             </Panel>
             <Separator className="app-workspace-split__separator" />

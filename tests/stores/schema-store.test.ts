@@ -233,4 +233,15 @@ describe("schema-store", () => {
     expect(store.getState().columnsErrorMessage).toBe("columns_load_failed");
     expect(store.getState().tablesErrorMessage).toBeNull();
   });
+
+  it("setSearchPath named schema vs All Schemas", async () => {
+    const setSearchPath = vi.fn(async () => undefined);
+    const listTables = vi.fn(async () => [{ name: "t", schema: "audit", tableType: "regular" }]);
+    const ipc = { listTables, setSearchPath } as unknown as DragonIpc;
+    const store = createSchemaStore(ipc);
+    await store.getState().setSearchPath("c1", "audit");
+    expect(setSearchPath).toHaveBeenCalledWith("audit");
+    await store.getState().setSearchPath("c1", null);
+    expect(setSearchPath).toHaveBeenCalledWith(null);
+  });
 });
