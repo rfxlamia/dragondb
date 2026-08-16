@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { TABLES_LOAD_FAILED } from "../../../src/stores/schema-store";
 import { ConnectionAccessibility } from "../../../src/ui/connection/connection-accessibility";
 import { ConnectionCopy } from "../../../src/ui/connection/connection-copy";
@@ -68,5 +68,22 @@ describe("ConnectionTablesList", () => {
     expect(screen.getByRole("button", { name: "users" })).toBeInTheDocument();
     rerender(<ConnectionTablesList tables={[]} tablesLoading={false} tablesErrorMessage={null} />);
     expect(screen.queryByRole("button", { name: "users" })).toBeNull();
+  });
+
+  it("Next page is offered when browse returned limit+1 rows", async () => {
+    const user = userEvent.setup();
+    const onNextPage = vi.fn();
+    render(
+      <ConnectionTablesList
+        tables={[{ schema: "public", name: "orders", tableType: "regular" }]}
+        tablesLoading={false}
+        tablesErrorMessage={null}
+        hasNextPage
+        onNextPage={onNextPage}
+        onBrowse={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: /next/i }));
+    expect(onNextPage).toHaveBeenCalledOnce();
   });
 });

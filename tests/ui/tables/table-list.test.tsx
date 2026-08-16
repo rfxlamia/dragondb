@@ -1,0 +1,101 @@
+/** @vitest-environment jsdom */
+import { cleanup, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import type { ColumnInfo, TableRef } from "../../../src/ipc/contract";
+import { TableList } from "../../../src/ui/tables/table-list";
+import { TablesCopy } from "../../../src/ui/tables/tables-copy";
+
+afterEach(() => cleanup());
+
+const orders: TableRef = { schema: "public", name: "orders", tableType: "regular" };
+const remote: TableRef = { schema: "public", name: "remote_orders", tableType: "foreign" };
+const pkCol: ColumnInfo = {
+  name: "id",
+  dataType: "integer",
+  isNullable: false,
+  defaultValue: null,
+  isPrimaryKey: true,
+  isUnique: true,
+  isForeignKey: false,
+};
+
+describe("TableList", () => {
+  it("click runs Show All Rows via onBrowse, mere focus does not", async () => {
+    const user = userEvent.setup();
+    const onBrowse = vi.fn();
+    render(
+      <TableList
+        tables={[orders]}
+        columnsByTable={{}}
+        executing={false}
+        onBrowse={onBrowse}
+        onDrop={vi.fn()}
+        onTruncate={vi.fn()}
+        onGenerateDdl={vi.fn()}
+      />,
+    );
+    screen.getByRole("button", { name: "orders" }).focus();
+    expect(onBrowse).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "orders" }));
+    expect(onBrowse).toHaveBeenCalledWith(orders);
+  });
+
+  it("expand shows PK icon; foreign table has a distinct icon", async () => {
+    const user = userEvent.setup();
+    render(
+      <TableList
+        tables={[orders, remote]}
+        columnsByTable={{ "public.orders": [pkCol] }}
+        executing={false}
+        onBrowse={vi.fn()}
+        onDrop={vi.fn()}
+        onTruncate={vi.fn()}
+        onGenerateDdl={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: TablesCopy.expandColumns }));
+    expect(screen.getByLabelText(TablesCopy.primaryKey)).toBeInTheDocument();
+    expect(screen.getByLabelText(TablesCopy.foreignTable)).toBeInTheDocument();
+  });
+
+  it("Drop confirm calls dropTable callback, not onRunQuery", async () => {
+    const user = userEvent.setup();
+    const onDrop = vi.fn();
+    const onRunQuery = vi.fn();
+    render(
+      <TableList
+        tables={[{ schema: "public", name: "temp", tableType: "regular" }]}
+        columnsByTable={{}}
+        executing={false}
+        onBrowse={vi.fn()}
+        onDrop={onDrop}
+        onTruncate={vi.fn()}
+        onGenerateDdl={vi.fn()}
+        onRunQuery={onRunQuery}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: TablesCopy.drop }));
+    await user.click(screen.getByRole("button", { name: TablesCopy.confirmDrop }));
+    expect(onDrop).toHaveBeenCalledOnce();
+    expect(onRunQuery).not.toHaveBeenCalled();
+  });
+
+  it("context menu actions are disabled while executing", async () => {
+    const user = userEvent.setup();
+    render(
+      <TableList
+        tables={[orders]}
+        columnsByTable={{}}
+        executing={true}
+        onBrowse={vi.fn()}
+        onDrop={vi.fn()}
+        onTruncate={vi.fn()}
+        onGenerateDdl={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: TablesCopy.menu }));
+    expect(screen.getByRole("menuitem", { name: TablesCopy.drop })).toBeDisabled();
+    expect(screen.getByRole("menuitem", { name: TablesCopy.truncate })).toBeDisabled();
+  });
+});

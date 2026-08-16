@@ -1,15 +1,48 @@
-import type { TableRef } from "../../ipc/contract";
-import { tableDisplayName } from "../../lib/table-display-name";
+import type { ColumnInfo, DragonIpc, TableRef } from "../../ipc/contract";
 import { TABLES_LOAD_FAILED } from "../../stores/schema-store";
+import { TableList } from "../tables/table-list";
+import { TablesCopy } from "../tables/tables-copy";
 import { ConnectionAccessibility } from "./connection-accessibility";
 import { ConnectionCopy } from "./connection-copy";
+
+function noop(): void {}
 
 export function ConnectionTablesList(props: {
   tables: TableRef[];
   tablesLoading: boolean;
   tablesErrorMessage: string | null;
+  hasNextPage?: boolean;
+  onNextPage?: () => void;
+  onBrowse?: (table: TableRef) => void;
+  columnsByTable?: Record<string, ColumnInfo[]>;
+  executing?: boolean;
+  onDrop?: (table: TableRef) => void;
+  onTruncate?: (table: TableRef) => void;
+  onGenerateDdl?: (table: TableRef) => unknown;
+  onRunQuery?: (sql: string) => void;
+  onRefresh?: (table: TableRef) => void;
+  onFetchAll?: (table: TableRef) => Promise<{ columns: string[]; rows: unknown[][] }>;
+  saveCsvFile?: DragonIpc["saveCsvFile"];
+  saveTextFile?: DragonIpc["saveTextFile"];
 }): React.JSX.Element {
-  const { tables, tablesLoading, tablesErrorMessage } = props;
+  const {
+    tables,
+    tablesLoading,
+    tablesErrorMessage,
+    hasNextPage = false,
+    onNextPage,
+    onBrowse,
+    columnsByTable = {},
+    executing = false,
+    onDrop,
+    onTruncate,
+    onGenerateDdl,
+    onRunQuery,
+    onRefresh,
+    onFetchAll,
+    saveCsvFile,
+    saveTextFile,
+  } = props;
 
   let body: React.ReactNode;
   if (tablesLoading) {
@@ -20,16 +53,27 @@ export function ConnectionTablesList(props: {
     body = <p className="connection-panel__hint">{ConnectionCopy.noTablesFound}</p>;
   } else {
     body = (
-      <ul className="connection-tables-list">
-        {tables.map((table) => {
-          const label = tableDisplayName(table);
-          return (
-            <li key={`${table.schema ?? ""}.${table.name}`}>
-              <button type="button">{label}</button>
-            </li>
-          );
-        })}
-      </ul>
+      <>
+        <TableList
+          tables={tables}
+          columnsByTable={columnsByTable}
+          executing={executing}
+          onBrowse={onBrowse ?? noop}
+          onDrop={onDrop ?? noop}
+          onTruncate={onTruncate ?? noop}
+          onGenerateDdl={onGenerateDdl ?? noop}
+          onRunQuery={onRunQuery}
+          onRefresh={onRefresh}
+          onFetchAll={onFetchAll}
+          saveCsvFile={saveCsvFile}
+          saveTextFile={saveTextFile}
+        />
+        {hasNextPage ? (
+          <button type="button" className="table-list__next" onClick={onNextPage}>
+            {TablesCopy.nextPage}
+          </button>
+        ) : null}
+      </>
     );
   }
 
