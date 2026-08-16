@@ -73,6 +73,11 @@ export interface TestConnectionInput {
   sshPort?: number | null;
   sshUsername?: string | null;
   sshAuthMethod?: SshAuthMethod | null;
+  /** Transient only; never persisted in ConnectionProfile. */
+  password?: string | null;
+  sshPassword?: string | null;
+  sshPrivateKey?: string | null;
+  sshPassphrase?: string | null;
 }
 
 export interface ColumnInfo {

@@ -9,6 +9,7 @@ use tauri::Emitter;
 use tauri::Manager;
 use tokio::sync::Mutex;
 
+use crate::postgres::CancelRegistry;
 use crate::session::AppSession;
 
 #[cfg(desktop)]
@@ -79,8 +80,11 @@ pub fn run() {
                 .app_data_dir()
                 .expect("resolve app data directory");
             std::fs::create_dir_all(&app_data).ok();
-            let session = AppSession::open(&app_data).expect("open app session");
+            let cancel_registry = CancelRegistry::default();
+            let session = AppSession::open_with_cancel_registry(&app_data, cancel_registry.clone())
+                .expect("open app session");
             app.manage(Mutex::new(session));
+            app.manage(cancel_registry);
             #[cfg(desktop)]
             install_native_menu(app)?;
             Ok(())
@@ -92,6 +96,12 @@ pub fn run() {
             commands::delete_profile,
             commands::connect_profile,
             commands::disconnect,
+            commands::test_connection,
+            commands::cancel_query,
+            commands::list_databases,
+            commands::switch_database,
+            commands::create_database,
+            commands::delete_database,
             commands::list_tables,
             commands::list_columns,
             commands::run_query,
