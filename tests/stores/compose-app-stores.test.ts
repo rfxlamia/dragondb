@@ -18,6 +18,7 @@ function baseTabDto(id: string) {
     selectedSchemaFilter: null,
     cachedResultsData: null,
     cachedColumnNames: null,
+    visualDocumentJson: null,
   };
 }
 

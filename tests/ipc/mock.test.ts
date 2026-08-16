@@ -18,7 +18,11 @@ describe("mock DragonIpc", () => {
 
   it("happy path returns columns for users", async () => {
     const ipc = createMockDragonIpc("happy");
-    const cols = await ipc.listColumns(FIXTURE_CONNECTION_ID, { name: "users", schema: "public" });
+    const cols = await ipc.listColumns(FIXTURE_CONNECTION_ID, {
+      name: "users",
+      schema: "public",
+      tableType: "regular",
+    });
     expect(cols.map((c) => c.name)).toEqual(
       expect.arrayContaining(["id", "name", "email", "created_at"]),
     );
@@ -31,12 +35,16 @@ describe("mock DragonIpc", () => {
 
   it("emptyColumns returns []", async () => {
     const ipc = createMockDragonIpc("emptyColumns");
-    expect(await ipc.listColumns(FIXTURE_CONNECTION_ID, { name: "users" })).toEqual([]);
+    expect(
+      await ipc.listColumns(FIXTURE_CONNECTION_ID, { name: "users", tableType: "regular" }),
+    ).toEqual([]);
   });
 
   it("columnsError rejects", async () => {
     const ipc = createMockDragonIpc("columnsError");
-    await expect(ipc.listColumns(FIXTURE_CONNECTION_ID, { name: "users" })).rejects.toBeTruthy();
+    await expect(
+      ipc.listColumns(FIXTURE_CONNECTION_ID, { name: "users", tableType: "regular" }),
+    ).rejects.toBeTruthy();
   });
 
   it("runQuery is present but unused by UI — returns empty result", async () => {
@@ -45,22 +53,47 @@ describe("mock DragonIpc", () => {
     expect(result.columns).toEqual([]);
     expect(result.rows).toEqual([]);
   });
+
+  it("happy mock exposes last-slice methods and tableType / visualDocumentJson", async () => {
+    const ipc = createMockDragonIpc("happy");
+    expect(typeof ipc.testConnection).toBe("function");
+    expect(typeof ipc.cancelQuery).toBe("function");
+    expect(typeof ipc.switchDatabase).toBe("function");
+    expect(typeof ipc.createDatabase).toBe("function");
+    expect(typeof ipc.deleteDatabase).toBe("function");
+    expect(typeof ipc.truncateTable).toBe("function");
+    expect(typeof ipc.dropTable).toBe("function");
+    expect(typeof ipc.generateTableDdl).toBe("function");
+    expect(typeof ipc.setSearchPath).toBe("function");
+    expect(typeof ipc.clearAllHistory).toBe("function");
+    expect(await ipc.listDatabases(FIXTURE_CONNECTION_ID)).toEqual([]);
+    const tables = await ipc.listTables(FIXTURE_CONNECTION_ID);
+    expect(tables.length).toBeGreaterThan(0);
+    expect(tables.every((t) => t.tableType === "regular" || t.tableType === "foreign")).toBe(true);
+  });
 });
 
 describe("table ref helpers", () => {
   it("maps optional schema to TableReference", () => {
-    expect(tableRefToCore({ name: "users" })).toEqual({ schema: null, name: "users" });
-    expect(tableRefToCore({ schema: "analytics", name: "events" })).toEqual({
+    expect(tableRefToCore({ name: "users", tableType: "regular" })).toEqual({
+      schema: null,
+      name: "users",
+    });
+    expect(tableRefToCore({ schema: "analytics", name: "events", tableType: "regular" })).toEqual({
       schema: "analytics",
       name: "events",
     });
   });
 
   it("round-trips TableReference to TableRef", () => {
-    expect(coreToTableRef({ schema: null, name: "users" })).toEqual({ name: "users" });
+    expect(coreToTableRef({ schema: null, name: "users" })).toEqual({
+      name: "users",
+      tableType: "regular",
+    });
     expect(coreToTableRef({ schema: "analytics", name: "events" })).toEqual({
       schema: "analytics",
       name: "events",
+      tableType: "regular",
     });
   });
 

@@ -53,6 +53,26 @@ export interface ConnectResult {
 export interface TableRef {
   schema?: string;
   name: string;
+  /** Catalog kind — `listTables` unions foreign tables like Swift. */
+  tableType: "regular" | "foreign";
+}
+
+/**
+ * Test-connection probe input — host/port/user/database/SSL/SSH fields only.
+ * Temporary probe: never mutates the live session, never persists secrets.
+ */
+export interface TestConnectionInput {
+  host: string;
+  port: number;
+  username: string;
+  database: string;
+  sslMode: SslMode;
+  sshEnabled: boolean;
+  /** Tunnel fields — only meaningful when sshEnabled. */
+  sshHost?: string | null;
+  sshPort?: number | null;
+  sshUsername?: string | null;
+  sshAuthMethod?: SshAuthMethod | null;
 }
 
 export interface ColumnInfo {
@@ -120,6 +140,8 @@ export interface TabStateDto {
   selectedSchemaFilter: string | null;
   cachedResultsData: string | null;
   cachedColumnNames: string[] | null;
+  /** Visual-canvas IR JSON — dedicated field; NEVER stuffed into queryText. */
+  visualDocumentJson: string | null;
 }
 
 /**
@@ -255,4 +277,29 @@ export interface DragonIpc {
   // SP-3 row ops — reject with RowOperationError (not IpcError kind expansion)
   updateRow(input: UpdateRowInput): Promise<void>;
   deleteRows(input: DeleteRowsInput): Promise<void>;
+
+  // SP-4b last slice — dedicated catalog / database / DDL / cancel / global
+  // history commands (Option B; NOT runQuery for app-generated mutations).
+  // Tauri snake_case map (hand-written in tauri-client): test_connection,
+  // cancel_query, list_databases, switch_database, create_database,
+  // delete_database, truncate_table, drop_table, generate_table_ddl,
+  // set_search_path, clear_all_history.
+  /** Temporary SSH+DB probe — no session mutation; maps to Test banner states. */
+  testConnection(input: TestConnectionInput): Promise<void>;
+  /** Interrupt in-flight runQuery / browse for the connection. */
+  cancelQuery(connectionId: ConnectionId): Promise<void>;
+  /** Picker list; switch does NOT rewrite profile.database. */
+  listDatabases(connectionId: ConnectionId): Promise<string[]>;
+  switchDatabase(connectionId: ConnectionId, name: string): Promise<void>;
+  /** CREATE/DROP DATABASE via maintenance connection; create selects the new db. */
+  createDatabase(name: string): Promise<void>;
+  deleteDatabase(name: string): Promise<void>;
+  /** Quoted-identifier mutations + DDL sheet source (Rust-side quoting). */
+  truncateTable(table: TableRef): Promise<void>;
+  dropTable(table: TableRef): Promise<void>;
+  generateTableDdl(table: TableRef): Promise<string>;
+  /** Named schema → `TO schema, public`; null (All Schemas) → `TO public`. */
+  setSearchPath(schema: string | null): Promise<void>;
+  /** Wipe ALL profiles' history rows (clearHistory stays per-profile). */
+  clearAllHistory(): Promise<void>;
 }

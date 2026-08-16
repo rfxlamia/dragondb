@@ -23,8 +23,8 @@ describe("ConnectionTablesList", () => {
     render(
       <ConnectionTablesList
         tables={[
-          { schema: "public", name: "users" },
-          { schema: "other", name: "orders" },
+          { schema: "public", name: "users", tableType: "regular" },
+          { schema: "other", name: "orders", tableType: "regular" },
         ]}
         tablesLoading={false}
         tablesErrorMessage={null}
@@ -60,7 +60,7 @@ describe("ConnectionTablesList", () => {
   it("clears names and fail copy when rerendered empty after disconnect unmount", () => {
     const { rerender } = render(
       <ConnectionTablesList
-        tables={[{ schema: "public", name: "users" }]}
+        tables={[{ schema: "public", name: "users", tableType: "regular" }]}
         tablesLoading={false}
         tablesErrorMessage={null}
       />,

@@ -59,8 +59,14 @@ describe("schema-store", () => {
     const listColumns = vi.fn(async () => [column("id"), column("email")]);
     const ipc = { listTables: vi.fn(), listColumns } as unknown as DragonIpc;
     const store = createSchemaStore(ipc);
-    await store.getState().loadColumns("c-a", { name: "users", schema: "public" });
-    expect(listColumns).toHaveBeenCalledWith("c-a", { name: "users", schema: "public" });
+    await store
+      .getState()
+      .loadColumns("c-a", { name: "users", schema: "public", tableType: "regular" });
+    expect(listColumns).toHaveBeenCalledWith("c-a", {
+      name: "users",
+      schema: "public",
+      tableType: "regular",
+    });
     expect(store.getState().columnNames).toEqual(["id", "email"]);
     expect(store.getState().metadataErrorMessage).toBeNull();
   });
@@ -75,7 +81,7 @@ describe("schema-store", () => {
     );
     const ipc = { listTables: vi.fn(), listColumns } as unknown as DragonIpc;
     const store = createSchemaStore(ipc);
-    const pending = store.getState().loadColumns("c-old", { name: "users" });
+    const pending = store.getState().loadColumns("c-old", { name: "users", tableType: "regular" });
     store.getState().clear();
     resolveLate([column("stale")]);
     await pending;
@@ -92,7 +98,7 @@ describe("schema-store", () => {
     );
     const ipc = { listTables: vi.fn(), listColumns } as unknown as DragonIpc;
     const store = createSchemaStore(ipc);
-    const pending = store.getState().loadColumns("c-old", { name: "users" });
+    const pending = store.getState().loadColumns("c-old", { name: "users", tableType: "regular" });
     store.getState().clear();
     rejectLate(new Error("gone"));
     await pending;
@@ -106,7 +112,7 @@ describe("schema-store", () => {
     });
     const ipc = { listTables: vi.fn(), listColumns } as unknown as DragonIpc;
     const store = createSchemaStore(ipc);
-    await store.getState().loadColumns("c-a", { name: "users" });
+    await store.getState().loadColumns("c-a", { name: "users", tableType: "regular" });
     expect(store.getState().columnNames).toEqual([]);
     expect(store.getState().metadataErrorMessage).toBe("columns_load_failed");
   });
@@ -127,12 +133,12 @@ describe("schema-store", () => {
     const ipc = { listTables, listColumns } as unknown as DragonIpc;
     const store = createSchemaStore(ipc);
     await store.getState().loadTables("c-a");
-    await store.getState().loadColumns("c-a", { name: "users" });
+    await store.getState().loadColumns("c-a", { name: "users", tableType: "regular" });
     expect(store.getState().columnNames).toEqual(["id"]);
-    await store.getState().loadColumns("c-a", { name: "users" });
+    await store.getState().loadColumns("c-a", { name: "users", tableType: "regular" });
     expect(store.getState().metadataErrorMessage).toBe("columns_load_failed");
 
-    const pending = store.getState().loadColumns("c-a", { name: "users" });
+    const pending = store.getState().loadColumns("c-a", { name: "users", tableType: "regular" });
     store.getState().clearColumns();
     expect(store.getState().columnNames).toEqual([]);
     expect(store.getState().metadataErrorMessage).toBeNull();
@@ -221,7 +227,9 @@ describe("schema-store", () => {
       }),
     } as unknown as DragonIpc;
     const store = createSchemaStore(ipc);
-    await store.getState().loadColumns("c-a", { schema: "public", name: "users" });
+    await store
+      .getState()
+      .loadColumns("c-a", { schema: "public", name: "users", tableType: "regular" });
     expect(store.getState().columnsErrorMessage).toBe("columns_load_failed");
     expect(store.getState().tablesErrorMessage).toBeNull();
   });

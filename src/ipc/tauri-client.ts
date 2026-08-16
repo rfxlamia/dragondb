@@ -22,6 +22,7 @@ import type {
   SaveTextFileResult,
   TableRef,
   TabStateDto,
+  TestConnectionInput,
   UpdateRowInput,
 } from "./contract";
 
@@ -220,6 +221,40 @@ export function createTauriDragonIpc(): DragonIpc {
         table: input.table,
         primaryKeys: input.primaryKeys,
       });
+    },
+    // SP-4b last slice — hand-written camel→snake maps (no generic mapper).
+    testConnection(input: TestConnectionInput): Promise<void> {
+      return invokeCommand("test_connection", { input });
+    },
+    cancelQuery(c: ConnectionId): Promise<void> {
+      return invokeCommand("cancel_query", { connectionId: c });
+    },
+    listDatabases(c: ConnectionId): Promise<string[]> {
+      return invokeCommand("list_databases", { connectionId: c });
+    },
+    switchDatabase(c: ConnectionId, name: string): Promise<void> {
+      return invokeCommand("switch_database", { connectionId: c, name });
+    },
+    createDatabase(name: string): Promise<void> {
+      return invokeCommand("create_database", { name });
+    },
+    deleteDatabase(name: string): Promise<void> {
+      return invokeCommand("delete_database", { name });
+    },
+    truncateTable(table: TableRef): Promise<void> {
+      return invokeCommand("truncate_table", { table });
+    },
+    dropTable(table: TableRef): Promise<void> {
+      return invokeCommand("drop_table", { table });
+    },
+    generateTableDdl(table: TableRef): Promise<string> {
+      return invokeCommand("generate_table_ddl", { table });
+    },
+    setSearchPath(schema: string | null): Promise<void> {
+      return invokeCommand("set_search_path", { schema });
+    },
+    clearAllHistory(): Promise<void> {
+      return invokeCommand("clear_all_history");
     },
   };
 }

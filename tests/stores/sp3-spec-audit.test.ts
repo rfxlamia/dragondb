@@ -60,6 +60,7 @@ function baseTab(overrides: Partial<TabStateDto> = {}): TabStateDto {
     selectedSchemaFilter: null,
     cachedResultsData: null,
     cachedColumnNames: null,
+    visualDocumentJson: null,
     ...overrides,
   };
 }

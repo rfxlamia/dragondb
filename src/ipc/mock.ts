@@ -20,6 +20,7 @@ import type {
   SaveTextFileResult,
   TableRef,
   TabStateDto,
+  TestConnectionInput,
   UpdateRowInput,
 } from "./contract";
 
@@ -98,8 +99,8 @@ const EVENTS_COLUMNS: ColumnInfo[] = [
 ];
 
 const HAPPY_TABLES: TableRef[] = [
-  { schema: "public", name: "users" },
-  { schema: "analytics", name: "events" },
+  { schema: "public", name: "users", tableType: "regular" },
+  { schema: "analytics", name: "events", tableType: "regular" },
 ];
 
 const HAPPY_COLUMNS: Record<string, ColumnInfo[]> = {
@@ -119,6 +120,10 @@ function emptyQueryResult(): QueryResult {
     rowsAffected: null,
     durationMs: 0,
   };
+}
+
+function notImplemented(method: string): IpcError {
+  return { kind: "unknown", message: `SP-4b mock: ${method} not implemented` };
 }
 
 function newProfileId(): ProfileId {
@@ -283,6 +288,41 @@ export function createMockDragonIpc(mode: MockMode = "happy"): DragonIpc {
         message: "SP-3 mock: deleteRows not implemented",
       };
       throw err;
+    },
+
+    // SP-4b last slice — picker surface returns []; Rust-backed commands stub.
+    async listDatabases(_c: ConnectionId): Promise<string[]> {
+      return [];
+    },
+    async testConnection(_input: TestConnectionInput): Promise<void> {
+      throw notImplemented("testConnection");
+    },
+    async cancelQuery(_c: ConnectionId): Promise<void> {
+      throw notImplemented("cancelQuery");
+    },
+    async switchDatabase(_c: ConnectionId, _name: string): Promise<void> {
+      throw notImplemented("switchDatabase");
+    },
+    async createDatabase(_name: string): Promise<void> {
+      throw notImplemented("createDatabase");
+    },
+    async deleteDatabase(_name: string): Promise<void> {
+      throw notImplemented("deleteDatabase");
+    },
+    async truncateTable(_table: TableRef): Promise<void> {
+      throw notImplemented("truncateTable");
+    },
+    async dropTable(_table: TableRef): Promise<void> {
+      throw notImplemented("dropTable");
+    },
+    async generateTableDdl(_table: TableRef): Promise<string> {
+      throw notImplemented("generateTableDdl");
+    },
+    async setSearchPath(_schema: string | null): Promise<void> {
+      throw notImplemented("setSearchPath");
+    },
+    async clearAllHistory(): Promise<void> {
+      throw notImplemented("clearAllHistory");
     },
   };
 }

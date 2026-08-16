@@ -534,7 +534,7 @@ describe("ConnectionPanel Save-then-Connect", () => {
         formVisible={true}
         onFormVisibleChange={vi.fn()}
         onProfilesLoaded={vi.fn()}
-        tables={[{ schema: "public", name: "users" }]}
+        tables={[{ schema: "public", name: "users", tableType: "regular" }]}
         tablesLoading={false}
         tablesErrorMessage={TABLES_LOAD_FAILED}
         {...sessionPropsFromIpc(ipc)}

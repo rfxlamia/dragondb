@@ -78,6 +78,8 @@ function toTabState(
 ): TabState {
   return {
     ...dto,
+    // Hydrate default — persisted rows from before the visual-IR column land as null.
+    visualDocumentJson: dto.visualDocumentJson ?? null,
     raw,
     compact,
     status: { kind: "idle" },
@@ -105,6 +107,7 @@ function emptyTab(
     selectedSchemaFilter: null,
     cachedResultsData: null,
     cachedColumnNames: null,
+    visualDocumentJson: null,
   });
 }
 

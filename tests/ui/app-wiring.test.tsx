@@ -910,6 +910,7 @@ describe("App results pane (SP-4b first slice)", () => {
         selectedSchemaFilter: null,
         cachedResultsData: JSON.stringify({ columns: ["id"], rows: [["cached"]] }),
         cachedColumnNames: ["id"],
+        visualDocumentJson: null,
       },
     ]);
     render(<App ipc={ipc} />);
