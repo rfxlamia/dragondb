@@ -11,14 +11,16 @@ use std::time::Instant;
 
 use rusqlite::Connection as SqliteConnection;
 use serde::{Deserialize, Serialize};
-use tokio_postgres::Client;
+use tokio_postgres::{CancelToken, Client};
 use uuid::Uuid;
 
 use crate::postgres::{
     collapse_ssl_mode, connect as pg_connect, delete_rows as pg_delete_rows,
+    create_database as pg_create_database, drop_database as pg_drop_database,
+    list_databases as pg_list_databases, maintenance_database,
     list_columns as pg_list_columns, list_tables as pg_list_tables, run_query as pg_run_query,
     update_row as pg_update_row, ColumnInfoRow, ConnectParams, IpcErrorKind, MappedIpcError,
-    QueryResultData, RowOperationError, RowOperationErrorKind, TableRefRow,
+    CancelRegistry, QueryResultData, RowOperationError, RowOperationErrorKind, TableRefRow,
 };
 use crate::secrets::{KeyringStore, KeyringStoreError, ProfileSecrets};
 use crate::ssh::{
@@ -138,6 +140,7 @@ struct ActiveSession {
     /// Cached for reconnect (never logged).
     secrets: ProfileSecrets,
     client: Option<Client>,
+    cancel_token: Option<CancelToken>,
     tunnel: Option<TunnelHandle>,
     ssh_enabled: bool,
     /// Usable live handle (DB client and/or fake live flag). Cleared during oneshot teardown.
@@ -157,11 +160,19 @@ enum Backend {
 pub struct AppSession {
     backend: Backend,
     active: Option<ActiveSession>,
+    cancel_registry: CancelRegistry,
 }
 
 impl AppSession {
     /// Open production session under `app_data_dir`.
     pub fn open(app_data_dir: &Path) -> Result<Self, MappedIpcError> {
+        Self::open_with_cancel_registry(app_data_dir, CancelRegistry::default())
+    }
+
+    pub fn open_with_cancel_registry(
+        app_data_dir: &Path,
+        cancel_registry: CancelRegistry,
+    ) -> Result<Self, MappedIpcError> {
         let db_path = crate::storage::default_db_path(app_data_dir);
         let db = open_db(&db_path).map_err(|e| MappedIpcError {
             kind: IpcErrorKind::Unknown,
@@ -174,6 +185,7 @@ impl AppSession {
                 keyring: KeyringStore::new("dragondb"),
             },
             active: None,
+            cancel_registry,
         })
     }
 
@@ -183,6 +195,7 @@ impl AppSession {
         Self {
             backend: Backend::Fake(deps),
             active,
+            cancel_registry: CancelRegistry::default(),
         }
     }
 
@@ -451,11 +464,18 @@ impl AppSession {
                     profile_id: id.to_string(),
                     profile,
                     secrets,
+                    cancel_token: Some(client.cancel_token()),
                     client: Some(client),
                     tunnel,
                     ssh_enabled,
                     live: true,
                 });
+                let active = self.active.as_ref().expect("active session just installed");
+                self.cancel_registry.register(
+                    active.connection_id.clone(),
+                    active.cancel_token.clone().expect("production token"),
+                    collapse_ssl_mode(&active.profile.ssl_mode),
+                );
             }
             Backend::Fake(d) => {
                 let ssh_enabled = profile.ssh_enabled;
@@ -469,6 +489,7 @@ impl AppSession {
                     profile,
                     secrets,
                     client: None,
+                    cancel_token: None,
                     tunnel: None,
                     ssh_enabled,
                     live: true,
@@ -484,6 +505,7 @@ impl AppSession {
     }
 
     pub async fn disconnect(&mut self) -> Result<(), MappedIpcError> {
+        self.cancel_registry.clear();
         if let Some(mut active) = self.active.take() {
             if let Some(mut tunnel) = active.tunnel.take() {
                 let _ = tunnel.shutdown();
@@ -492,6 +514,111 @@ impl AppSession {
             active.client = None;
         }
         Ok(())
+    }
+
+    /// List connectable databases through the active live client.
+    pub async fn list_databases(
+        &self,
+        connection_id: &str,
+    ) -> Result<Vec<String>, MappedIpcError> {
+        self.require_live(connection_id)?;
+        match &self.backend {
+            Backend::Fake(_) => Ok(vec!["postgres".into(), "shop".into()]),
+            Backend::Production { .. } => {
+                let client = self
+                    .active
+                    .as_ref()
+                    .and_then(|active| active.client.as_ref())
+                    .ok_or_else(not_connected)?;
+                pg_list_databases(client).await
+            }
+        }
+    }
+
+    /// Reconnect the live session to a database without persisting the picker choice.
+    pub async fn switch_database(
+        &mut self,
+        connection_id: &str,
+        name: &str,
+    ) -> Result<(), MappedIpcError> {
+        self.require_live(connection_id)?;
+        let active = self.active.as_ref().ok_or_else(not_connected)?;
+        let mut profile = active.profile.clone();
+        profile.database = name.to_string();
+        let secrets = active.secrets.clone();
+
+        match &mut self.backend {
+            Backend::Production { .. } => {
+                let (client, tunnel) = establish_live(&profile, &secrets).await?;
+                let active = self.active.as_mut().ok_or_else(not_connected)?;
+                if let Some(mut prior_tunnel) = active.tunnel.take() {
+                    let _ = prior_tunnel.shutdown();
+                }
+                active.client = Some(client);
+                active.cancel_token = Some(
+                    active
+                        .client
+                        .as_ref()
+                        .expect("client set")
+                        .cancel_token(),
+                );
+                active.tunnel = tunnel;
+                active.profile = profile;
+                active.live = true;
+                self.cancel_registry.register(
+                    active.connection_id.clone(),
+                    active.cancel_token.clone().expect("production token"),
+                    collapse_ssl_mode(&active.profile.ssl_mode),
+                );
+            }
+            Backend::Fake(_) => {
+                self.active.as_mut().ok_or_else(not_connected)?.profile = profile;
+            }
+        }
+        Ok(())
+    }
+
+    /// Create a database through a temporary maintenance connection, then select it.
+    pub async fn create_database(&mut self, name: &str) -> Result<(), MappedIpcError> {
+        let connection_id = self
+            .active
+            .as_ref()
+            .map(|active| active.connection_id.clone())
+            .ok_or_else(not_connected)?;
+        if matches!(self.backend, Backend::Fake(_)) {
+            return self.switch_database(&connection_id, name).await;
+        }
+        self.run_database_admin(name, true).await?;
+        self.switch_database(&connection_id, name).await
+    }
+
+    /// Drop a database through a temporary maintenance connection.
+    pub async fn delete_database(&self, name: &str) -> Result<(), MappedIpcError> {
+        if matches!(self.backend, Backend::Fake(_)) {
+            return Ok(());
+        }
+        self.run_database_admin(name, false).await
+    }
+
+    async fn run_database_admin(
+        &self,
+        name: &str,
+        create: bool,
+    ) -> Result<(), MappedIpcError> {
+        let active = self.active.as_ref().ok_or_else(not_connected)?;
+        let mut profile = active.profile.clone();
+        profile.database = maintenance_database(&profile.database).to_string();
+        let (client, mut tunnel) = establish_live(&profile, &active.secrets).await?;
+        let result = if create {
+            pg_create_database(&client, name).await
+        } else {
+            pg_drop_database(&client, name).await
+        };
+        drop(client);
+        if let Some(tunnel) = tunnel.as_mut() {
+            let _ = tunnel.shutdown();
+        }
+        result
     }
 
     pub async fn list_tables(
@@ -799,7 +926,9 @@ impl AppSession {
             let _ = tunnel.shutdown();
         }
         active.client = None;
+        active.cancel_token = None;
         active.live = false;
+        self.cancel_registry.clear();
 
         let profile = active.profile.clone();
         let secrets = active.secrets.clone();
@@ -810,8 +939,14 @@ impl AppSession {
                 let (client, tunnel) = establish_live(&profile, &secrets).await?;
                 if let Some(a) = self.active.as_mut() {
                     a.client = Some(client);
+                    a.cancel_token = Some(a.client.as_ref().expect("client set").cancel_token());
                     a.tunnel = tunnel;
                     a.live = true;
+                    self.cancel_registry.register(
+                        a.connection_id.clone(),
+                        a.cancel_token.clone().expect("production token"),
+                        collapse_ssl_mode(&a.profile.ssl_mode),
+                    );
                 }
                 Ok(())
             }
@@ -1517,6 +1652,7 @@ impl FakeDeps {
                     profile,
                     secrets,
                     client: None,
+                    cancel_token: None,
                     tunnel: None,
                     ssh_enabled,
                     live: true,

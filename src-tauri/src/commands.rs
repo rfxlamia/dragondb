@@ -2,14 +2,15 @@
 //!
 //! Command names and camelCase DTOs are locked for the TS DragonIpc client (T8).
 //! Errors reject as `MappedIpcError` objects (`{ kind, message, position? }`).
-//! No createDatabase / deleteDatabase commands.
+//! Database administration uses dedicated session methods, never run_query.
 
 use serde::{Deserialize, Serialize};
 use tauri::State;
 use tokio::sync::Mutex;
 
 use crate::postgres::{
-    ColumnInfoRow, IpcErrorKind, MappedIpcError, QueryResultData, RowOperationError, TableRefRow,
+    collapse_ssl_mode, probe_config, CancelRegistry, ColumnInfoRow, IpcErrorKind, MappedIpcError,
+    ProbeConfig, QueryResultData, RowOperationError, TableRefRow,
 };
 use crate::session::{
     AppSession, ConnectResult, ExecutableSql, ProfileFields, ProfileSecretsInput,
@@ -163,6 +164,94 @@ pub async fn connect_profile(
 pub async fn disconnect(state: State<'_, Mutex<AppSession>>) -> Result<(), MappedIpcError> {
     let mut session = state.lock().await;
     session.disconnect().await
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TestConnectionInput {
+    pub host: String,
+    pub port: i64,
+    pub username: String,
+    pub database: String,
+    pub ssl_mode: String,
+    pub ssh_enabled: bool,
+    pub ssh_host: Option<String>,
+    pub ssh_port: Option<i64>,
+    pub ssh_username: Option<String>,
+    pub ssh_auth_method: Option<String>,
+    #[serde(default)]
+    pub password: Option<String>,
+    #[serde(default)]
+    pub ssh_password: Option<String>,
+    #[serde(default)]
+    pub ssh_private_key: Option<String>,
+    #[serde(default)]
+    pub ssh_passphrase: Option<String>,
+}
+
+#[tauri::command]
+pub async fn test_connection(input: TestConnectionInput) -> Result<(), MappedIpcError> {
+    probe_config(ProbeConfig {
+        host: input.host,
+        port: input.port as u16,
+        username: input.username,
+        password: input.password.unwrap_or_default(),
+        database: input.database,
+        tls: collapse_ssl_mode(&input.ssl_mode),
+        ssh_host: input.ssh_enabled.then_some(input.ssh_host).flatten(),
+        ssh_port: input.ssh_port.unwrap_or(22) as u16,
+        ssh_username: input.ssh_username,
+        ssh_auth_method: input.ssh_auth_method,
+        ssh_password: input.ssh_password,
+        ssh_private_key: input.ssh_private_key,
+        ssh_passphrase: input.ssh_passphrase,
+    })
+    .await
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn cancel_query(
+    registry: State<'_, CancelRegistry>,
+    connection_id: String,
+) -> Result<(), MappedIpcError> {
+    registry.cancel_token(&connection_id).await
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn list_databases(
+    state: State<'_, Mutex<AppSession>>,
+    connection_id: String,
+) -> Result<Vec<String>, MappedIpcError> {
+    state.lock().await.list_databases(&connection_id).await
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn switch_database(
+    state: State<'_, Mutex<AppSession>>,
+    connection_id: String,
+    name: String,
+) -> Result<(), MappedIpcError> {
+    state
+        .lock()
+        .await
+        .switch_database(&connection_id, &name)
+        .await
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn create_database(
+    state: State<'_, Mutex<AppSession>>,
+    name: String,
+) -> Result<(), MappedIpcError> {
+    state.lock().await.create_database(&name).await
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn delete_database(
+    state: State<'_, Mutex<AppSession>>,
+    name: String,
+) -> Result<(), MappedIpcError> {
+    state.lock().await.delete_database(&name).await
 }
 
 #[tauri::command(rename_all = "camelCase")]
@@ -874,5 +963,16 @@ mod tests {
         assert_eq!(dto.cached_results_data.as_deref(), Some(json));
         assert_eq!(dto.order, 0); // order ↔ order_index
         assert_eq!(dto.cached_column_names.as_deref(), Some(&["c".to_string()][..]));
+    }
+
+    #[test]
+    fn cancel_query_command_uses_cancel_token() {
+        let src = include_str!("commands.rs");
+        let production = src.split("#[cfg(test)]").next().expect("has test module");
+        let needle = concat!("cancel_", "token");
+        assert!(
+            production.contains(needle),
+            "cancel_query must use Client cancel token then cancel_query"
+        );
     }
 }
