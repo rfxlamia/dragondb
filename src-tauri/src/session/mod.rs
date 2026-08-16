@@ -127,6 +127,8 @@ pub struct TableRefArg {
     pub name: String,
     #[serde(default)]
     pub schema: Option<String>,
+    #[serde(default)]
+    pub table_type: Option<String>,
 }
 
 struct ActiveSession {
@@ -518,6 +520,7 @@ impl AppSession {
             return Ok(vec![TableRefRow {
                 schema: "public".into(),
                 name: "users".into(),
+                table_type: "regular".into(),
             }]);
         }
         let client = self

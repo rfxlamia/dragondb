@@ -1,4 +1,4 @@
-//! Catalog SQL + query result mapping for thin Postgres I/O.
+//! Query execution and result mapping for thin Postgres I/O.
 
 use std::time::{Duration, Instant};
 
@@ -8,12 +8,6 @@ use tokio_postgres::types::{ToSql, Type};
 use tokio_postgres::Client;
 
 use super::error::{map_tokio_postgres_error, IpcErrorKind, MappedIpcError};
-
-/// Locked Swift-parity catalog query for listing user tables.
-pub const LIST_TABLES_SQL: &str = "SELECT table_schema, table_name FROM information_schema.tables WHERE table_type = 'BASE TABLE' AND table_schema NOT IN ('pg_catalog', 'information_schema') ORDER BY table_schema, table_name";
-
-/// Locked Swift-parity catalog query for listing columns of one table.
-pub const LIST_COLUMNS_SQL: &str = "SELECT column_name, data_type, is_nullable::text, column_default::text FROM information_schema.columns WHERE table_schema = $1 AND table_name = $2 ORDER BY ordinal_position";
 
 /// Cell value used by the pure row mapper / QueryResult shaping.
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -43,26 +37,6 @@ pub struct QueryResultData {
     pub duration_ms: u64,
 }
 
-/// TableRef-shaped row from `list_tables`.
-#[derive(Debug, Clone, PartialEq, Serialize)]
-pub struct TableRefRow {
-    pub schema: String,
-    pub name: String,
-}
-
-/// ColumnInfo-shaped row from `list_columns` (PK/unique/FK enrichment deferred).
-#[derive(Debug, Clone, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ColumnInfoRow {
-    pub name: String,
-    pub data_type: String,
-    pub is_nullable: bool,
-    pub default_value: Option<String>,
-    pub is_primary_key: bool,
-    pub is_unique: bool,
-    pub is_foreign_key: bool,
-}
-
 /// Attach durationMs; SELECT row count semantics use `rows.len()` (not rowsAffected).
 pub fn map_query_rows(row_set: MappedRowSet, duration: Duration) -> QueryResultData {
     QueryResultData {
@@ -71,49 +45,6 @@ pub fn map_query_rows(row_set: MappedRowSet, duration: Duration) -> QueryResultD
         rows_affected: None,
         duration_ms: duration.as_millis() as u64,
     }
-}
-
-/// List user BASE TABLEs via locked catalog SQL.
-pub async fn list_tables(client: &Client) -> Result<Vec<TableRefRow>, MappedIpcError> {
-    let rows = client
-        .query(LIST_TABLES_SQL, &[])
-        .await
-        .map_err(|e| map_tokio_postgres_error(&e))?;
-    Ok(rows
-        .iter()
-        .map(|row| TableRefRow {
-            schema: row.get(0),
-            name: row.get(1),
-        })
-        .collect())
-}
-
-/// List columns for one table via locked catalog SQL.
-pub async fn list_columns(
-    client: &Client,
-    schema: &str,
-    table: &str,
-) -> Result<Vec<ColumnInfoRow>, MappedIpcError> {
-    let rows = client
-        .query(LIST_COLUMNS_SQL, &[&schema, &table])
-        .await
-        .map_err(|e| map_tokio_postgres_error(&e))?;
-    Ok(rows
-        .iter()
-        .map(|row| {
-            let is_nullable: String = row.get(2);
-            let default_value: Option<String> = row.get(3);
-            ColumnInfoRow {
-                name: row.get(0),
-                data_type: row.get(1),
-                is_nullable: is_nullable.eq_ignore_ascii_case("YES"),
-                default_value,
-                is_primary_key: false,
-                is_unique: false,
-                is_foreign_key: false,
-            }
-        })
-        .collect())
 }
 
 /// Run a SQL statement with bound parameters; SELECT returns rows, others set rowsAffected.
@@ -361,25 +292,6 @@ mod tests {
         assert!(!looks_like_select("INSERT INTO t VALUES (1)"));
         assert!(!looks_like_select("UPDATE t SET x = 1"));
         assert!(!looks_like_select("SELECTIVE_NAME"));
-    }
-
-    #[test]
-    fn list_tables_sql_is_locked_catalog_query() {
-        assert!(LIST_TABLES_SQL.contains("information_schema.tables"));
-        assert!(LIST_TABLES_SQL.contains("table_schema"));
-        assert!(LIST_TABLES_SQL.contains("table_name"));
-        assert!(LIST_TABLES_SQL.contains("BASE TABLE"));
-        assert!(LIST_TABLES_SQL.contains("pg_catalog"));
-        assert!(LIST_TABLES_SQL.contains("information_schema"));
-    }
-
-    #[test]
-    fn list_columns_sql_is_locked_catalog_query() {
-        assert!(LIST_COLUMNS_SQL.contains("information_schema.columns"));
-        assert!(LIST_COLUMNS_SQL.contains("table_schema"));
-        assert!(LIST_COLUMNS_SQL.contains("table_name"));
-        assert!(LIST_COLUMNS_SQL.contains("column_name"));
-        assert!(LIST_COLUMNS_SQL.contains("data_type"));
     }
 
     #[test]
