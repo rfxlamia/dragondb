@@ -12,6 +12,7 @@ export type SchemaState = {
   tablesErrorMessage: string | null;
   columnsErrorMessage: string | null;
   loadTables: (connectionId: ConnectionId) => Promise<void>;
+  reloadTables: (connectionId: ConnectionId) => Promise<void>;
   loadColumns: (connectionId: ConnectionId, table: TableRef) => Promise<void>;
   clearColumns: () => void;
   clear: () => void;
@@ -25,7 +26,7 @@ export function createSchemaStore(ipc: DragonIpc): StoreApi<SchemaState> {
   let tableGeneration = 0;
   let columnGeneration = 0;
 
-  return createStore<SchemaState>((set) => ({
+  return createStore<SchemaState>((set, get) => ({
     tables: [],
     columnNames: [],
     metadataErrorMessage: null,
@@ -54,6 +55,12 @@ export function createSchemaStore(ipc: DragonIpc): StoreApi<SchemaState> {
           metadataErrorMessage: TABLES_LOAD_FAILED,
         });
       }
+    },
+
+    async reloadTables(connectionId) {
+      columnGeneration += 1;
+      set({ columnNames: [], columnsErrorMessage: null });
+      await get().loadTables(connectionId);
     },
 
     async loadColumns(connectionId, table) {
