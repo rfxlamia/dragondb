@@ -607,8 +607,9 @@ describe("App wiring regressions after connect (SP-4a)", () => {
     );
     await user.click(screen.getByTestId(VisualQueryAccessibility.startOver));
     await user.click(screen.getByTestId(VisualQueryAccessibility.initialAddBlock));
-    await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("createTable")));
-    await user.type(screen.getByTestId(VisualQueryAccessibility.createTableNameField), "orders");
+    expect(
+      screen.queryByTestId(VisualQueryAccessibility.statementMenuItem("createTable")),
+    ).toBeNull();
     expect(runQuery).not.toHaveBeenCalled();
   });
 
@@ -996,18 +997,21 @@ describe("App results pane (SP-4b first slice)", () => {
     expect(clearHistory).not.toHaveBeenCalled();
   });
 
-  it("CREATE disables Run in App so runQuery is not called", async () => {
+  it("picker has no CREATE; runQuery is not called without clicking Run on SELECT", async () => {
     const user = userEvent.setup();
     const ipc = createMockDragonIpc("happy");
     const runQuery = vi.spyOn(ipc, "runQuery");
     render(<App ipc={ipc} />);
     await connectFirst(user, ipc);
     await user.click(await screen.findByTestId(VisualQueryAccessibility.initialAddBlock));
-    await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("createTable")));
-    await user.type(screen.getByTestId(VisualQueryAccessibility.createTableNameField), "orders");
-    await user.type(screen.getByTestId(VisualQueryAccessibility.createColumnNameField(0)), "id");
-    expect(screen.getByTestId(VisualQueryAccessibility.runQuery)).toBeDisabled();
-    await user.click(screen.getByTestId(VisualQueryAccessibility.runQuery));
+    expect(
+      screen.queryByTestId(VisualQueryAccessibility.statementMenuItem("createTable")),
+    ).toBeNull();
+    expect(screen.queryByTestId(VisualQueryAccessibility.statementMenuItem("update"))).toBeNull();
+    expect(screen.queryByTestId(VisualQueryAccessibility.statementMenuItem("delete"))).toBeNull();
+    expect(
+      screen.getByTestId(VisualQueryAccessibility.statementMenuItem("select")),
+    ).toBeInTheDocument();
     expect(runQuery).not.toHaveBeenCalled();
   });
 

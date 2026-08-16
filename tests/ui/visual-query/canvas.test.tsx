@@ -273,7 +273,7 @@ describe("VisualQueryCanvas", () => {
     expect(onCommittedFromChange).toHaveBeenCalledWith({ schema: null, name: "users" });
   });
 
-  it("CREATE disables Run, does not call onRunQuery, and SQL is in the dialog", async () => {
+  it("statement picker has no CREATE; incomplete SELECT disables Run", async () => {
     const user = userEvent.setup();
     const onRunQuery = vi.fn();
     render(
@@ -286,21 +286,20 @@ describe("VisualQueryCanvas", () => {
       />,
     );
     await user.click(screen.getByTestId(VisualQueryAccessibility.initialAddBlock));
-    await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("createTable")));
-    await user.type(screen.getByTestId(VisualQueryAccessibility.createTableNameField), "orders");
-    await user.type(screen.getByTestId(VisualQueryAccessibility.createColumnNameField(0)), "id");
+    expect(
+      screen.queryByTestId(VisualQueryAccessibility.statementMenuItem("createTable")),
+    ).toBeNull();
+    expect(screen.queryByTestId(VisualQueryAccessibility.statementMenuItem("update"))).toBeNull();
+    expect(screen.queryByTestId(VisualQueryAccessibility.statementMenuItem("delete"))).toBeNull();
+    await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("select")));
     expect(screen.getByTestId(VisualQueryAccessibility.runQuery)).toBeDisabled();
     await user.click(screen.getByTestId(VisualQueryAccessibility.runQuery));
     expect(onRunQuery).not.toHaveBeenCalled();
     expect(screen.queryByText(/only select queries can run/i)).toBeNull();
     expect(document.querySelector(".vq-canvas__status")).toBeNull();
-    await openGeneratedSqlDialog(user);
-    expect(screen.getByTestId(VisualQueryAccessibility.generatedSQLText).textContent).toMatch(
-      /orders/i,
-    );
   });
 
-  it("UPDATE disables Run; dialog shows em dash", async () => {
+  it("statement picker has no UPDATE; empty canvas dialog shows em dash", async () => {
     const user = userEvent.setup();
     const onRunQuery = vi.fn();
     render(
@@ -313,8 +312,14 @@ describe("VisualQueryCanvas", () => {
       />,
     );
     await user.click(screen.getByTestId(VisualQueryAccessibility.initialAddBlock));
-    await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("update")));
-    expect(screen.getAllByText(/coming soon/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.queryByTestId(VisualQueryAccessibility.statementMenuItem("update"))).toBeNull();
+    expect(
+      screen.queryByTestId(VisualQueryAccessibility.statementMenuItem("createTable")),
+    ).toBeNull();
+    expect(screen.queryByTestId(VisualQueryAccessibility.statementMenuItem("delete"))).toBeNull();
+    expect(
+      screen.getByTestId(VisualQueryAccessibility.statementMenuItem("select")),
+    ).toBeInTheDocument();
     expect(screen.getByTestId(VisualQueryAccessibility.runQuery)).toBeDisabled();
     await user.click(screen.getByTestId(VisualQueryAccessibility.runQuery));
     expect(onRunQuery).not.toHaveBeenCalled();
@@ -570,7 +575,7 @@ describe("VisualQueryCanvas full lock + Run (SP-2)", () => {
     );
   });
 
-  it("Run CREATE is gated in UI — Run is disabled and does not call onRunQuery", async () => {
+  it("picker omits CREATE; Run is not called without completing SELECT", async () => {
     const user = userEvent.setup();
     const onRunQuery = vi.fn();
     render(
@@ -583,9 +588,14 @@ describe("VisualQueryCanvas full lock + Run (SP-2)", () => {
       />,
     );
     await user.click(screen.getByTestId(VisualQueryAccessibility.initialAddBlock));
-    await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("createTable")));
-    await user.type(screen.getByTestId(VisualQueryAccessibility.createTableNameField), "orders");
-    await user.type(screen.getByTestId(VisualQueryAccessibility.createColumnNameField(0)), "id");
+    expect(
+      screen.queryByTestId(VisualQueryAccessibility.statementMenuItem("createTable")),
+    ).toBeNull();
+    expect(screen.queryByTestId(VisualQueryAccessibility.statementMenuItem("update"))).toBeNull();
+    expect(screen.queryByTestId(VisualQueryAccessibility.statementMenuItem("delete"))).toBeNull();
+    expect(
+      screen.getByTestId(VisualQueryAccessibility.statementMenuItem("select")),
+    ).toBeInTheDocument();
     expect(screen.getByTestId(VisualQueryAccessibility.runQuery)).toBeDisabled();
     await user.click(screen.getByTestId(VisualQueryAccessibility.runQuery));
     expect(onRunQuery).not.toHaveBeenCalled();

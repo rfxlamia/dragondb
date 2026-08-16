@@ -66,7 +66,7 @@ describe("mock DragonIpc", () => {
     expect(typeof ipc.generateTableDdl).toBe("function");
     expect(typeof ipc.setSearchPath).toBe("function");
     expect(typeof ipc.clearAllHistory).toBe("function");
-    expect(await ipc.listDatabases(FIXTURE_CONNECTION_ID)).toEqual([]);
+    expect(await ipc.listDatabases(FIXTURE_CONNECTION_ID)).toEqual(["app"]);
     const tables = await ipc.listTables(FIXTURE_CONNECTION_ID);
     expect(tables.length).toBeGreaterThan(0);
     expect(tables.every((t) => t.tableType === "regular" || t.tableType === "foreign")).toBe(true);
