@@ -2,7 +2,7 @@ import type { DragonIpc, QueryResult, TableRef } from "../ipc/contract";
 import { QUERY_FAILED_MESSAGE, unknownErrorMessage } from "../lib/unknown-error-message";
 import type { AppStores } from "./compose-app-stores";
 
-const PAGE_SIZE = 100;
+export const PAGE_SIZE = 100;
 
 function quoteIdentifier(value: string): string {
   return `"${value.replaceAll('"', '""')}"`;

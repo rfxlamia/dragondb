@@ -11,9 +11,10 @@ import type {
 } from "./ipc/contract";
 import { coreToTableRef, tableRefToCore } from "./ipc/table-ref";
 import { createTauriDragonIpc } from "./ipc/tauri-client";
+import { loadDateFormat, type QueryResultsDateFormat } from "./lib/date-format-setting";
 import { newSavedQueryName } from "./lib/new-saved-query-name";
 import { type AppStores, composeAppStores } from "./stores/compose-app-stores";
-import { runBrowseOnActiveTab } from "./stores/run-browse-on-active-tab";
+import { PAGE_SIZE, runBrowseOnActiveTab } from "./stores/run-browse-on-active-tab";
 import { runSelectOnActiveTab } from "./stores/run-select-on-active-tab";
 import { runSqlOnActiveTab } from "./stores/run-sql-on-active-tab";
 import { ConnectionCopy, humanIpcErrorMessage } from "./ui/connection/connection-copy";
@@ -104,6 +105,15 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
     stores.tabs,
     (s) => s.tabs.find((t) => t.id === s.activeTabId)?.compact ?? null,
   );
+  const raw = useStore(stores.tabs, (s) => s.tabs.find((t) => t.id === s.activeTabId)?.raw ?? null);
+  const selectedTableSchema = useStore(
+    stores.tabs,
+    (s) => s.tabs.find((t) => t.id === s.activeTabId)?.selectedTableSchema ?? null,
+  );
+  const selectedTableName = useStore(
+    stores.tabs,
+    (s) => s.tabs.find((t) => t.id === s.activeTabId)?.selectedTableName ?? null,
+  );
   const mutationToast = useStore(
     stores.tabs,
     (s) => s.tabs.find((t) => t.id === s.activeTabId)?.mutationToast ?? null,
@@ -135,6 +145,9 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
   const [missingDatabase, setMissingDatabase] = useState(false);
   const [selectedSchema, setSelectedSchema] = useState<string | null>(null);
   const [schemaError, setSchemaError] = useState<string | null>(null);
+  const [dateFormat, setDateFormat] = useState<QueryResultsDateFormat>(loadDateFormat);
+  const [primaryKeyColumns, setPrimaryKeyColumns] = useState<string[]>([]);
+  const [browsePage, setBrowsePage] = useState(0);
   const canvasHandleRef = useRef<VisualQueryCanvasHandle | null>(null);
   const connectionPanelRef = useRef<ConnectionPanelHandle | null>(null);
   /**
@@ -166,6 +179,52 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
     ? tableRefs.filter((table) => table.schema === selectedSchema)
     : tableRefs;
   const executingQueryId = status.kind === "running" ? savedQueryId : null;
+
+  // sourceTable mirrors Swift's connection.selectedTable: only set right after
+  // an actual table browse (tabs-store.applyRunSuccess resolves it fresh on
+  // every run, clearing it for plain SELECT/canvas results) — DetailContent
+  // modals (row edit / delete) must only treat browsed-table grids as editable.
+  // Memoized so effects keyed on it don't re-fire every render.
+  const sourceTable = useMemo(
+    () =>
+      selectedTableName !== null
+        ? { schema: selectedTableSchema ?? undefined, name: selectedTableName }
+        : undefined,
+    [selectedTableSchema, selectedTableName],
+  );
+  const hasNextPage = (raw?.rows.length ?? 0) > PAGE_SIZE;
+  const hasPrevPage = browsePage > 0;
+
+  // Reset pagination whenever the browsed table (or active tab) changes —
+  // page 0 is always the correct start for a newly-selected table.
+  useEffect(() => {
+    setBrowsePage(0);
+  }, [activeTabId, selectedTableSchema, selectedTableName]);
+
+  useEffect(() => {
+    if (connectionId === null || sourceTable === undefined) {
+      setPrimaryKeyColumns([]);
+      return;
+    }
+    let cancelled = false;
+    void ipc
+      .listColumns(connectionId, {
+        schema: sourceTable.schema,
+        name: sourceTable.name,
+        tableType: "regular",
+      })
+      .then((columns) => {
+        if (cancelled) return;
+        setPrimaryKeyColumns(columns.filter((c) => c.isPrimaryKey).map((c) => c.name));
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setPrimaryKeyColumns([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [connectionId, ipc, sourceTable]);
 
   useSavedQueryAutosave({
     stores,
@@ -532,8 +591,17 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
     stores.tabs.getState().clearMutationToast(tabId);
   }
 
-  // First production wiring of runBrowseOnActiveTab (T5, previously
-  // unwired) — View Table on the mutation toast selects the mutated table.
+  // View Table on the mutation toast selects + browses the mutated table
+  // (Swift MainSplitView.onViewTable), schema-qualified via extractTableName
+  // so it never degrades to an unqualified `SELECT * FROM "name"`.
+  //
+  // Swift only calls requestTableQuery explicitly when the table was already
+  // selectedTable (its SwiftUI .onChange(of: selectedTable) fires the query
+  // automatically otherwise). Tauri has no such reactive watcher, so
+  // runBrowseOnActiveTab is the single mechanism that both selects (via
+  // applyRunSuccess's selectedTable option) and loads the table in every
+  // case — this reproduces Swift's net effect (exactly one query per click)
+  // without a second, easy-to-double-fire code path.
   function handleViewMutationTable(table: MutationToastTable): void {
     void runBrowseOnActiveTab(
       stores,
@@ -541,6 +609,70 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
       { schema: table.schema, name: table.name, tableType: "regular" },
       0,
     ).catch(() => undefined);
+  }
+
+  function handleNextPage(): void {
+    if (sourceTable === undefined) return;
+    const nextPage = browsePage + 1;
+    void runBrowseOnActiveTab(
+      stores,
+      ipc,
+      { schema: sourceTable.schema, name: sourceTable.name, tableType: "regular" },
+      nextPage,
+    )
+      .then(() => setBrowsePage(nextPage))
+      .catch(() => undefined);
+  }
+
+  function handlePrevPage(): void {
+    if (sourceTable === undefined || browsePage === 0) return;
+    const prevPage = browsePage - 1;
+    void runBrowseOnActiveTab(
+      stores,
+      ipc,
+      { schema: sourceTable.schema, name: sourceTable.name, tableType: "regular" },
+      prevPage,
+    )
+      .then(() => setBrowsePage(prevPage))
+      .catch(() => undefined);
+  }
+
+  async function handleUpdateRow(
+    patch: Record<string, unknown | null>,
+    primaryKey: Record<string, unknown>,
+  ): Promise<void> {
+    if (connectionId === null || sourceTable === undefined) return;
+    await ipc.updateRow({
+      connectionId,
+      table: { schema: sourceTable.schema, name: sourceTable.name, tableType: "regular" },
+      primaryKey,
+      patch,
+    });
+    await runBrowseOnActiveTab(
+      stores,
+      ipc,
+      { schema: sourceTable.schema, name: sourceTable.name, tableType: "regular" },
+      browsePage,
+    ).catch(() => undefined);
+  }
+
+  async function handleDeleteRows(primaryKeys: Record<string, unknown>[]): Promise<void> {
+    if (connectionId === null || sourceTable === undefined) return;
+    await ipc.deleteRows({
+      connectionId,
+      table: { schema: sourceTable.schema, name: sourceTable.name, tableType: "regular" },
+      primaryKeys,
+    });
+    await runBrowseOnActiveTab(
+      stores,
+      ipc,
+      { schema: sourceTable.schema, name: sourceTable.name, tableType: "regular" },
+      browsePage,
+    ).catch(() => undefined);
+  }
+
+  async function handleSaveCsv(csv: string): Promise<void> {
+    await ipc.saveCsvFile(csv).catch(() => undefined);
   }
 
   function handleSelectQuery(queryId: string | null): void {
@@ -697,7 +829,15 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
     <>
       <HelpDialog open={helpOpen} onOpenChange={setHelpOpen} platform={platform} />
       <ShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} platform={platform} />
-      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+      <SettingsDialog
+        open={settingsOpen}
+        onOpenChange={(open) => {
+          setSettingsOpen(open);
+          // SettingsDialog owns its own localStorage-backed radio state; pick
+          // up the saved value on close so the results grid re-renders dates.
+          if (!open) setDateFormat(loadDateFormat());
+        }}
+      />
     </>
   );
 
@@ -790,6 +930,19 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
             schemaError={schemaError}
             status={status}
             compact={compact}
+            raw={raw}
+            dateFormat={dateFormat}
+            query={queryText}
+            sourceTable={sourceTable}
+            primaryKeyColumns={primaryKeyColumns}
+            browse={sourceTable !== undefined}
+            hasNextPage={hasNextPage}
+            hasPrevPage={hasPrevPage}
+            onNextPage={handleNextPage}
+            onPrevPage={handlePrevPage}
+            onUpdateRow={handleUpdateRow}
+            onDeleteRows={handleDeleteRows}
+            onSaveCsv={handleSaveCsv}
             mutationToast={mutationToast}
             canvas={canvas}
             onNewTab={handleNewTab}

@@ -56,6 +56,7 @@ export async function runMutationOnActiveTab(
       {
         title: SUCCESS_TITLES[queryType],
         tableName: table?.name ?? null,
+        tableSchema: table?.schema ?? null,
         queryType,
         sql: sql.text,
       },

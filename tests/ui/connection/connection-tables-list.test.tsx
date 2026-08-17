@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { TABLES_LOAD_FAILED } from "../../../src/stores/schema-store";
 import { ConnectionAccessibility } from "../../../src/ui/connection/connection-accessibility";
 import { ConnectionCopy } from "../../../src/ui/connection/connection-copy";
@@ -69,5 +69,4 @@ describe("ConnectionTablesList", () => {
     rerender(<ConnectionTablesList tables={[]} tablesLoading={false} tablesErrorMessage={null} />);
     expect(screen.queryByRole("button", { name: "users" })).toBeNull();
   });
-
 });

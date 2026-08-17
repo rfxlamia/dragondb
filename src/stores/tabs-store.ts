@@ -26,6 +26,8 @@ export type TabRunStatus =
 export type MutationToast = {
   title: string;
   tableName: string | null;
+  /** Schema-qualifies tableName (extractTableName) — View Table must not browse unqualified. */
+  tableSchema: string | null;
   queryType: string;
   sql: string;
 };
@@ -433,12 +435,11 @@ export function createTabsStore(ipc: DragonIpc, getters: TabsSessionGetters): St
           },
           cachedResultsData: JSON.stringify(raw),
           cachedColumnNames: result.columns,
-          ...(options?.selectedTable === undefined
-            ? {}
-            : {
-                selectedTableSchema: options.selectedTable.schema ?? null,
-                selectedTableName: options.selectedTable.name,
-              }),
+          // Always resolve (not merge-preserve): a plain SELECT/canvas run must
+          // clear a stale selectedTable from a prior browse, or QueryResultsPane
+          // would keep treating unrelated results as editable via the old table.
+          selectedTableSchema: options?.selectedTable?.schema ?? null,
+          selectedTableName: options?.selectedTable?.name ?? null,
         });
         const tab = get().tabs.find((t) => t.id === tabId);
         if (!tab) return false;

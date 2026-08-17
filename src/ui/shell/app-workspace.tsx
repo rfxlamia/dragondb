@@ -12,6 +12,7 @@ import type {
   QueryFolderDto,
   SavedQueryDto,
 } from "../../ipc/contract";
+import type { QueryResultsDateFormat } from "../../lib/date-format-setting";
 import type {
   MutationToast as MutationToastData,
   TabResultGrid,
@@ -41,6 +42,22 @@ export type AppWorkspaceProps = {
   schemaError: string | null;
   status: TabRunStatus;
   compact: TabResultGrid | null;
+  raw: TabResultGrid | null;
+  dateFormat: QueryResultsDateFormat;
+  query: string;
+  sourceTable?: { schema?: string; name: string };
+  primaryKeyColumns: string[];
+  browse: boolean;
+  hasNextPage: boolean;
+  hasPrevPage: boolean;
+  onNextPage: () => void;
+  onPrevPage: () => void;
+  onUpdateRow: (
+    patch: Record<string, unknown | null>,
+    primaryKey: Record<string, unknown>,
+  ) => void | Promise<void>;
+  onDeleteRows: (primaryKeys: Record<string, unknown>[]) => void | Promise<void>;
+  onSaveCsv: (csv: string) => void | Promise<void>;
   mutationToast: MutationToastData | null;
   canvas: React.ReactNode;
   onNewTab: () => void;
@@ -80,6 +97,19 @@ export function AppWorkspace(props: AppWorkspaceProps): React.JSX.Element {
     schemaError,
     status,
     compact,
+    raw,
+    dateFormat,
+    query,
+    sourceTable,
+    primaryKeyColumns,
+    browse,
+    hasNextPage,
+    hasPrevPage,
+    onNextPage,
+    onPrevPage,
+    onUpdateRow,
+    onDeleteRows,
+    onSaveCsv,
     mutationToast,
     canvas,
     onNewTab,
@@ -168,12 +198,31 @@ export function AppWorkspace(props: AppWorkspaceProps): React.JSX.Element {
                       <MutationToast
                         sql={mutationToast.sql}
                         title={mutationToast.title}
-                        table={{ name: mutationToast.tableName }}
+                        table={{
+                          schema: mutationToast.tableSchema ?? undefined,
+                          name: mutationToast.tableName,
+                        }}
                         onViewTable={onViewMutationTable}
                         onDismiss={onDismissMutationToast}
                       />
                     ) : null}
-                    <QueryResultsPane status={status} compact={compact} />
+                    <QueryResultsPane
+                      status={status}
+                      compact={compact}
+                      raw={raw}
+                      dateFormat={dateFormat}
+                      query={query}
+                      sourceTable={sourceTable}
+                      primaryKeyColumns={primaryKeyColumns}
+                      browse={browse}
+                      hasNextPage={hasNextPage}
+                      hasPrevPage={hasPrevPage}
+                      onNextPage={onNextPage}
+                      onPrevPage={onPrevPage}
+                      onUpdateRow={onUpdateRow}
+                      onDeleteRows={onDeleteRows}
+                      onSaveCsv={onSaveCsv}
+                    />
                   </div>
                 }
               />
