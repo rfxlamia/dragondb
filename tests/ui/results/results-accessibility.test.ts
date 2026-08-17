@@ -7,6 +7,7 @@ const EXPECTED = [
   "queryResults.loading",
   "queryResults.error",
   "queryResults.empty",
+  "queryResults.cancelled",
   "queryResults.splitSeparator",
   "queryResults.filter",
   "queryResults.toolbar",

@@ -5,7 +5,6 @@ import { join } from "node:path";
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { determineEditability } from "../../../src/lib/query-editability";
 import { compactCell } from "../../../src/lib/result-compactor";
 import type { TabResultGrid, TabRunStatus } from "../../../src/stores/tabs-store";
 import { QueryResultsPane } from "../../../src/ui/results/query-results-pane";
@@ -184,12 +183,22 @@ describe("QueryResultsPane", () => {
     expect(deleteBtn).toHaveAttribute("title", "Can't Edit Joined Results");
   });
 
-  it("leftover selectedTable after JOIN hatch stays editable (Swift short-circuit)", () => {
-    const result = determineEditability("SELECT * FROM a JOIN b ON a.id = b.id", {
-      sourceTable: { schema: "public", name: "orders" },
-    });
-    expect(result.isEditable).toBe(true);
-    expect(result.tableName).toBe("orders");
+  it("leftover selectedTable after JOIN hatch stays editable (Swift short-circuit)", async () => {
+    const user = userEvent.setup();
+    render(
+      <QueryResultsPane
+        status={{ kind: "ok", rowCount: 1, durationMs: 1 }}
+        compact={{ columns: ["id"], rows: [["1"]] }}
+        raw={{ columns: ["id"], rows: [["1"]] }}
+        query="SELECT * FROM a JOIN b ON a.id = b.id"
+        sourceTable={{ schema: "public", name: "orders" }}
+      />,
+    );
+    await user.click(screen.getAllByRole("row")[1]!);
+    const editBtn = screen.getByRole("button", { name: ResultsCopy.edit });
+    expect(editBtn).not.toBeDisabled();
+    const deleteBtn = screen.getByRole("button", { name: ResultsCopy.delete });
+    expect(deleteBtn).not.toBeDisabled();
   });
 
   it("Space opens JSON viewer when a row is selected", async () => {

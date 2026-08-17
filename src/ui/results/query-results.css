@@ -10,7 +10,8 @@
 
 .query-results__empty,
 .query-results__loading,
-.query-results__no-rows {
+.query-results__no-rows,
+.query-results__cancelled {
   align-items: center;
   color: var(--neutral-600);
   display: flex;
