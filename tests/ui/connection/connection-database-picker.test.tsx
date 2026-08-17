@@ -71,6 +71,8 @@ describe("ConnectionDatabasePicker", () => {
     await user.type(screen.getByLabelText(ConnectionCopy.databaseName), "shop");
     await user.click(screen.getByRole("button", { name: ConnectionCopy.create }));
     expect(screen.getByRole("combobox")).toHaveValue("postgres");
+    expect(screen.getByText(ConnectionCopy.createDatabaseError)).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: ConnectionCopy.createDatabase })).toBeInTheDocument();
   });
 
   it("delete failure rolls picker back to the pre-delete snapshot", async () => {

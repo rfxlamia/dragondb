@@ -253,6 +253,10 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
             await stores.session.getState().switchDatabase(wanted);
             setMissingDatabase(false);
           } else if (wanted) {
+            // Persisted db missing from the live list: clear the selection
+            // rather than keep connect's default profile.database — the
+            // picker must show the "Select DB" pulse with nothing chosen.
+            stores.session.setState({ databaseName: null });
             setMissingDatabase(true);
           }
           setOverlayPhase("Loading tables…");
@@ -271,7 +275,7 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
   }, [profilesReady, profileCount, ipc, stores]);
 
   useEffect(() => {
-    if (databaseName) document.title = databaseName;
+    document.title = databaseName ?? "DragonDB";
   }, [databaseName]);
 
   useEffect(() => {

@@ -60,6 +60,7 @@ export const ConnectionCopy = {
   databaseName: "Database name",
   create: "Create",
   deleteDatabaseError: "Could not delete the database. The previous selection is unchanged.",
+  createDatabaseError: "Could not create the database. The previous selection is unchanged.",
   collapseConnection: "Hide sidebar",
   showConnection: "Show sidebar",
   connectionError: "Connection Error",

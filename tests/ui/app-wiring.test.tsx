@@ -2137,6 +2137,42 @@ describe("App overlay, collapse, and title (SP-4b last slice T6)", () => {
     await waitFor(() => expect(switchDatabase).toHaveBeenCalledWith(expect.any(String), "shop"));
   });
 
+  it("relaunch with a persisted database missing from the live list clears the selection", async () => {
+    const ipc = createMockDragonIpc("happy");
+    const profile = await ipc.saveProfile({
+      profile: { ...fixtureProfileFields(), name: "dev" },
+      secrets: { password: "pw" },
+    });
+    vi.spyOn(ipc, "listTabStates").mockResolvedValue([
+      {
+        id: "persisted-tab",
+        connectionId: profile.id,
+        databaseName: "shop",
+        queryText: "",
+        savedQueryId: null,
+        isActive: true,
+        order: 0,
+        createdAt: "1",
+        lastAccessedAt: "1",
+        selectedTableSchema: null,
+        selectedTableName: null,
+        selectedSchemaFilter: null,
+        cachedResultsData: null,
+        cachedColumnNames: null,
+        visualDocumentJson: null,
+      },
+    ]);
+    // listDatabases only ever returns the connected login database ("app");
+    // the persisted "shop" selection is missing from the live list.
+    render(<App ipc={ipc} />);
+
+    const combobox = await screen.findByTestId(ConnectionAccessibility.databasePicker);
+    await waitFor(() => expect(combobox).toHaveValue(""));
+    expect(screen.getByText(ConnectionCopy.selectDbPulse)).toBeInTheDocument();
+    expect(document.title).not.toBe("shop");
+    expect(document.title).not.toBe("app");
+  });
+
   it("keeps Loading tables visible until restore table loading completes", async () => {
     const ipc = createMockDragonIpc("happy");
     const profile = await ipc.saveProfile({

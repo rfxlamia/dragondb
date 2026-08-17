@@ -5,10 +5,11 @@ import { ConnectionCopy } from "./connection-copy";
 export function CreateDatabaseDialog(props: {
   open: boolean;
   busy?: boolean;
+  error?: string | null;
   onCreate: (name: string) => void | Promise<void>;
   onCancel: () => void;
 }): React.JSX.Element | null {
-  const { open, busy = false, onCreate, onCancel } = props;
+  const { open, busy = false, error = null, onCreate, onCancel } = props;
   const [name, setName] = useState("");
   if (!open) return null;
   return (
@@ -26,6 +27,11 @@ export function CreateDatabaseDialog(props: {
           onChange={(event) => setName(event.target.value)}
         />
       </label>
+      {error ? (
+        <p className="connection-panel__status" role="alert">
+          {error}
+        </p>
+      ) : null}
       <div className="connection-panel__confirm-actions">
         <button
           type="button"

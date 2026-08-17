@@ -25,6 +25,7 @@ export function ConnectionDatabasePicker(props: {
     onDeleteDatabase,
   } = props;
   const [createOpen, setCreateOpen] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteError, setDeleteError] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -37,9 +38,11 @@ export function ConnectionDatabasePicker(props: {
     setBusy(true);
     try {
       await onCreateDatabase(name);
+      setCreateError(null);
       setCreateOpen(false);
     } catch {
-      /* keep selected; parent snapshot unchanged */
+      // Keep the sheet open and selected/session unchanged; surface the failure.
+      setCreateError(ConnectionCopy.createDatabaseError);
     } finally {
       setBusy(false);
     }
@@ -96,6 +99,7 @@ export function ConnectionDatabasePicker(props: {
           disabled={!isConnected}
           onClick={() => {
             setDeleteError(false);
+            setCreateError(null);
             setCreateOpen(true);
           }}
         >
@@ -116,8 +120,12 @@ export function ConnectionDatabasePicker(props: {
       <CreateDatabaseDialog
         open={createOpen}
         busy={busy}
+        error={createError}
         onCreate={(name) => void handleCreate(name)}
-        onCancel={() => setCreateOpen(false)}
+        onCancel={() => {
+          setCreateError(null);
+          setCreateOpen(false);
+        }}
       />
 
       {deleteOpen ? (
