@@ -71,6 +71,42 @@ describe("VisualQueryCanvas layout chrome", () => {
     expect(await screen.findByText(/select a database from the sidebar/i)).toBeInTheDocument();
   });
 
+  it("toolbar Run query in SQL mode submits the hatch buffer, not generated visual SQL", async () => {
+    const user = userEvent.setup();
+    const onRunQuery = vi.fn();
+    const onRunSql = vi.fn(async () => ({
+      columns: [],
+      rows: [],
+      rowsAffected: 0,
+      durationMs: 1,
+    }));
+    render(
+      <VisualQueryCanvas
+        tables={tables}
+        columnNames={["id"]}
+        metadataErrorMessage={null}
+        isConnected={true}
+        databaseName="app"
+        queryText=""
+        onRunQuery={onRunQuery}
+        onRunSql={onRunSql}
+      />,
+    );
+    await user.click(screen.getByTestId(VisualQueryAccessibility.initialAddBlock));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("select")));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.clauseMenuItem("from")));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.fromTablePicker));
+    await user.click(screen.getByRole("button", { name: "users" }));
+
+    await user.click(screen.getByRole("radio", { name: /sql/i }));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.runQuery));
+
+    await waitFor(() => expect(onRunSql).toHaveBeenCalledTimes(1));
+    expect(onRunSql).toHaveBeenCalledWith({ text: "", params: [] });
+    expect(onRunQuery).not.toHaveBeenCalled();
+  });
+
   it("does not place .vq-sql-preview as a sibling under the canvas body", async () => {
     const user = userEvent.setup();
     const { container } = render(

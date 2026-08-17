@@ -296,6 +296,10 @@ export function VisualQueryCanvas(props: VisualQueryCanvasProps): React.JSX.Elem
         isConnected={isConnected}
         canRunQuery={canRunQuery}
         onRunQuery={() => {
+          if (editorMode === "sql") {
+            sqlHatchRef.current?.run();
+            return;
+          }
           void handleRunQuery();
         }}
         onViewGeneratedSQL={() => {

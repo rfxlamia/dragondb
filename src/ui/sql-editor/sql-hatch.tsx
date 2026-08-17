@@ -50,6 +50,7 @@ export type SqlHatchProps = {
   onRun: (text: string) => void;
   isConnected: boolean;
   databaseName: string | null;
+  /** Intentionally unread by submitRun; kept as a test-only seam proving hatch Run never falls back to generated visual SQL. */
   generatedVisualSql?: string;
   onCancel?: () => void;
   running?: boolean;
@@ -147,10 +148,17 @@ export function SqlHatch(props: SqlHatchProps): React.JSX.Element {
             const should = shouldHighlightSql(text.length);
             if (should === highlightingRef.current) return;
             highlightingRef.current = should;
-            update.view.dispatch({
-              effects: highlightCompartment.current.reconfigure(
-                should ? highlightExtensions() : [],
-              ),
+            // CodeMirror forbids dispatching from within updateListener (nested
+            // updates). Defer the Compartment reconfigure to after this update
+            // cycle completes so crossing the highlight threshold can't throw.
+            const { view } = update;
+            queueMicrotask(() => {
+              if (viewRef.current !== view) return;
+              view.dispatch({
+                effects: highlightCompartment.current.reconfigure(
+                  should ? highlightExtensions() : [],
+                ),
+              });
             });
           }),
         ],

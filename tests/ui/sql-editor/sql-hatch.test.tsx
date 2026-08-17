@@ -1,4 +1,6 @@
 /** @vitest-environment jsdom */
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -102,6 +104,29 @@ describe("SqlHatch", () => {
   it("skips highlight above 50_000 characters but keeps the editor host", () => {
     expect(shouldHighlightSql(50_000)).toBe(true);
     expect(shouldHighlightSql(50_001)).toBe(false);
+  });
+
+  it("defers the highlight Compartment reconfigure dispatch out of the synchronous updateListener callback", () => {
+    // CodeMirror forbids nested `view.dispatch` calls from directly inside
+    // EditorView.updateListener; crossing the 50_000-char threshold while
+    // typing must schedule the reconfigure after the update cycle completes
+    // (queueMicrotask/requestAnimationFrame) instead of dispatching inline.
+    // jsdom cannot host a real CodeMirror EditorView (it lacks Range.getClientRects,
+    // which CodeMirror's measurement pass needs), so this asserts the fix
+    // structurally rather than through a live editor instance.
+    const source = readFileSync(join(process.cwd(), "src/ui/sql-editor/sql-hatch.tsx"), "utf8");
+    const listenerStart = source.indexOf("EditorView.updateListener.of((update) => {");
+    expect(listenerStart).toBeGreaterThan(-1);
+    const listenerEnd = source.indexOf("}),", listenerStart);
+    expect(listenerEnd).toBeGreaterThan(listenerStart);
+    const listenerBody = source.slice(listenerStart, listenerEnd);
+
+    const deferIndex = listenerBody.search(/queueMicrotask\(|requestAnimationFrame\(/);
+    expect(deferIndex).toBeGreaterThan(-1);
+    const reconfigureIndex = listenerBody.indexOf("highlightCompartment.current.reconfigure(");
+    expect(reconfigureIndex).toBeGreaterThan(deferIndex);
+    const dispatchIndex = listenerBody.lastIndexOf(".dispatch({");
+    expect(dispatchIndex).toBeGreaterThan(deferIndex);
   });
 
   it("offers Try Again after 300s and reruns the current buffer", async () => {
