@@ -933,7 +933,7 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
             compact={compact}
             raw={raw}
             dateFormat={dateFormat}
-            query={queryText}
+            query={sourceTable !== undefined ? queryText : ""}
             sourceTable={sourceTable}
             primaryKeyColumns={primaryKeyColumns}
             browse={sourceTable !== undefined}

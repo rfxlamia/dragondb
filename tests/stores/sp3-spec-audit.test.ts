@@ -80,7 +80,8 @@ describe("SP-3 audit — compose createTab inherits databaseName (AC Tabs)", () 
     // if the session/profile database is available — current wiring passes
     // `getDatabaseName: () => null` unconditionally.
     const created = stores.tabs.getState().createTab();
-    expect(created.connectionId).toBe("c1");
+    // TabStateDto.connectionId stores profileId for relaunch restore — not the live session token.
+    expect(created.connectionId).toBe("P");
     expect(created.databaseName).not.toBeNull();
   });
 });

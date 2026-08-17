@@ -166,6 +166,39 @@ describe("QueryResultsPane", () => {
     expect(csv).not.toContain(compactDisplay);
   });
 
+  it("plain SELECT without sourceTable disables edit even when hatch SQL looks editable", () => {
+    render(
+      <QueryResultsPane
+        status={{ kind: "ok", rowCount: 1, durationMs: 1 }}
+        compact={{ columns: ["id"], rows: [["1"]] }}
+        raw={{ columns: ["id"], rows: [["1"]] }}
+        query="SELECT * FROM users"
+      />,
+    );
+    const editBtn = screen.getByRole("button", { name: ResultsCopy.edit });
+    expect(editBtn).toBeDisabled();
+    expect(editBtn).toHaveAttribute("title", "Can't Edit Query Results");
+    const deleteBtn = screen.getByRole("button", { name: ResultsCopy.delete });
+    expect(deleteBtn).toBeDisabled();
+    expect(deleteBtn).toHaveAttribute("title", "Can't Edit Query Results");
+  });
+
+  it("browse without primary keys disables edit until metadata loads", () => {
+    render(
+      <QueryResultsPane
+        status={{ kind: "ok", rowCount: 1, durationMs: 1 }}
+        compact={{ columns: ["id"], rows: [["1"]] }}
+        raw={{ columns: ["id"], rows: [["1"]] }}
+        query="SELECT * FROM users"
+        sourceTable={{ schema: "public", name: "users" }}
+        primaryKeyColumns={[]}
+      />,
+    );
+    const editBtn = screen.getByRole("button", { name: ResultsCopy.edit });
+    expect(editBtn).toBeDisabled();
+    expect(editBtn).toHaveAttribute("title", "Can't Edit Query Results");
+  });
+
   it("JOIN without leftover selectedTable disables edit with Swift title through pane", () => {
     render(
       <QueryResultsPane
@@ -192,6 +225,7 @@ describe("QueryResultsPane", () => {
         raw={{ columns: ["id"], rows: [["1"]] }}
         query="SELECT * FROM a JOIN b ON a.id = b.id"
         sourceTable={{ schema: "public", name: "orders" }}
+        primaryKeyColumns={["id"]}
       />,
     );
     await user.click(screen.getAllByRole("row")[1]!);

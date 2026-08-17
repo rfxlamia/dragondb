@@ -53,9 +53,9 @@ import { QueriesAccessibility } from "../../src/ui/library/queries-accessibility
 import { QueriesCopy } from "../../src/ui/library/queries-copy";
 import { ResultsAccessibility } from "../../src/ui/results/results-accessibility";
 import { ResultsCopy } from "../../src/ui/results/results-copy";
-import { SqlHatchCopy } from "../../src/ui/sql-editor/sql-hatch-copy";
 import { TabBarAccessibility } from "../../src/ui/shell/tab-bar-accessibility";
 import type { MenuEventId } from "../../src/ui/shell/workspace-accelerators";
+import { SqlHatchCopy } from "../../src/ui/sql-editor/sql-hatch-copy";
 import { VisualQueryAccessibility } from "../../src/ui/visual-query/accessibility";
 import { VisualQueryCopy } from "../../src/ui/visual-query/copy";
 import { serializeQueryDocument } from "../../src/ui/visual-query/tab-documents";

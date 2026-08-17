@@ -3,9 +3,9 @@ import { toCsv } from "../../lib/csv-exporter";
 import type { QueryResultsDateFormat } from "../../lib/date-format-setting";
 import { determineEditability } from "../../lib/query-editability";
 import type { TabResultGrid, TabRunStatus } from "../../stores/tabs-store";
+import { SqlHatchCopy } from "../sql-editor/sql-hatch-copy";
 import { formatResultCell } from "./format-result-cell";
 import { JsonViewer } from "./json-viewer";
-import { SqlHatchCopy } from "../sql-editor/sql-hatch-copy";
 import { ResultsAccessibility } from "./results-accessibility";
 import { deleteRowsPrompt, ResultsCopy } from "./results-copy";
 import { RowEditor } from "./row-editor";
@@ -91,12 +91,23 @@ function ResultGrid(
   const [editorOpen, setEditorOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
+  const browseContext = props.sourceTable;
+  const hasPrimaryKeys = pkColumns.length > 0;
   const editability = determineEditability(
     props.query ?? "",
-    props.sourceTable ? { sourceTable: props.sourceTable } : {},
+    browseContext ? { sourceTable: browseContext } : {},
   );
-  const canEdit = editability.isEditable;
-  const editTitle = editability.reason?.title;
+  let canEdit = false;
+  let editTitle: string | undefined;
+  if (browseContext === undefined) {
+    editTitle = editability.isEditable ? "Can't Edit Query Results" : editability.reason?.title;
+  } else if (!hasPrimaryKeys) {
+    editTitle = "Can't Edit Query Results";
+  } else if (editability.isEditable) {
+    canEdit = true;
+  } else {
+    editTitle = editability.reason?.title;
+  }
 
   const visible = useMemo(
     () => visibleRows(rows, columns, filter, sort, dateFormat),

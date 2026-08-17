@@ -11,8 +11,15 @@ export function TableContextMenu(props: {
   onTruncate: () => void;
   onDrop: () => void;
 }): React.JSX.Element {
-  const { executing, exportDisabled = false, onRefresh, onDdl, onExport, onTruncate, onDrop } =
-    props;
+  const {
+    executing,
+    exportDisabled = false,
+    onRefresh,
+    onDdl,
+    onExport,
+    onTruncate,
+    onDrop,
+  } = props;
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const menuId = useId();

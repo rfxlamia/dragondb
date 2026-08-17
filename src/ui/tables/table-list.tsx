@@ -97,109 +97,109 @@ export function TableList(props: TableListProps): React.JSX.Element {
         const visibleTables = group.tables.slice(0, displayedCount);
         const hasMore = group.tables.length > displayedCount;
         return (
-        <section key={group.schema} className="table-list__schema">
-          <h3 className="table-list__schema-title">{group.schema}</h3>
-          <ul className="table-list__rows">
-            {visibleTables.map((table) => {
-              const key = catalogKey(table);
-              const isExpanded = expanded.has(key);
-              const columns = columnsByTable[key] ?? [];
-              const expandLabel =
-                key === firstKey && !isExpanded
-                  ? TablesCopy.expandColumns
-                  : isExpanded
-                    ? TablesCopy.collapseColumns
-                    : `${table.name} columns`;
-              return (
-                <li key={key} className="table-list__row">
-                  <div className="table-list__row-main">
-                    <button
-                      type="button"
-                      className="table-list__expand"
-                      aria-expanded={isExpanded}
-                      aria-label={expandLabel}
-                      onClick={() => toggleExpanded(key)}
-                    >
-                      {isExpanded ? "▾" : "▸"}
-                    </button>
-                    {table.tableType === "foreign" ? (
-                      <span
-                        className="table-list__foreign"
-                        role="img"
-                        aria-label={TablesCopy.foreignTable}
+          <section key={group.schema} className="table-list__schema">
+            <h3 className="table-list__schema-title">{group.schema}</h3>
+            <ul className="table-list__rows">
+              {visibleTables.map((table) => {
+                const key = catalogKey(table);
+                const isExpanded = expanded.has(key);
+                const columns = columnsByTable[key] ?? [];
+                const expandLabel =
+                  key === firstKey && !isExpanded
+                    ? TablesCopy.expandColumns
+                    : isExpanded
+                      ? TablesCopy.collapseColumns
+                      : `${table.name} columns`;
+                return (
+                  <li key={key} className="table-list__row">
+                    <div className="table-list__row-main">
+                      <button
+                        type="button"
+                        className="table-list__expand"
+                        aria-expanded={isExpanded}
+                        aria-label={expandLabel}
+                        onClick={() => toggleExpanded(key)}
                       >
-                        <ForeignTableIcon />
-                      </span>
+                        {isExpanded ? "▾" : "▸"}
+                      </button>
+                      {table.tableType === "foreign" ? (
+                        <span
+                          className="table-list__foreign"
+                          role="img"
+                          aria-label={TablesCopy.foreignTable}
+                        >
+                          <ForeignTableIcon />
+                        </span>
+                      ) : null}
+                      <button
+                        type="button"
+                        className="table-list__name"
+                        onClick={() => onBrowse(table)}
+                      >
+                        {tableDisplayName(table)}
+                      </button>
+                      <button
+                        type="button"
+                        className="table-list__danger"
+                        disabled={executing}
+                        onClick={() => setPending({ table, kind: "drop" })}
+                      >
+                        {TablesCopy.drop}
+                      </button>
+                      <TableContextMenu
+                        executing={executing}
+                        exportDisabled={!canExport}
+                        onRefresh={() => onRefresh?.(table)}
+                        onDdl={() => void handleDdl(table)}
+                        onExport={() => {
+                          if (canExport) setExportTable(table);
+                        }}
+                        onTruncate={() => setPending({ table, kind: "truncate" })}
+                        onDrop={() => setPending({ table, kind: "drop" })}
+                      />
+                    </div>
+                    {isExpanded ? (
+                      <ul className="table-list__columns">
+                        {columns.map((column) => (
+                          <li key={column.name} className="table-list__column">
+                            <span className="table-list__column-name">{column.name}</span>
+                            <span className="table-list__column-type">{column.dataType}</span>
+                            {column.isPrimaryKey ? (
+                              <span
+                                className="table-list__key"
+                                role="img"
+                                aria-label={TablesCopy.primaryKey}
+                              >
+                                <KeyIcon />
+                              </span>
+                            ) : null}
+                            {column.isForeignKey ? (
+                              <span
+                                className="table-list__key"
+                                role="img"
+                                aria-label={TablesCopy.foreignKey}
+                              >
+                                <FkIcon />
+                              </span>
+                            ) : null}
+                          </li>
+                        ))}
+                      </ul>
                     ) : null}
-                    <button
-                      type="button"
-                      className="table-list__name"
-                      onClick={() => onBrowse(table)}
-                    >
-                      {tableDisplayName(table)}
-                    </button>
-                    <button
-                      type="button"
-                      className="table-list__danger"
-                      disabled={executing}
-                      onClick={() => setPending({ table, kind: "drop" })}
-                    >
-                      {TablesCopy.drop}
-                    </button>
-                    <TableContextMenu
-                      executing={executing}
-                      exportDisabled={!canExport}
-                      onRefresh={() => onRefresh?.(table)}
-                      onDdl={() => void handleDdl(table)}
-                      onExport={() => {
-                        if (canExport) setExportTable(table);
-                      }}
-                      onTruncate={() => setPending({ table, kind: "truncate" })}
-                      onDrop={() => setPending({ table, kind: "drop" })}
-                    />
-                  </div>
-                  {isExpanded ? (
-                    <ul className="table-list__columns">
-                      {columns.map((column) => (
-                        <li key={column.name} className="table-list__column">
-                          <span className="table-list__column-name">{column.name}</span>
-                          <span className="table-list__column-type">{column.dataType}</span>
-                          {column.isPrimaryKey ? (
-                            <span
-                              className="table-list__key"
-                              role="img"
-                              aria-label={TablesCopy.primaryKey}
-                            >
-                              <KeyIcon />
-                            </span>
-                          ) : null}
-                          {column.isForeignKey ? (
-                            <span
-                              className="table-list__key"
-                              role="img"
-                              aria-label={TablesCopy.foreignKey}
-                            >
-                              <FkIcon />
-                            </span>
-                          ) : null}
-                        </li>
-                      ))}
-                    </ul>
-                  ) : null}
-                </li>
-              );
-            })}
-          </ul>
-          {hasMore ? (
-            <button
-              type="button"
-              className="table-list__load-more"
-              onClick={() => loadMoreSchema(group.schema)}
-            >
-              {TablesCopy.loadMore}
-            </button>
-          ) : null}
-        </section>
+                  </li>
+                );
+              })}
+            </ul>
+            {hasMore ? (
+              <button
+                type="button"
+                className="table-list__load-more"
+                onClick={() => loadMoreSchema(group.schema)}
+              >
+                {TablesCopy.loadMore}
+              </button>
+            ) : null}
+          </section>
         );
       })}
 
