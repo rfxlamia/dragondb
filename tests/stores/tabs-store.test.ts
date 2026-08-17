@@ -25,6 +25,29 @@ function baseTab(overrides: Partial<TabStateDto> = {}): TabStateDto {
 }
 
 describe("tabs-store", () => {
+  it("setQueryText updates only the requested tab buffer", () => {
+    const ipc = {
+      saveTabState: vi.fn(async () => undefined),
+      deleteTabState: vi.fn(async () => undefined),
+      listTabStates: vi.fn(async () => []),
+    } as unknown as DragonIpc;
+    const store = createTabsStore(ipc, {
+      getConnectionId: () => "c1",
+      getDatabaseName: () => "app",
+    });
+    store.setState({
+      tabs: [baseTab({ id: "active" }), baseTab({ id: "other", isActive: false })],
+      activeTabId: "active",
+    });
+
+    store.getState().setQueryText("active", "SELECT 1");
+
+    expect(store.getState().tabs.map(({ id, queryText }) => ({ id, queryText }))).toEqual([
+      { id: "active", queryText: "SELECT 1" },
+      { id: "other", queryText: "" },
+    ]);
+  });
+
   it("persistTab includeCachedResults false does not wipe an existing results blob", async () => {
     const saveTabState = vi.fn(
       async (_dto: TabStateDto, _opts?: { includeCachedResults?: boolean }) => undefined,

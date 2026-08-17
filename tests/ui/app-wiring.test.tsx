@@ -692,6 +692,34 @@ describe("App wiring regressions after connect (SP-4a)", () => {
     });
   });
 
+  it("auto-creates and selects a SavedQuery after hatch typing is debounced", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    const savedQueries: SavedQueryDto[] = [];
+    vi.spyOn(ipc, "listSavedQueries").mockImplementation(async () => [...savedQueries]);
+    const saveSavedQuery = vi.spyOn(ipc, "saveSavedQuery").mockImplementation(async (query) => {
+      savedQueries.push(query);
+      return query;
+    });
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
+    await user.selectOptions(screen.getByLabelText("Catalog"), "app");
+    await user.click(screen.getByRole("radio", { name: /sql/i }));
+
+    fireEvent.change(screen.getByRole("textbox", { name: "SQL editor" }), {
+      target: { value: "SELECT 42" },
+    });
+
+    await waitFor(() => expect(saveSavedQuery).toHaveBeenCalledTimes(1), { timeout: 1_500 });
+    const created = saveSavedQuery.mock.calls[0]?.[0];
+    if (created === undefined) throw new Error("Expected an auto-created SavedQuery");
+    expect(created.queryText).toBe("SELECT 42");
+    expect(await screen.findByRole("button", { name: created.name })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+  });
+
   it("ignores stale listColumns resolution", async () => {
     const user = userEvent.setup();
     let releaseFirst!: () => void;

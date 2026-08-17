@@ -76,6 +76,7 @@ export type TabsState = {
   clearTabResults: (tabId: string) => void;
   clearInMemoryResults: () => void;
   setDatabaseName: (tabId: string, databaseName: string) => Promise<void>;
+  setQueryText: (tabId: string, text: string) => void;
   setSavedQueryId: (tabId: string, queryId: string | null) => void;
   restoreSavedQueryResult: (
     tabId: string,
@@ -250,6 +251,10 @@ export function createTabsStore(ipc: DragonIpc, getters: TabsSessionGetters): St
         // Persist new active + deactivated siblings (isActive must not stay true in sqlite).
         syncMetadataForCurrentTabs();
         return created;
+      },
+
+      setQueryText(tabId, text) {
+        patchTab(tabId, { queryText: text });
       },
 
       switchTab(id) {

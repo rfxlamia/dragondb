@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 
-import { renderHook } from "@testing-library/react";
+import { act, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { DragonIpc, SavedQueryDto } from "../../../src/ipc/contract";
 import { composeAppStores } from "../../../src/stores/compose-app-stores";
@@ -31,23 +31,53 @@ describe("useSavedQueryAutosave", () => {
     const saveSavedQuery = vi.fn(async (q: SavedQueryDto) => q);
     const ipc = ipcWithSave(saveSavedQuery);
     const stores = composeAppStores(ipc);
-    stores.tabs.getState().createTab();
-    renderHook(() =>
-      useSavedQueryAutosave({ stores, ipc, queryText: "SELECT 1", isRestoring: false }),
+    const tab = stores.tabs.getState().createTab();
+    const { rerender } = renderHook(
+      ({ queryText }) => useSavedQueryAutosave({ stores, ipc, queryText, isRestoring: false }),
+      { initialProps: { queryText: "" } },
     );
+
+    act(() => stores.tabs.getState().setQueryText(tab.id, "SELECT 1"));
+    rerender({ queryText: stores.tabs.getState().tabs[0]?.queryText ?? "" });
     await vi.advanceTimersByTimeAsync(500);
     expect(saveSavedQuery).toHaveBeenCalledWith(expect.objectContaining({ queryText: "SELECT 1" }));
+    const created = saveSavedQuery.mock.calls[0]?.[0];
+    expect(stores.tabs.getState().tabs[0]?.savedQueryId).toBe(created?.id);
   });
 
-  it("skips auto-create while restoring", async () => {
+  it("does not auto-create after a persisted buffer finishes restoring", async () => {
     vi.useFakeTimers();
     const saveSavedQuery = vi.fn(async (q: SavedQueryDto) => q);
     const ipc = ipcWithSave(saveSavedQuery);
     const stores = composeAppStores(ipc);
-    stores.tabs.getState().createTab();
-    renderHook(() =>
-      useSavedQueryAutosave({ stores, ipc, queryText: "SELECT 1", isRestoring: true }),
+    stores.tabs.getState().hydrateFromDto({
+      id: "restored",
+      connectionId: "c1",
+      databaseName: "app",
+      queryText: "SELECT restored",
+      savedQueryId: null,
+      isActive: true,
+      order: 0,
+      createdAt: "1",
+      lastAccessedAt: "1",
+      selectedTableSchema: null,
+      selectedTableName: null,
+      selectedSchemaFilter: null,
+      cachedResultsData: null,
+      cachedColumnNames: null,
+      visualDocumentJson: null,
+    });
+    const { rerender } = renderHook(
+      ({ isRestoring }) =>
+        useSavedQueryAutosave({
+          stores,
+          ipc,
+          queryText: "SELECT restored",
+          isRestoring,
+        }),
+      { initialProps: { isRestoring: true } },
     );
+    rerender({ isRestoring: false });
     await vi.advanceTimersByTimeAsync(500);
     expect(saveSavedQuery).not.toHaveBeenCalled();
   });

@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import type { DragonIpc } from "../../ipc/contract";
 import { newSavedQueryName } from "../../lib/new-saved-query-name";
 import type { AppStores } from "../../stores/compose-app-stores";
@@ -20,9 +20,17 @@ export type SavedQueryAutosaveArgs = {
  */
 export function useSavedQueryAutosave(args: SavedQueryAutosaveArgs): void {
   const { stores, queryText, isRestoring } = args;
+  const skipAfterRestoreRef = useRef(isRestoring);
 
   useEffect(() => {
-    if (isRestoring) return;
+    if (isRestoring) {
+      skipAfterRestoreRef.current = true;
+      return;
+    }
+    if (skipAfterRestoreRef.current) {
+      skipAfterRestoreRef.current = false;
+      return;
+    }
     if (queryText.length === 0) return;
 
     const timer = window.setTimeout(() => {

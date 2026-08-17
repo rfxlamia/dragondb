@@ -452,9 +452,7 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
   function handleQueryTextChange(text: string): void {
     const tabId = stores.tabs.getState().activeTabId;
     if (tabId === null) return;
-    stores.tabs.setState((state) => ({
-      tabs: state.tabs.map((tab) => (tab.id === tabId ? { ...tab, queryText: text } : tab)),
-    }));
+    stores.tabs.getState().setQueryText(tabId, text);
   }
 
   function handleCancelSql(): void {
