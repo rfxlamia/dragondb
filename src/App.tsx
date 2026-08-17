@@ -8,13 +8,14 @@ import type {
   DragonIpc,
   IpcError,
   ProfileId,
+  TableRef,
 } from "./ipc/contract";
 import { coreToTableRef, tableRefToCore } from "./ipc/table-ref";
 import { createTauriDragonIpc } from "./ipc/tauri-client";
 import { loadDateFormat, type QueryResultsDateFormat } from "./lib/date-format-setting";
 import { newSavedQueryName } from "./lib/new-saved-query-name";
 import { type AppStores, composeAppStores } from "./stores/compose-app-stores";
-import { PAGE_SIZE, runBrowseOnActiveTab } from "./stores/run-browse-on-active-tab";
+import { PAGE_SIZE, quotedTableSql, runBrowseOnActiveTab } from "./stores/run-browse-on-active-tab";
 import { runSelectOnActiveTab } from "./stores/run-select-on-active-tab";
 import { runSqlOnActiveTab } from "./stores/run-sql-on-active-tab";
 import { ConnectionCopy, humanIpcErrorMessage } from "./ui/connection/connection-copy";
@@ -80,6 +81,7 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
   const tablesLoading = useStore(stores.schema, (s) => s.tablesLoading);
   const tablesErrorMessage = useStore(stores.schema, (s) => s.tablesErrorMessage);
   const columnNames = useStore(stores.schema, (s) => s.columnNames);
+  const columnsByTable = useStore(stores.schema, (s) => s.columnsByTable);
   const metadataErrorCode = useStore(stores.schema, (s) => s.metadataErrorMessage);
   const tabs = useStore(stores.tabs, (s) => s.tabs);
   const activeTabId = useStore(stores.tabs, (s) => s.activeTabId);
@@ -612,6 +614,52 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
     ).catch(() => undefined);
   }
 
+  function handleBrowseTable(table: TableRef): void {
+    void runBrowseOnActiveTab(stores, ipc, table, 0).catch(() => undefined);
+  }
+
+  function handleExpandTable(table: TableRef): void {
+    const liveId = stores.session.getState().connectionId;
+    if (liveId === null) return;
+    void stores.schema.getState().loadExpanderColumns(liveId, table);
+  }
+
+  async function handleDropTable(table: TableRef): Promise<void> {
+    await ipc.dropTable(table);
+    const liveId = stores.session.getState().connectionId;
+    if (liveId === null) return;
+    await stores.schema.getState().reloadTables(liveId);
+  }
+
+  async function handleTruncateTable(table: TableRef): Promise<void> {
+    await ipc.truncateTable(table);
+    const liveId = stores.session.getState().connectionId;
+    if (liveId === null) return;
+    await stores.schema.getState().reloadTables(liveId);
+  }
+
+  function handleGenerateTableDdl(table: TableRef): Promise<string> {
+    return ipc.generateTableDdl(table);
+  }
+
+  function handleRefreshTables(_table: TableRef): void {
+    const liveId = stores.session.getState().connectionId;
+    if (liveId === null) return;
+    void stores.schema.getState().reloadTables(liveId);
+  }
+
+  async function handleFetchAllTable(
+    table: TableRef,
+  ): Promise<{ columns: string[]; rows: unknown[][] }> {
+    const liveId = stores.session.getState().connectionId;
+    if (liveId === null) throw new Error("Not connected");
+    const result = await ipc.runQuery(liveId, {
+      text: `SELECT * FROM ${quotedTableSql(table)}`,
+      params: [],
+    });
+    return { columns: result.columns, rows: result.rows };
+  }
+
   function handleNextPage(): void {
     if (sourceTable === undefined) return;
     const nextPage = browsePage + 1;
@@ -900,6 +948,19 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
             tables={visibleTables}
             tablesLoading={tablesLoading}
             tablesErrorMessage={tablesErrorMessage}
+            onBrowse={handleBrowseTable}
+            columnsByTable={columnsByTable}
+            executing={status.kind === "running"}
+            onDrop={handleDropTable}
+            onTruncate={handleTruncateTable}
+            onGenerateDdl={handleGenerateTableDdl}
+            onRefresh={handleRefreshTables}
+            onFetchAll={handleFetchAllTable}
+            onExpand={handleExpandTable}
+            saveCsvFile={(csv, defaultPath) => ipc.saveCsvFile(csv, defaultPath)}
+            saveTextFile={(text, defaultPath, filter) =>
+              ipc.saveTextFile(text, defaultPath, filter)
+            }
             connectionId={connectionId}
             databaseName={databaseName}
             onSwitchDatabase={handleSwitchDatabase}

@@ -8,7 +8,8 @@ function quoteIdentifier(value: string): string {
   return `"${value.replaceAll('"', '""')}"`;
 }
 
-function tableSql(table: TableRef): string {
+/** Schema-qualified identifier for browse/export SELECT, matching table-list quoting. */
+export function quotedTableSql(table: TableRef): string {
   const name = quoteIdentifier(table.name);
   return table.schema ? `${quoteIdentifier(table.schema)}.${name}` : name;
 }
@@ -32,7 +33,7 @@ export async function runBrowseOnActiveTab(
   let result: QueryResult;
   try {
     result = await ipc.runQuery(connectionId, {
-      text: `SELECT * FROM ${tableSql(table)} LIMIT ${PAGE_SIZE + 1} OFFSET ${safePage * PAGE_SIZE}`,
+      text: `SELECT * FROM ${quotedTableSql(table)} LIMIT ${PAGE_SIZE + 1} OFFSET ${safePage * PAGE_SIZE}`,
       params: [],
     });
   } catch (error) {

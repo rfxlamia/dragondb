@@ -41,6 +41,28 @@ describe("TableList", () => {
     expect(onBrowse).toHaveBeenCalledWith(orders);
   });
 
+  it("expand notifies onExpand so the parent can load columns; collapse does not", async () => {
+    const user = userEvent.setup();
+    const onExpand = vi.fn();
+    render(
+      <TableList
+        tables={[orders]}
+        columnsByTable={{}}
+        executing={false}
+        onBrowse={vi.fn()}
+        onDrop={vi.fn()}
+        onTruncate={vi.fn()}
+        onGenerateDdl={vi.fn()}
+        onExpand={onExpand}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: TablesCopy.expandColumns }));
+    expect(onExpand).toHaveBeenCalledOnce();
+    expect(onExpand).toHaveBeenCalledWith(orders);
+    await user.click(screen.getByRole("button", { name: TablesCopy.collapseColumns }));
+    expect(onExpand).toHaveBeenCalledOnce();
+  });
+
   it("expand shows PK icon; foreign table has a distinct icon", async () => {
     const user = userEvent.setup();
     render(
@@ -79,6 +101,28 @@ describe("TableList", () => {
     await user.click(screen.getByRole("button", { name: TablesCopy.confirmDrop }));
     expect(onDrop).toHaveBeenCalledOnce();
     expect(onRunQuery).not.toHaveBeenCalled();
+  });
+
+  it("Drop callback rejection shows the error and keeps the table", async () => {
+    const user = userEvent.setup();
+    const onDrop = vi.fn(async () => {
+      throw { kind: "permission", message: "cannot drop temp" };
+    });
+    render(
+      <TableList
+        tables={[{ schema: "public", name: "temp", tableType: "regular" }]}
+        columnsByTable={{}}
+        executing={false}
+        onBrowse={vi.fn()}
+        onDrop={onDrop}
+        onTruncate={vi.fn()}
+        onGenerateDdl={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: TablesCopy.drop }));
+    await user.click(screen.getByRole("button", { name: TablesCopy.confirmDrop }));
+    expect(await screen.findByText("cannot drop temp")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "temp" })).toBeInTheDocument();
   });
 
   it("context menu actions are disabled while executing", async () => {

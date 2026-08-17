@@ -39,13 +39,13 @@ Already-decided **out of SP-4b product chrome** (still listed where Swift screen
 | Extra capabilities with no §12.2 row | **14** (included in §2 “Capabilities without screens”) |
 | DROP (dead) view files | **3** (`ConnectionsListView`, `ResizableSplitView`, `ColumnRowView`) + `Badge` only used by dead `ColumnRowView` |
 | Swift test files under `DragonDBTests/` | 25 (UI/service-relevant ones cited per cluster; visual-query suites are SP-4a) |
-| Tauri UI today | `App.tsx` = welcome **or** collapsible `ConnectionPanel` (profiles + URI mode + database picker + tables names) \| resizable Queries column \| `TabBar` + vertical `WorkspaceSplit` (per-tab `VisualQueryCanvas` or SQL hatch above results). History sheet from canvas toolbar. Native Help / Shortcuts / Settings. Loading overlay on launch restore. **No** Show All Rows (`ConnectionPanel` does not pass `onBrowse`). |
+| Tauri UI today | `App.tsx` = welcome **or** collapsible `ConnectionPanel` (profiles + URI mode + database picker + tables list with Show All Rows / expand / DDL / export / truncate / drop) \| resizable Queries column \| `TabBar` + vertical `WorkspaceSplit` (per-tab `VisualQueryCanvas` or SQL hatch above results). History sheet from canvas toolbar. Native Help / Shortcuts / Settings. Loading overlay on launch restore. |
 
 **Headline Tauri status**
 
-- **DONE (UI):** SP-4a canvas plus SP-4b first-slice (shell + read-only grid) plus SP-4b workspace chrome (2026-08-15, `feat/sp-4b-ui` `e7b97f5`) plus last-slice connection chrome / SQL hatch: welcome gating, “No connections”, tables names in the connection column (click does not run), connection-string mode, Queries column + B′ session cache, per-tab visual documents (persisted `visualDocumentJson`), tab bar (hidden at 1 tab, `+` always, Swift-style titles), history sheet + JSON/CSV/SQL export + relative dates, native Help / Shortcuts / Settings, Accel+T/W/Enter, collapsible connection sidebar, database picker, launch restore + loading overlay, Visual\|SQL hatch. SP-2/SP-3 connection panel (save / connect / disconnect / switch / delete / SSL / SSH).
+- **DONE (UI):** SP-4a canvas plus SP-4b first-slice (shell + read-only grid) plus SP-4b workspace chrome (2026-08-15, `feat/sp-4b-ui` `e7b97f5`) plus last-slice connection chrome / SQL hatch / table browser host: welcome gating, “No connections”, tables list in the connection column (click = Show All Rows; expand loads columns + PK/FK icons; Refresh/DDL/Export/Truncate/Drop via dedicated IPC), connection-string mode, Queries column + B′ session cache, per-tab visual documents (persisted `visualDocumentJson`), tab bar (hidden at 1 tab, `+` always, Swift-style titles), history sheet + JSON/CSV/SQL export + relative dates, native Help / Shortcuts / Settings, Accel+T/W/Enter, collapsible connection sidebar, database picker, launch restore + loading overlay, Visual\|SQL hatch. SP-2/SP-3 connection panel (save / connect / disconnect / switch / delete / SSL / SSH).
 - **PARTIAL:** result-grid editability UI attaches but `RowOperationError` kinds don't surface distinct messages; table-browse pagination doesn't cache pages; Edit row uses plain text inputs (no typed pickers); context-mismatch help is missing. T12 last slice: mutation toast, DetailContent modals, background persist shipped.
-- **MISSING UI:** remaining SEQUENCE (table browse Show All Rows — `ConnectionPanel` does not pass `onBrowse`). Workspace-chrome spec: `docs/pocket/spec/2026-08-15-sp4b-workspace-chrome/workspace-chrome.md`.
+- **MISSING UI:** remaining SEQUENCE (context-mismatch editability help; row-editor typed pickers / saving-state disable; table-load timeout 300s; pagination cached-pages-skip-refetch). Workspace-chrome spec: `docs/pocket/spec/2026-08-15-sp4b-workspace-chrome/workspace-chrome.md`.
 
 ---
 
@@ -103,7 +103,7 @@ Parent §12.1: form, list, dropdown, database picker, status banner — 5 files,
 
 Parent §12.1: 8 files, 1,544 LOC.
 
-- [x] **Tables names in the connection column after connect.** Swift: `ConnectionsDatabasesSidebar.mainContent` (also schema picker + db picker). Tauri: **DONE** `ConnectionTablesList` — loading / names / “No tables found” / fail copy; clear on disconnect; click does **not** run a query (Show All Rows still unwired). Schema picker + SET search_path live on the Queries toolbar; sidebar Refresh reloads tables + picker databases. **WORKSPACE-CHROME**.
+- [x] **Tables names in the connection column after connect.** Swift: `ConnectionsDatabasesSidebar.mainContent` (also schema picker + db picker). Tauri: **DONE** `ConnectionTablesList` — loading / names / “No tables found” / fail copy; clear on disconnect; click runs Show All Rows (`App` → `onBrowse` → `runBrowseOnActiveTab`). Schema picker + SET search_path live on the Queries toolbar; sidebar Refresh reloads tables + picker databases. **WORKSPACE-CHROME**.
 - [x] **Sidebar refresh.** Swift: toolbar `arrow.clockwise` → `refreshOnDemandFromToolbar`, min 0.45s spinner (`isRefreshingSidebarMetadata`). Tests: `ConnectionSidebarViewModelTests`. Tauri: **DONE** Queries-column Refresh (`REFRESH_MIN_MS = 450`) calls `library.refresh` + `reloadTables` + `ConnectionPanel.refreshDatabases`; overlay on the Queries column (not the tables list). Button label is `Refresh`, not Swift’s longer help string. **Done:** refresh re-fetches database list and `listTables`. **SEQUENCE**.
 - [x] **Schema filter when `schemas.count > 1`.** Swift: `SchemaPicker` “All Schemas” vs named; clears selected table if schema mismatch; `setSchemaSearchPathDebounced`; `tabManager.updateActiveTabSchemaFilter`. Tauri: **DONE** Queries toolbar schema `<select>` when `schemaNames.length > 1`; client-side filter on `TableRef.schema`; `handleSelectSchema` → `ipc.setSearchPath` then `loadTables`. **Done:** filter is client-side on `TableRef.schema`; selecting a schema runs `SET search_path`. **SEQUENCE**.
 - [x] **Schema error alert.** Swift: `appState.connection.schemaError`. Tauri: **DONE** Queries toolbar `role="alert"` + OK (`QueriesCopy.schemaError` / `onDismissSchemaError`). **Done:** failed SET search_path shows alert, OK clears. **SEQUENCE**.
@@ -146,14 +146,14 @@ Parent §12.1: 7 files, 1,374 LOC.
 
 Parent §12.1: 6 files, 1,164 LOC.
 
-- [x] **Tables list after connect.** Swift: `TablesListIsolated`; loading spinner if empty+loading; “No tables found”; refresh overlay. Tauri: **DONE** names in the connection column (`ConnectionTablesList`); loading / empty / fail copy; no refresh overlay. Click still does **not** Show All Rows (next grinding). **WORKSPACE-CHROME**.
-- [ ] **Click table name = Show All Rows (does not auto-run on mere selection).** Swift: `TableListRowComponent.onShowAllRows` → `requestTableQuery`; `QueryResultsViewModel.handleTableSelectionChange` comment: no auto-execute. Tests: `AppStateTests` race/supersede. Tauri: **MISSING**. **Done:** click runs paginated `SELECT` for that table into the results grid; switching selection without click does not fetch. **SEQUENCE**.
-- [ ] **Expand table → columns (lazy fetch).** Swift: `TableListRowView.toggleExpanded` / `fetchColumnInfo` + PK merge; `TableColumnRowView` simplified types + key icons. Tauri: `listColumns` exists but **PK/unique/FK enrichment deferred** (`postgres/query.rs` comment). **Done:** expander shows names + data types; PK/FK icons **needs-decision** until catalog enrichment exists (row-ops already query PK separately). **SEQUENCE**.
+- [x] **Tables list after connect.** Swift: `TablesListIsolated`; loading spinner if empty+loading; “No tables found”; refresh overlay. Tauri: **DONE** names in the connection column (`ConnectionTablesList`); loading / empty / fail copy; no refresh overlay. Click runs Show All Rows. **WORKSPACE-CHROME**.
+- [x] **Click table name = Show All Rows (does not auto-run on mere selection).** Swift: `TableListRowComponent.onShowAllRows` → `requestTableQuery`; `QueryResultsViewModel.handleTableSelectionChange` comment: no auto-execute. Tests: `AppStateTests` race/supersede. Tauri: **DONE** `App` passes `onBrowse` → `runBrowseOnActiveTab` (paginated `SELECT` LIMIT 101); focus without click does not fetch (`tests/ui/app-wiring.test.tsx`). **SEQUENCE**.
+- [x] **Expand table → columns (lazy fetch).** Swift: `TableListRowView.toggleExpanded` / `fetchColumnInfo` + PK merge; `TableColumnRowView` simplified types + key icons. Tauri: **DONE** `TableList.onExpand` → `schema.loadExpanderColumns`; `columnsByTable` keyed `schema.name` keeps full `ColumnInfo` (PK/FK flags) while canvas `loadColumns` owns `columnNames` for the FROM picker. Expander shows names, types, and PK/FK icons when the catalog returns those flags. **SEQUENCE**.
 - [x] **Grouped schemas + Load more (100).** Swift: `SchemaGroupView` / `displayedCount` batch 100. Tauri: **DONE** `TableList` groups by schema and batches 100 with Load more (`SCHEMA_BATCH_SIZE`). **SEQUENCE**.
-- [ ] **Context menu: Refresh, Generate DDL, Export, Truncate, Drop** — disabled while `isExecutingQuery`. Swift: `TableListRowComponent.tableMenuContent`. Tauri: **MISSING**. Truncate/Drop/DDL have **no IPC** (could `runQuery` raw SQL — **needs-decision**). **SEQUENCE**.
-- [ ] **DDL sheet + copy.** Swift: `TableDDLSheet`. Tauri: **MISSING**. **SEQUENCE**.
-- [ ] **Export sheet: Fetch Data → CSV/JSON preview counts → native save.** Swift: `TableExportSheet` + `fetchAllTableData`. Tauri: **MISSING** UI; `saveCsvFile` + `toCsv` ready; JSON export not in IPC (client-side stringify is enough). **SEQUENCE**.
-- [ ] **Truncate / Drop confirms** with irreversible copy. Swift: `TableContextMenuModals`. Tauri: **MISSING**. **SEQUENCE**.
+- [x] **Context menu: Refresh, Generate DDL, Export, Truncate, Drop** — disabled while `isExecutingQuery`. Swift: `TableListRowComponent.tableMenuContent`. Tauri: **DONE** `App` wires `onRefresh` / `onGenerateDdl` / `onFetchAll` / `onTruncate` / `onDrop` to dedicated IPC (never hatch `runQuery`); `executing={status.kind === "running"}` disables the menu. **SEQUENCE**.
+- [x] **DDL sheet + copy.** Swift: `TableDDLSheet`. Tauri: **DONE** `TableDdlSheet` via `ipc.generateTableDdl`. **SEQUENCE**.
+- [x] **Export sheet: Fetch Data → CSV/JSON preview counts → native save.** Swift: `TableExportSheet` + `fetchAllTableData`. Tauri: **DONE** `TableExportSheet` via `onFetchAll` (`SELECT * FROM` quoted table, full rows) + `saveCsvFile` / `saveTextFile`. **SEQUENCE**.
+- [x] **Truncate / Drop confirms** with irreversible copy. Swift: `TableContextMenuModals`. Tauri: **DONE** confirm copy then `ipc.truncateTable` / `ipc.dropTable` + `reloadTables`. **SEQUENCE**.
 - [x] **Foreign table icon.** Swift: `table.tableType == .foreign`. Tauri: **DONE** `TableRef.tableType`; `TableList` shows `TablesCopy.foreignTable` when `tableType === "foreign"`. **SEQUENCE**.
 
 ### 2.6 Query editor (SQL)
@@ -217,7 +217,7 @@ Every §12.2 row appears here. Extras flagged `§12.2 miss`.
 
 | Capability | Swift | Tauri status | Done criterion | Slice | Disposition |
 |---|---|---|---|---|---|
-| CSV export | `CSVExporter` + `TableExportSheet` + JSON viewer Download CSV | Util **DONE** `src/lib/csv-exporter.ts`; IPC **DONE** `saveCsvFile`; JSON viewer Download CSV **DONE**; table-export sheet not wired from `ConnectionPanel` | Save dialog writes RFC4180 CSV (quote only when needed; null → empty field) | SEQUENCE | SHIP — JSON viewer path **done** |
+| CSV export | `CSVExporter` + `TableExportSheet` + JSON viewer Download CSV | Util **DONE** `src/lib/csv-exporter.ts`; IPC **DONE** `saveCsvFile`; JSON viewer Download CSV **DONE**; table-export sheet **DONE** (`onFetchAll` + `saveCsvFile` / `saveTextFile` from `App`) | Save dialog writes RFC4180 CSV (quote only when needed; null → empty field) | SEQUENCE | SHIP — JSON viewer path **done** |
 | Multi-statement queries | `SQLStatementSplitter` | Util **DONE** `src/lib/sql-statement-splitter.ts`; execute multi **out of SP-3** | Splitter available to SQL editor; executing multiple statements is **needs-decision** (Swift `QueryService` behavior unread in full) | SEQUENCE | needs-decision on execute |
 | Query type detection | `QueryTypeDetector` | Util **DONE** `src/lib/query-type-detector.ts`; mutation toast path **DONE** | Mutations take toast path not grid replace; DROP TABLE hides View Table | SEQUENCE | SHIP — **done** |
 | Result-grid editability | `QueryEditability` + `RowOperationsService` | Util **DONE**; IPC `updateRow`/`deleteRows` **DONE**; UI **PARTIAL** — Edit/Delete now attach and call `ipc.updateRow`/`ipc.deleteRows` gated on `isEditable` (`determineEditability`); the six `RowOperationError` kinds are not yet distinguished/surfaced (a rejected call fails silently); context-mismatch help **MISSING** | Edit/delete only when `isEditable`; six `RowOperationError` kinds surface | SEQUENCE | SHIP |
@@ -241,7 +241,7 @@ Every §12.2 row appears here. Extras flagged `§12.2 miss`.
 | Auto-save SQL | `QueryEditorViewModel` 500ms | **DONE** `useSavedQueryAutosave` | Typing persists SavedQuery without Save button | SEQUENCE | SHIP; §12.2 miss — **done** |
 | Restore last connection | `RootViewModel.initializeApp` | **DONE** launch restore auto-connect | Launch reconnects active tab’s profile | SEQUENCE | SHIP; §12.2 miss — **done** |
 | Sidebar metadata refresh | toolbar refresh | **DONE** Queries Refresh reloads tables + picker databases | Reloads tables without reconnect | SEQUENCE | SHIP; §12.2 miss — **done** |
-| Truncate / Drop / DDL | `TableContextMenuViewModel` | Menu chrome exists in `TableList`; `ConnectionPanel` does **not** wire `onDrop` / `onTruncate` / `onGenerateDdl` (no-ops) | Confirms then mutates; DDL copyable | SEQUENCE | needs-decision IPC vs `runQuery`; §12.2 miss |
+| Truncate / Drop / DDL | `TableContextMenuViewModel` | **DONE** dedicated `ipc.truncateTable` / `dropTable` / `generateTableDdl` from `App` via `ConnectionPanel` (never hatch `runQuery`) | Confirms then mutates; DDL copyable | SEQUENCE | SHIP; §12.2 miss — **done** |
 | Visual CREATE confirm | `VisualQueryCanvasView.createConfirmationSheet` | First-slice: SELECT-only Run (disabled for CREATE); confirm+execute not ported | Decision recorded 2026-08-15; SEQUENCE if reversed | SEQUENCE | decision recorded; §12.2 miss |
 | Favorite flag | `ConnectionProfile.isFavorite` | DTO field, no UI | **needs-decision** | — | needs-decision; display-only dead UI |
 | SwiftData importer | — | Out of SP-4b | Release notes until SP-6 | out of chrome | already decided |
@@ -297,7 +297,7 @@ Every §12.2 row appears here. Extras flagged `§12.2 miss`.
 
 **Tests:** `ConnectionStateTests`, `ConnectionStringParser` tests, `ConnectionSidebarViewModelTests` (delete database, refresh). Form VM not fully covered in the suites listed.
 
-**Tauri:** `src/ui/connection/connection-panel.tsx` + `connection-form.tsx` — Save/Connect/Disconnect/Switch/Delete/SSL/SSH **DONE**; URI mode **DONE**; “No connections” **DONE**; tables names **DONE** (click does not run). Test, database list/switch, status banner states, show-password **DONE**. Show All Rows still unwired.
+**Tauri:** `src/ui/connection/connection-panel.tsx` + `connection-form.tsx` — Save/Connect/Disconnect/Switch/Delete/SSL/SSH **DONE**; URI mode **DONE**; “No connections” **DONE**; tables names **DONE** (click = Show All Rows). Test, database list/switch, status banner states, show-password **DONE**.
 
 **Dependencies:** Database management IPC for picker create/delete; new list/switch-database for picker.
 
@@ -378,7 +378,7 @@ Every §12.2 row appears here. Extras flagged `§12.2 miss`.
 
 **Tests:** `TableRefreshServiceTests`, `AppStateTests` interrupt-on-supersede (`interruptInFlightTableBrowseLoadForSupersession`).
 
-**Tauri:** `ipc.listTables` / `listColumns` **DONE**; names listed in the connection column. No Show All Rows / browse SELECT helper / DDL/truncate/drop/fetchAll.
+**Tauri:** `ipc.listTables` / `listColumns` **DONE**; names listed in the connection column. Show All Rows via `runBrowseOnActiveTab`; expand loads `columnsByTable`; DDL / truncate / drop / fetch-all via dedicated IPC from `App`.
 
 **Dependencies:** Results grid; CSV; optional new catalog IPC for PK flags.
 
@@ -527,14 +527,14 @@ Visual-query cards remain 767 LOC; canvas container 281 — SP-4a arithmetic sti
 | Query type / splitter / compaction / CSV escape | `src/lib/*` | No |
 | List/switch databases on server | `listDatabases` / `switchDatabase` + picker **DONE** | No |
 | Create / delete database | `createDatabase` / `deleteDatabase` + picker dialogs **DONE** | No |
-| Generate DDL / truncate / drop / fetch-all-for-export | TableList menu chrome exists; ConnectionPanel does not wire handlers | **Yes**, or blessed `runQuery` SQL + refresh |
+| Generate DDL / truncate / drop / fetch-all-for-export | **DONE** `ipc.generateTableDdl` / `truncateTable` / `dropTable`; fetch-all is `runQuery` `SELECT * FROM` quoted table (not compact) | No |
 | SET search_path | `ipc.setSearchPath` + schema picker **DONE** | No |
 | Test connection without session | `ipc.testConnection` **DONE** | No |
 | Cancel in-flight query | `ipc.cancelQuery` + hatch Stop/Esc **DONE** | No |
 | Per-tab visual document | `visualDocumentJson` on DTO persist + hydrate **DONE** | No |
 | SwiftData importer | out of SP-4b | SP-6 / release notes |
 
-**Rule:** SP-3 store/IPC existence ≠ UI done. Workspace chrome **binds** welcome, tables names, Queries, tabs, history, URI mode, and native menus. Last slice binds collapse sidebar, SQL hatch, grid mutation, database picker, loading overlay. Remaining SEQUENCE still needs Show All Rows wiring (`onBrowse`).
+**Rule:** SP-3 store/IPC existence ≠ UI done. Workspace chrome **binds** welcome, tables names, Queries, tabs, history, URI mode, and native menus. Last slice binds collapse sidebar, SQL hatch, grid mutation, database picker, loading overlay, and table-browser host (Show All Rows / expand / DDL / export / truncate / drop).
 
 ---
 
@@ -571,14 +571,14 @@ Extracted from §2 (FIRST-SLICE rows only):
 
 1. [x] Welcome iff 0 profiles and form hidden; Cancel / delete-last returns to welcome.
 2. [x] “No connections” when the form is showing and the list is empty.
-3. [x] Tables names in the connection column (loading / empty / fail copy; click does not run).
+3. [x] Tables names in the connection column (loading / empty / fail copy). Show All Rows / expand / DDL / export / truncate / drop wired from `App` after this subset.
 4. [x] Connection-string mode (parse on Save; edit read-only + Copy).
 5. [x] Queries column left of canvas, including disconnected; B′ success cache; + named query clears active tab; rename / delete confirm / move / dual folder-delete.
 6. [x] Tab bar hidden at 1 tab, `+` visible; in-session per-tab visual documents; close last recreates; Accel+T/W.
 7. [x] History sheet from canvas toolbar; global list; Copy; export JSON/CSV/SQL; fail ≠ empty copy. Relative date labels shipped (epoch `created_at`).
 8. [x] Native Help / Keyboard Shortcuts / Settings; Accel+Enter Run (SELECT-only, no-op if disabled); Settings radios persist (grid dates applied).
 
-**Still SEQUENCE after this slice:** Show All Rows / table expander (`ConnectionPanel` does not pass `onBrowse` / `columnsByTable`); table context menu / DDL / export / truncate-drop (menu chrome exists, handlers unwired); context-mismatch editability help; row-editor typed pickers / saving-state disable; table-load timeout 300s; pagination cached-pages-skip-refetch.
+**Still SEQUENCE after this slice:** context-mismatch editability help; row-editor typed pickers / saving-state disable; table-load timeout 300s; pagination cached-pages-skip-refetch.
 
 ---
 
@@ -603,7 +603,7 @@ Extracted from §2 (FIRST-SLICE rows only):
 3. **History from canvas** — **done** 2026-08-15 (Swift visual mode hid the button; Tauri exposes it on the canvas toolbar).
 4. **SELECT-only canvas run** vs Swift CREATE confirm — **recorded 2026-08-15:** keep SELECT-only for first-slice; confirm+execute remains SEQUENCE if reversed.
 5. **Cancel query** — hatch Stop/Esc + `ipc.cancelQuery` **shipped**; table-load timeout still missing.
-6. **Truncate/Drop/DDL** via raw `runQuery` vs new commands — menu chrome exists; ConnectionPanel handlers unwired.
+6. **Truncate/Drop/DDL** — **done** dedicated `ipc.truncateTable` / `dropTable` / `generateTableDdl` (never hatch `runQuery`).
 7. **Favorites**, **PK badges** without catalog enrichment (foreign-table icon shipped).
 8. **Auto-create SavedQuery** on SQL typing — **done** (`useSavedQueryAutosave`).
 9. **Global vs per-profile history** UI — **done** global list 2026-08-15.
@@ -612,7 +612,7 @@ Extracted from §2 (FIRST-SLICE rows only):
 ### Stop conditions honored
 
 - All 52 `Views/` files listed; none missing on disk.
-- First-slice implementation shipped 2026-08-15; workspace chrome shipped 2026-08-15 (`e7b97f5`); remaining SEQUENCE clusters not silently dropped (Show All Rows is still unwired).
+- First-slice implementation shipped 2026-08-15; workspace chrome shipped 2026-08-15 (`e7b97f5`); remaining SEQUENCE clusters not silently dropped (context-mismatch help, typed row-editor pickers, table-load timeout 300s, pagination page cache).
 - No DROP without unreachable-file evidence.
 - SP-2/SP-3 not claimed incomplete where files show shipped IPC/stores; SEQUENCE UI still missing.
 

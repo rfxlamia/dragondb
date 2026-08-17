@@ -311,14 +311,11 @@ export function createMockDragonIpc(mode: MockMode = "happy"): DragonIpc {
     async deleteDatabase(name: string): Promise<void> {
       databases = databases.filter((item) => item !== name);
     },
-    async truncateTable(_table: TableRef): Promise<void> {
-      throw notImplemented("truncateTable");
-    },
-    async dropTable(_table: TableRef): Promise<void> {
-      throw notImplemented("dropTable");
-    },
-    async generateTableDdl(_table: TableRef): Promise<string> {
-      throw notImplemented("generateTableDdl");
+    async truncateTable(_table: TableRef): Promise<void> {},
+    async dropTable(_table: TableRef): Promise<void> {},
+    async generateTableDdl(table: TableRef): Promise<string> {
+      const schema = table.schema ?? "public";
+      return `CREATE TABLE ${schema}.${table.name} ();`;
     },
     async setSearchPath(_schema: string | null): Promise<void> {
       throw notImplemented("setSearchPath");

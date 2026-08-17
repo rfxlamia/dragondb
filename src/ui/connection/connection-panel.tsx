@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useImperativeHandle, useState } from "react";
 import type {
+  ColumnInfo,
   ConnectionId,
   ConnectionProfileDto,
   ConnectResult,
@@ -51,6 +52,17 @@ export interface ConnectionPanelProps {
   tables?: TableRef[];
   tablesLoading?: boolean;
   tablesErrorMessage?: string | null;
+  onBrowse?: (table: TableRef) => void;
+  columnsByTable?: Record<string, ColumnInfo[]>;
+  executing?: boolean;
+  onDrop?: (table: TableRef) => void | Promise<void>;
+  onTruncate?: (table: TableRef) => void | Promise<void>;
+  onGenerateDdl?: (table: TableRef) => unknown;
+  onRefresh?: (table: TableRef) => void;
+  onFetchAll?: (table: TableRef) => Promise<{ columns: string[]; rows: unknown[][] }>;
+  onExpand?: (table: TableRef) => void;
+  saveCsvFile?: DragonIpc["saveCsvFile"];
+  saveTextFile?: DragonIpc["saveTextFile"];
   connectionId?: ConnectionId | null;
   databaseName?: string | null;
   /** Session switchDatabase — picker must not rewrite profile.database. */
@@ -81,6 +93,17 @@ export function ConnectionPanel(props: ConnectionPanelProps): React.JSX.Element 
     tables = [],
     tablesLoading = false,
     tablesErrorMessage = null,
+    onBrowse,
+    columnsByTable,
+    executing,
+    onDrop,
+    onTruncate,
+    onGenerateDdl,
+    onRefresh,
+    onFetchAll,
+    onExpand,
+    saveCsvFile,
+    saveTextFile,
     connectProfile,
     disconnectSession,
     onConnected,
@@ -413,6 +436,17 @@ export function ConnectionPanel(props: ConnectionPanelProps): React.JSX.Element 
           tables={tables}
           tablesLoading={tablesLoading}
           tablesErrorMessage={tablesErrorMessage}
+          onBrowse={onBrowse}
+          columnsByTable={columnsByTable}
+          executing={executing}
+          onDrop={onDrop}
+          onTruncate={onTruncate}
+          onGenerateDdl={onGenerateDdl}
+          onRefresh={onRefresh}
+          onFetchAll={onFetchAll}
+          onExpand={onExpand}
+          saveCsvFile={saveCsvFile}
+          saveTextFile={saveTextFile}
         />
       ) : null}
 

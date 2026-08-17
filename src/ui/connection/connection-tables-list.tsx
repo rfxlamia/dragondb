@@ -13,11 +13,12 @@ export function ConnectionTablesList(props: {
   onBrowse?: (table: TableRef) => void;
   columnsByTable?: Record<string, ColumnInfo[]>;
   executing?: boolean;
-  onDrop?: (table: TableRef) => void;
-  onTruncate?: (table: TableRef) => void;
+  onDrop?: (table: TableRef) => void | Promise<void>;
+  onTruncate?: (table: TableRef) => void | Promise<void>;
   onGenerateDdl?: (table: TableRef) => unknown;
   onRunQuery?: (sql: string) => void;
   onRefresh?: (table: TableRef) => void;
+  onExpand?: (table: TableRef) => void;
   onFetchAll?: (table: TableRef) => Promise<{ columns: string[]; rows: unknown[][] }>;
   saveCsvFile?: DragonIpc["saveCsvFile"];
   saveTextFile?: DragonIpc["saveTextFile"];
@@ -34,6 +35,7 @@ export function ConnectionTablesList(props: {
     onGenerateDdl,
     onRunQuery,
     onRefresh,
+    onExpand,
     onFetchAll,
     saveCsvFile,
     saveTextFile,
@@ -58,6 +60,7 @@ export function ConnectionTablesList(props: {
         onGenerateDdl={onGenerateDdl ?? noop}
         onRunQuery={onRunQuery}
         onRefresh={onRefresh}
+        onExpand={onExpand}
         onFetchAll={onFetchAll}
         saveCsvFile={saveCsvFile}
         saveTextFile={saveTextFile}

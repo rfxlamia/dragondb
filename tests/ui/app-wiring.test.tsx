@@ -56,6 +56,7 @@ import { ResultsCopy } from "../../src/ui/results/results-copy";
 import { TabBarAccessibility } from "../../src/ui/shell/tab-bar-accessibility";
 import type { MenuEventId } from "../../src/ui/shell/workspace-accelerators";
 import { SqlHatchCopy } from "../../src/ui/sql-editor/sql-hatch-copy";
+import { TablesCopy } from "../../src/ui/tables/tables-copy";
 import { VisualQueryAccessibility } from "../../src/ui/visual-query/accessibility";
 import { VisualQueryCopy } from "../../src/ui/visual-query/copy";
 import { serializeQueryDocument } from "../../src/ui/visual-query/tab-documents";
@@ -2655,5 +2656,108 @@ describe("App shell — mutation toast host, background persist, no-db alert (SP
       await screen.findByText("Select a database from the sidebar before running queries."),
     ).toBeInTheDocument();
     expect(runQuery).not.toHaveBeenCalled();
+  });
+});
+
+describe("App table browser host wiring", () => {
+  it("clicking a listed table name browses into the results grid; mere focus does not", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    const runQuery = vi.spyOn(ipc, "runQuery").mockResolvedValue({
+      columns: ["id"],
+      rows: [[1]],
+      rowsAffected: null,
+      durationMs: 4,
+    });
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
+    const name = await screen.findByRole("button", { name: "users" });
+    name.focus();
+    expect(runQuery).not.toHaveBeenCalled();
+    await user.click(name);
+    await waitFor(() => expect(runQuery).toHaveBeenCalled());
+    expect(runQuery.mock.calls[0]?.[1]).toMatchObject({
+      text: expect.stringMatching(/SELECT \* FROM "public"\."users" LIMIT 101/i),
+    });
+    expect(await screen.findByTestId(ResultsAccessibility.grid)).toBeInTheDocument();
+  });
+
+  it("expanding the first table loads columns and shows the PK icon", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    const listColumns = vi.spyOn(ipc, "listColumns");
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
+    await user.click(await screen.findByRole("button", { name: TablesCopy.expandColumns }));
+    await waitFor(() => expect(listColumns).toHaveBeenCalled());
+    expect(listColumns.mock.calls[0]?.[1]).toMatchObject({ schema: "public", name: "users" });
+    expect(await screen.findByLabelText(TablesCopy.primaryKey)).toBeInTheDocument();
+  });
+
+  it("Drop confirm calls ipc.dropTable, not hatch runQuery", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    const dropTable = vi.spyOn(ipc, "dropTable");
+    const runQuery = vi.spyOn(ipc, "runQuery");
+    const listTables = vi.spyOn(ipc, "listTables");
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
+    const tablesAfterConnect = listTables.mock.calls.length;
+    const dropButtons = await screen.findAllByRole("button", { name: TablesCopy.drop });
+    const firstDrop = dropButtons[0];
+    if (firstDrop === undefined) throw new Error("expected Drop");
+    await user.click(firstDrop);
+    await user.click(screen.getByRole("button", { name: TablesCopy.confirmDrop }));
+    await waitFor(() => expect(dropTable).toHaveBeenCalled());
+    expect(dropTable.mock.calls[0]?.[0]).toMatchObject({ schema: "public", name: "users" });
+    expect(runQuery).not.toHaveBeenCalled();
+    await waitFor(() => expect(listTables.mock.calls.length).toBeGreaterThan(tablesAfterConnect));
+  });
+
+  it("Drop IPC rejection shows an error and keeps the table listed", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    vi.spyOn(ipc, "dropTable").mockRejectedValue({
+      kind: "permission",
+      message: "permission denied for table users",
+    });
+    const listTables = vi.spyOn(ipc, "listTables");
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
+    const tablesAfterConnect = listTables.mock.calls.length;
+    const dropButtons = await screen.findAllByRole("button", { name: TablesCopy.drop });
+    const firstDrop = dropButtons[0];
+    if (firstDrop === undefined) throw new Error("expected Drop");
+    await user.click(firstDrop);
+    await user.click(screen.getByRole("button", { name: TablesCopy.confirmDrop }));
+    expect(await screen.findByText("permission denied for table users")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "users" })).toBeInTheDocument();
+    expect(listTables.mock.calls.length).toBe(tablesAfterConnect);
+  });
+
+  it("Drop and Truncate menu items are disabled while a browse is in flight", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    vi.spyOn(ipc, "runQuery").mockImplementation(async () => {
+      await gate;
+      return { columns: ["id"], rows: [[1]], rowsAffected: null, durationMs: 1 };
+    });
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
+    await user.click(await screen.findByRole("button", { name: "users" }));
+    await waitFor(() =>
+      expect(screen.getAllByRole("button", { name: TablesCopy.drop })[0]).toBeDisabled(),
+    );
+    const menuButtons = screen.getAllByRole("button", { name: TablesCopy.menu });
+    const firstMenu = menuButtons[0];
+    if (firstMenu === undefined) throw new Error("expected Table actions");
+    await user.click(firstMenu);
+    expect(screen.getByRole("menuitem", { name: TablesCopy.drop })).toBeDisabled();
+    expect(screen.getByRole("menuitem", { name: TablesCopy.truncate })).toBeDisabled();
+    release();
   });
 });

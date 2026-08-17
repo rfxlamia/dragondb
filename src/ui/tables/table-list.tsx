@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { ColumnInfo, DragonIpc, TableRef } from "../../ipc/contract";
 import { tableDisplayName } from "../../lib/table-display-name";
+import { unknownErrorMessage } from "../../lib/unknown-error-message";
 import { TableContextMenu } from "./table-context-menu";
 import { TableDdlSheet } from "./table-ddl-sheet";
 import { TableExportSheet } from "./table-export-sheet";
@@ -15,9 +16,11 @@ export type TableListProps = {
   columnsByTable: Record<string, ColumnInfo[]>;
   executing: boolean;
   onBrowse: (table: TableRef) => void;
-  onDrop: (table: TableRef) => void;
-  onTruncate: (table: TableRef) => void;
+  onDrop: (table: TableRef) => void | Promise<void>;
+  onTruncate: (table: TableRef) => void | Promise<void>;
   onGenerateDdl: (table: TableRef) => unknown;
+  /** Fired when a row is expanded so the parent can load columns (no IPC here). */
+  onExpand?: (table: TableRef) => void;
   /** Accepted so callers can pass hatch runQuery — table admin must never call it. */
   onRunQuery?: (sql: string) => void;
   onRefresh?: (table: TableRef) => void;
@@ -37,6 +40,7 @@ export function TableList(props: TableListProps): React.JSX.Element {
     onDrop,
     onTruncate,
     onGenerateDdl,
+    onExpand,
     onRefresh,
     onFetchAll,
     saveCsvFile,
@@ -44,6 +48,7 @@ export function TableList(props: TableListProps): React.JSX.Element {
   } = props;
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
   const [pending, setPending] = useState<PendingAdmin | null>(null);
+  const [adminError, setAdminError] = useState<string | null>(null);
   const [ddl, setDdl] = useState<string | null>(null);
   const [ddlError, setDdlError] = useState<string | null>(null);
   const [exportTable, setExportTable] = useState<TableRef | null>(null);
@@ -67,20 +72,34 @@ export function TableList(props: TableListProps): React.JSX.Element {
     }
   }
 
-  function toggleExpanded(key: string): void {
+  function toggleExpanded(table: TableRef): void {
+    const key = catalogKey(table);
+    const willExpand = !expanded.has(key);
     setExpanded((current) => {
       const next = new Set(current);
       if (next.has(key)) next.delete(key);
       else next.add(key);
       return next;
     });
+    if (willExpand) onExpand?.(table);
   }
 
-  function confirmPending(): void {
+  async function confirmPending(): Promise<void> {
     if (pending === null) return;
-    if (pending.kind === "drop") onDrop(pending.table);
-    else onTruncate(pending.table);
+    const current = pending;
     setPending(null);
+    setAdminError(null);
+    try {
+      if (current.kind === "drop") await Promise.resolve(onDrop(current.table));
+      else await Promise.resolve(onTruncate(current.table));
+    } catch (err) {
+      setAdminError(
+        unknownErrorMessage(
+          err,
+          current.kind === "drop" ? TablesCopy.dropFailed : TablesCopy.truncateFailed,
+        ),
+      );
+    }
   }
 
   function loadMoreSchema(schema: string): void {
@@ -118,7 +137,7 @@ export function TableList(props: TableListProps): React.JSX.Element {
                         className="table-list__expand"
                         aria-expanded={isExpanded}
                         aria-label={expandLabel}
-                        onClick={() => toggleExpanded(key)}
+                        onClick={() => toggleExpanded(table)}
                       >
                         {isExpanded ? "▾" : "▸"}
                       </button>
@@ -203,6 +222,12 @@ export function TableList(props: TableListProps): React.JSX.Element {
         );
       })}
 
+      {adminError ? (
+        <p className="table-list__error" role="alert">
+          {adminError}
+        </p>
+      ) : null}
+
       {pending ? (
         <div
           className="table-sheet table-sheet--confirm"
@@ -212,7 +237,11 @@ export function TableList(props: TableListProps): React.JSX.Element {
         >
           <p>{pending.kind === "drop" ? TablesCopy.dropPrompt : TablesCopy.truncatePrompt}</p>
           <div className="table-sheet__actions">
-            <button type="button" className="table-sheet__danger" onClick={confirmPending}>
+            <button
+              type="button"
+              className="table-sheet__danger"
+              onClick={() => void confirmPending()}
+            >
               {pending.kind === "drop" ? TablesCopy.confirmDrop : TablesCopy.confirmTruncate}
             </button>
             <button

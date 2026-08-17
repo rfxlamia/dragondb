@@ -177,6 +177,17 @@
   display: inline-flex;
 }
 
+.table-list__error {
+  background: var(--error-tint);
+  border-radius: var(--radius);
+  color: var(--error-text);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.4;
+  margin: 0;
+  padding: 6px 10px;
+}
+
 .table-list__load-more,
 .table-list__next {
   align-self: flex-start;

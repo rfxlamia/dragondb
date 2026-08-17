@@ -25,6 +25,8 @@ export const TablesCopy = {
   exportJson: "Export JSON",
   dropPrompt: "Drop this table? This cannot be undone.",
   truncatePrompt: "Remove all rows from this table? This cannot be undone.",
+  dropFailed: "Could not drop this table. Try again.",
+  truncateFailed: "Could not truncate this table. Try again.",
   exportFailed: "Could not export this table. Try again.",
   ddlFailed: "Could not generate the DDL. Try again.",
 } as const;
