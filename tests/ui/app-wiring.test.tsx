@@ -72,7 +72,22 @@ afterEach(() => {
   localStorage.clear();
 });
 
-async function connectFirst(user: UserEvent, _ipc: DragonIpc): Promise<void> {
+/**
+ * Connect the fixture profile, then (by default) select "app" from the
+ * Catalog picker so the session ends up connected WITH a database chosen —
+ * the normal baseline for Run-success assertions. `user.type` on the
+ * individual-fields form does not reliably land under the full App tree
+ * (a pre-existing, out-of-scope issue independent of T12), so the profile's
+ * typed database can't be trusted; selecting it explicitly via the picker
+ * (which does work reliably) is what actually establishes databaseName.
+ * Pass `{ selectDatabase: false }` for tests that need the connected+no-db
+ * state (decision 14's alert path) instead.
+ */
+async function connectFirst(
+  user: UserEvent,
+  _ipc: DragonIpc,
+  options: { selectDatabase?: boolean } = {},
+): Promise<void> {
   await waitFor(() => {
     expect(
       screen.queryByRole("button", { name: WelcomeCopy.connectToServer }) ??
@@ -101,6 +116,12 @@ async function connectFirst(user: UserEvent, _ipc: DragonIpc): Promise<void> {
   await waitFor(() =>
     expect(screen.getByTestId(VisualQueryAccessibility.initialAddBlock)).not.toBeDisabled(),
   );
+  if (options.selectDatabase ?? true) {
+    const picker = screen.queryByLabelText(ConnectionCopy.catalog);
+    if (picker) {
+      await user.selectOptions(picker, "app");
+    }
+  }
 }
 
 describe("App production default (no runtime mock)", () => {
@@ -143,7 +164,9 @@ describe("App session connect / disconnect / switch", () => {
     const ipc = createMockDragonIpc("happy");
     const listTables = vi.spyOn(ipc, "listTables");
     render(<App ipc={ipc} />);
-    await connectFirst(user, ipc);
+    // No database selection here — switching database reloads tables and
+    // would make listTables' call count no longer reflect connect alone.
+    await connectFirst(user, ipc, { selectDatabase: false });
 
     await waitFor(() => expect(listTables).toHaveBeenCalledTimes(1));
     const connectionId = listTables.mock.calls[0]?.[0];
@@ -2565,5 +2588,72 @@ describe("App tab remainder (SP-4b last slice T11)", () => {
     await user.click(firstTab);
     await user.click(screen.getByRole("radio", { name: /sql/i }));
     expect(screen.getByRole("textbox", { name: "SQL editor" })).toHaveValue("SELECT 42");
+  });
+});
+
+describe("App shell — mutation toast host, background persist, no-db alert (SP-4b last slice T12)", () => {
+  it("App.tsx mounts useBackgroundPersist in the workspace tree", () => {
+    const src = readFileSync(join(process.cwd(), "src/App.tsx"), "utf8");
+    expect(src).toMatch(/useBackgroundPersist/);
+  });
+
+  it("disconnected Accel+Enter is a no-op without the no-database alert", async () => {
+    const user = userEvent.setup();
+    render(<App ipc={createMockDragonIpc("happy")} />);
+    await user.keyboard("{Meta>}{Enter}{/Meta}");
+    expect(
+      screen.queryByText("Select a database from the sidebar before running queries."),
+    ).toBeNull();
+  });
+
+  it("App workspace copy includes the Swift no-database Run alert (Visual + SQL; hatch behavior in T9)", () => {
+    let src = readFileSync(join(process.cwd(), "src/App.tsx"), "utf8");
+    try {
+      src += readFileSync(join(process.cwd(), "src/ui/shell/app-workspace.tsx"), "utf8");
+    } catch {
+      /* extract happens in this task; App.tsx alone is enough until then */
+    }
+    expect(src).toMatch(/Select a database from the sidebar before running queries/);
+  });
+
+  it("0-row UPDATE via the SQL hatch shows the mutation toast; View Table browses the table", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    const runQuery = vi.spyOn(ipc, "runQuery");
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
+    await user.click(screen.getByRole("radio", { name: /sql/i }));
+    fireEvent.change(screen.getByRole("textbox", { name: "SQL editor" }), {
+      target: { value: "UPDATE users SET name = 'Ada' WHERE false" },
+    });
+    await user.click(screen.getByRole("button", { name: "Run" }));
+    await waitFor(() => expect(runQuery).toHaveBeenCalledTimes(1));
+
+    const viewTable = await screen.findByRole("button", { name: /view table/i });
+    await user.click(viewTable);
+
+    expect(screen.queryByRole("button", { name: /view table/i })).toBeNull();
+    await waitFor(() => expect(runQuery).toHaveBeenCalledTimes(2));
+    expect(runQuery.mock.calls[1]?.[1]).toMatchObject({
+      text: expect.stringMatching(/SELECT \* FROM "users"/i),
+    });
+  });
+
+  it("connected no-db Accel+Enter shows the Swift alert on the Visual surface, not runQuery", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    const runQuery = vi.spyOn(ipc, "runQuery");
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc, { selectDatabase: false });
+    await addSelectFromUsers(user);
+    expect(screen.getByTestId(VisualQueryAccessibility.runQuery)).not.toBeDisabled();
+
+    window.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Enter", ctrlKey: true, bubbles: true }),
+    );
+    expect(
+      await screen.findByText("Select a database from the sidebar before running queries."),
+    ).toBeInTheDocument();
+    expect(runQuery).not.toHaveBeenCalled();
   });
 });

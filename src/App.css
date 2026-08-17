@@ -148,6 +148,86 @@
   overflow: auto;
 }
 
+.app-results-wrapper {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  position: relative;
+}
+
+.mutation-toast {
+  align-items: flex-start;
+  background: var(--success-tint);
+  border: 1px solid var(--success-solid);
+  border-radius: var(--radius);
+  bottom: 16px;
+  box-shadow: var(--shadow-md);
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  max-width: 320px;
+  padding: 10px 12px;
+  position: absolute;
+  right: 16px;
+  z-index: 30;
+}
+
+.mutation-toast__body {
+  min-width: 0;
+}
+
+.mutation-toast__title {
+  color: var(--success-text);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.mutation-toast__table {
+  color: var(--neutral-700);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  margin: 2px 0 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mutation-toast__actions {
+  align-items: center;
+  display: flex;
+  flex-shrink: 0;
+  gap: 8px;
+}
+
+.mutation-toast__view-table {
+  background: var(--primary-600);
+  border: none;
+  border-radius: var(--radius);
+  color: oklch(1 0 0);
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 6px 10px;
+}
+
+.mutation-toast__view-table:hover {
+  background: var(--primary-700);
+}
+
+.mutation-toast__dismiss {
+  background: transparent;
+  border: none;
+  color: var(--success-text);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  padding: 2px 4px;
+}
+
 *,
 *::before,
 *::after {

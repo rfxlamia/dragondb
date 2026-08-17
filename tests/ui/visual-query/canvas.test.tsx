@@ -71,6 +71,42 @@ describe("VisualQueryCanvas layout chrome", () => {
     expect(await screen.findByText(/select a database from the sidebar/i)).toBeInTheDocument();
   });
 
+  it("connected no-db Run on the Visual surface shows the alert instead of calling onRunQuery", async () => {
+    const user = userEvent.setup();
+    const handle = createRef<VisualQueryCanvasHandle>();
+    const onRunQuery = vi.fn();
+    render(
+      <VisualQueryCanvas
+        ref={handle}
+        tables={tables}
+        columnNames={["id"]}
+        metadataErrorMessage={null}
+        isConnected={true}
+        databaseName={null}
+        onRunQuery={onRunQuery}
+      />,
+    );
+    await user.click(screen.getByTestId(VisualQueryAccessibility.initialAddBlock));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("select")));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.clauseMenuItem("from")));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.fromTablePicker));
+    await user.click(screen.getByRole("button", { name: "users" }));
+
+    // canRunQuery must not gate on databaseName (decision 14) — the button
+    // stays enabled and runIfRunnable proceeds to the handleRunQuery guard.
+    expect(screen.getByTestId(VisualQueryAccessibility.runQuery)).not.toBeDisabled();
+    expect(handle.current?.canRun()).toBe(true);
+    expect(handle.current?.runIfRunnable()).toBe(true);
+    expect(await screen.findByText(/select a database from the sidebar/i)).toBeInTheDocument();
+    expect(onRunQuery).not.toHaveBeenCalled();
+
+    // Toolbar Run click takes the same path.
+    await user.click(screen.getByTestId(VisualQueryAccessibility.runQuery));
+    expect(onRunQuery).not.toHaveBeenCalled();
+    expect(screen.getByText(/select a database from the sidebar/i)).toBeInTheDocument();
+  });
+
   it("toolbar Run query in SQL mode submits the hatch buffer, not generated visual SQL", async () => {
     const user = userEvent.setup();
     const onRunQuery = vi.fn();
@@ -558,6 +594,7 @@ describe("VisualQueryCanvas full lock + Run (SP-2)", () => {
         columnNames={["id"]}
         metadataErrorMessage={null}
         isConnected={true}
+        databaseName="app"
         onRunQuery={onRunQuery}
       />,
     );
@@ -596,6 +633,7 @@ describe("VisualQueryCanvas full lock + Run (SP-2)", () => {
         columnNames={["id"]}
         metadataErrorMessage={null}
         isConnected={true}
+        databaseName="app"
         onRunQuery={onRunQuery}
       />,
     );
@@ -626,6 +664,7 @@ describe("VisualQueryCanvas full lock + Run (SP-2)", () => {
         columnNames={["id"]}
         metadataErrorMessage={null}
         isConnected={true}
+        databaseName="app"
         onRunQuery={onRunQuery}
       />,
     );
@@ -695,6 +734,7 @@ describe("VisualQueryCanvas full lock + Run (SP-2)", () => {
         columnNames={["id"]}
         metadataErrorMessage={null}
         isConnected={true}
+        databaseName="app"
         onRunQuery={onRunQuery}
       />,
     );
@@ -728,6 +768,7 @@ describe("VisualQueryCanvas full lock + Run (SP-2)", () => {
         columnNames={["id"]}
         metadataErrorMessage={null}
         isConnected={true}
+        databaseName="app"
         onRunQuery={onRunQuery}
         onClearTabResults={onClearTabResults}
       />,

@@ -7,6 +7,7 @@ import { sameTable } from "../../ipc/table-ref";
 import type { HistoryState } from "../../stores/history-store";
 import { QueryHistorySheet } from "../history/query-history-sheet";
 import { SqlHatch, type SqlHatchHandle } from "../sql-editor/sql-hatch";
+import { SqlHatchCopy } from "../sql-editor/sql-hatch-copy";
 import { VisualQueryAccessibility } from "./accessibility";
 import { ClauseCard } from "./clause-card";
 import { VisualQueryCopy } from "./copy";
@@ -94,6 +95,7 @@ export function VisualQueryCanvas(props: VisualQueryCanvasProps): React.JSX.Elem
   const [historyOpen, setHistoryOpen] = useState(false);
   const [runInFlight, setRunInFlight] = useState(false);
   const [editorMode, setEditorMode] = useState<"visual" | "sql">("visual");
+  const [noDatabaseAlert, setNoDatabaseAlert] = useState(false);
   const runGeneration = useRef(0);
   const sqlHatchRef = useRef<SqlHatchHandle | null>(null);
 
@@ -101,6 +103,7 @@ export function VisualQueryCanvas(props: VisualQueryCanvasProps): React.JSX.Elem
     if (!isConnected) {
       runGeneration.current += 1;
       setRunInFlight(false);
+      setNoDatabaseAlert(false);
     }
   }, [isConnected]);
 
@@ -169,6 +172,15 @@ export function VisualQueryCanvas(props: VisualQueryCanvasProps): React.JSX.Elem
     if (!isConnected || doc.statementKind !== "select" || !eligibility.isRunnable || runInFlight) {
       return;
     }
+    // Decision 14: connected + no database selected shows an alert instead
+    // of disabling Run (canRunQuery deliberately ignores databaseName so the
+    // button stays enabled — see toolbar.canRunQuery below). Mirrors the SQL
+    // hatch's submitRun guard (sql-hatch.tsx) and reuses its copy verbatim.
+    if (databaseName === null || databaseName.length === 0) {
+      setNoDatabaseAlert(true);
+      return;
+    }
+    setNoDatabaseAlert(false);
 
     const generated = generateSQL(doc);
     if (generated === null || onRunQuery === undefined) return;
@@ -323,6 +335,11 @@ export function VisualQueryCanvas(props: VisualQueryCanvasProps): React.JSX.Elem
 
       {editorMode === "visual" ? (
         <div className="vq-canvas__body">
+          {noDatabaseAlert ? (
+            <p className="vq-canvas__alert" role="alert">
+              {SqlHatchCopy.selectDatabaseAlert}
+            </p>
+          ) : null}
           <div className="vq-canvas__stage">
             <fieldset className="vq-canvas__interaction" disabled={interactionLocked}>
               <legend className="vq-canvas__interaction__legend">Query builder</legend>

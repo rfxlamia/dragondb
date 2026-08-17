@@ -639,6 +639,17 @@
   padding: 6px 10px;
 }
 
+.vq-canvas__alert {
+  background: var(--error-tint);
+  border-radius: var(--radius);
+  color: var(--error-text);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.4;
+  margin: 0;
+  padding: 6px 10px;
+}
+
 .vq-canvas__body {
   display: flex;
   flex: 1;

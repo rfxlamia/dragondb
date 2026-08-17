@@ -76,6 +76,7 @@ export type TabsState = {
   applyRunFailure: (tabId: string, message: string, generation?: number) => void;
   applyRunCancelled: (tabId: string) => void;
   clearTabResults: (tabId: string) => void;
+  clearMutationToast: (tabId: string) => void;
   clearInMemoryResults: () => void;
   setDatabaseName: (tabId: string, databaseName: string | null) => Promise<void>;
   setQueryText: (tabId: string, text: string) => void;
@@ -481,6 +482,11 @@ export function createTabsStore(ipc: DragonIpc, getters: TabsSessionGetters): St
           compact: null,
           status: { kind: "idle" },
         });
+      },
+
+      clearMutationToast(tabId) {
+        if (!get().tabs.some((t) => t.id === tabId)) return;
+        patchTab(tabId, { mutationToast: null });
       },
 
       clearInMemoryResults() {

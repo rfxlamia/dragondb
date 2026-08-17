@@ -1,6 +1,5 @@
 import { listen } from "@tauri-apps/api/event";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Group, Panel, Separator } from "react-resizable-panels";
 import { useStore } from "zustand";
 import type { ExecutableSQL, QueryDocument, TableReference } from "./core";
 import type {
@@ -14,6 +13,7 @@ import { coreToTableRef, tableRefToCore } from "./ipc/table-ref";
 import { createTauriDragonIpc } from "./ipc/tauri-client";
 import { newSavedQueryName } from "./lib/new-saved-query-name";
 import { type AppStores, composeAppStores } from "./stores/compose-app-stores";
+import { runBrowseOnActiveTab } from "./stores/run-browse-on-active-tab";
 import { runSelectOnActiveTab } from "./stores/run-select-on-active-tab";
 import { runSqlOnActiveTab } from "./stores/run-sql-on-active-tab";
 import { ConnectionCopy, humanIpcErrorMessage } from "./ui/connection/connection-copy";
@@ -21,14 +21,13 @@ import { ConnectionPanel, type ConnectionPanelHandle } from "./ui/connection/con
 import { HelpDialog } from "./ui/help/help-dialog";
 import { SettingsDialog } from "./ui/help/settings-dialog";
 import { ShortcutsDialog } from "./ui/help/shortcuts-dialog";
-import { QueriesColumn } from "./ui/library/queries-column";
 import { QueriesCopy } from "./ui/library/queries-copy";
 import { createSavedQueryResultCache } from "./ui/library/saved-query-result-cache";
 import { useSavedQueryAutosave } from "./ui/library/use-saved-query-autosave";
-import { QueryResultsPane } from "./ui/results/query-results-pane";
+import { AppWorkspace } from "./ui/shell/app-workspace";
 import { LoadingOverlay } from "./ui/shell/loading-overlay";
-import { TabBar } from "./ui/shell/tab-bar";
-import { formatTabTitle } from "./ui/shell/tab-bar-copy";
+import type { MutationToastTable } from "./ui/shell/mutation-toast";
+import { useBackgroundPersist } from "./ui/shell/use-background-persist";
 import {
   handleMenuEvent,
   handleWorkspaceKeydown,
@@ -36,7 +35,6 @@ import {
   type MenuEventId,
   type WorkspaceAccelContext,
 } from "./ui/shell/workspace-accelerators";
-import { WorkspaceSplit } from "./ui/shell/workspace-split";
 import { VisualQueryCanvas, type VisualQueryCanvasHandle } from "./ui/visual-query/canvas";
 import { VisualQueryCopy } from "./ui/visual-query/copy";
 import { createTabDocuments, serializeQueryDocument } from "./ui/visual-query/tab-documents";
@@ -106,8 +104,16 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
     stores.tabs,
     (s) => s.tabs.find((t) => t.id === s.activeTabId)?.compact ?? null,
   );
+  const mutationToast = useStore(
+    stores.tabs,
+    (s) => s.tabs.find((t) => t.id === s.activeTabId)?.mutationToast ?? null,
+  );
   const libraryQueries = useStore(stores.library, (s) => s.queries);
   const libraryFolders = useStore(stores.library, (s) => s.folders);
+
+  // Background persist (Swift `scenePhase == .background` equivalent): saves
+  // typed query text on hide/close without re-sending cached results.
+  useBackgroundPersist(stores.tabs);
 
   /** Last live profile id — store clears before panel calls onDisconnected. */
   const lastProfileIdRef = useRef<ProfileId | null>(null);
@@ -520,6 +526,23 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
     stores.tabs.getState().clearTabResults(tabId);
   }
 
+  function handleDismissMutationToast(): void {
+    const tabId = stores.tabs.getState().activeTabId;
+    if (tabId === null) return;
+    stores.tabs.getState().clearMutationToast(tabId);
+  }
+
+  // First production wiring of runBrowseOnActiveTab (T5, previously
+  // unwired) — View Table on the mutation toast selects the mutated table.
+  function handleViewMutationTable(table: MutationToastTable): void {
+    void runBrowseOnActiveTab(
+      stores,
+      ipc,
+      { schema: table.schema, name: table.name, tableType: "regular" },
+      0,
+    ).catch(() => undefined);
+  }
+
   function handleSelectQuery(queryId: string | null): void {
     const tabId = stores.tabs.getState().activeTabId;
     if (tabId === null) return;
@@ -639,6 +662,10 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
     }
   }
 
+  // Visual canvas surfaces the Swift-parity no-database Run alert (decision
+  // 14) via canvas.tsx's handleRunQuery guard, reusing
+  // SqlHatchCopy.selectDatabaseAlert verbatim on both Visual and SQL:
+  // "Select a database from the sidebar before running queries."
   const tabDocument = activeTabId === null ? undefined : tabDocumentsRef.current.get(activeTabId);
   const canvas =
     workspaceReady && tabDocument !== undefined ? (
@@ -747,78 +774,49 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
           />
         )}
         <div className="app-main-column" aria-busy={workspaceReady ? undefined : true}>
-          <Group orientation="horizontal" className="app-workspace-split">
-            <Panel className="app-workspace-split__queries" defaultSize={220} minSize={160}>
-              <QueriesColumn
-                queries={libraryQueries}
-                folders={libraryFolders}
-                selectedQueryId={savedQueryId}
-                onSelectQuery={handleSelectQuery}
-                onNewQuery={handleNewQuery}
-                onRenameQuery={handleRenameQuery}
-                onDeleteQuery={handleDeleteQuery}
-                onMoveQuery={handleMoveQuery}
-                onDeleteFolder={handleDeleteFolder}
-                onRefresh={handleLibraryRefresh}
-                onDuplicateQuery={(id) => {
-                  void stores.library.getState().duplicateSavedQuery(id);
-                }}
-                onRenameFolder={(id, name) => {
-                  void stores.library.getState().renameQueryFolder(id, name);
-                }}
-                onCreateFolder={(name) => stores.library.getState().createQueryFolder(name)}
-                hasCachedResult={(id) => savedQueryCacheRef.current.read(id) !== null}
-                executingQueryId={executingQueryId}
-                schemas={schemaNames}
-                selectedSchema={selectedSchema}
-                onSelectSchema={(schema) => {
-                  void handleSelectSchema(schema);
-                }}
-                schemaError={schemaError}
-                onDismissSchemaError={() => setSchemaError(null)}
-              />
-            </Panel>
-            <Separator className="app-workspace-split__separator" />
-            <Panel className="app-workspace-split__main" minSize={400}>
-              <div className="app-workspace-main">
-                {workspaceReady ? (
-                  <>
-                    <TabBar
-                      tabs={tabs.map((tab, index) => {
-                        const savedQueryName = libraryQueries.find(
-                          (query) => query.id === tab.savedQueryId,
-                        )?.name;
-                        const profile =
-                          profiles.find((candidate) => candidate.id === tab.connectionId) ??
-                          profiles.find((candidate) => candidate.id === profileId);
-                        const connectionDisplayName = profile
-                          ? profile.name?.trim() || profile.host
-                          : null;
-                        return {
-                          id: tab.id,
-                          title: formatTabTitle({
-                            databaseName: tab.databaseName,
-                            savedQueryName,
-                            connectionDisplayName,
-                            index: index + 1,
-                          }),
-                          isActive: tab.id === activeTabId,
-                          pendingClose: pendingDeletedIds.has(tab.id),
-                        };
-                      })}
-                      onNewTab={handleNewTab}
-                      onSwitchTab={(id) => stores.tabs.getState().switchTab(id)}
-                      onCloseTab={handleCloseTab}
-                    />
-                    <WorkspaceSplit
-                      canvas={canvas}
-                      results={<QueryResultsPane status={status} compact={compact} />}
-                    />
-                  </>
-                ) : null}
-              </div>
-            </Panel>
-          </Group>
+          <AppWorkspace
+            workspaceReady={workspaceReady}
+            tabs={tabs}
+            activeTabId={activeTabId}
+            pendingDeletedIds={pendingDeletedIds}
+            profiles={profiles}
+            profileId={profileId}
+            libraryQueries={libraryQueries}
+            libraryFolders={libraryFolders}
+            savedQueryId={savedQueryId}
+            executingQueryId={executingQueryId}
+            schemaNames={schemaNames}
+            selectedSchema={selectedSchema}
+            schemaError={schemaError}
+            status={status}
+            compact={compact}
+            mutationToast={mutationToast}
+            canvas={canvas}
+            onNewTab={handleNewTab}
+            onSwitchTab={(id) => stores.tabs.getState().switchTab(id)}
+            onCloseTab={handleCloseTab}
+            onSelectQuery={handleSelectQuery}
+            onNewQuery={handleNewQuery}
+            onRenameQuery={handleRenameQuery}
+            onDeleteQuery={handleDeleteQuery}
+            onMoveQuery={handleMoveQuery}
+            onDeleteFolder={handleDeleteFolder}
+            onLibraryRefresh={handleLibraryRefresh}
+            onDuplicateQuery={(id) => {
+              void stores.library.getState().duplicateSavedQuery(id);
+            }}
+            onRenameFolder={(id, name) => {
+              void stores.library.getState().renameQueryFolder(id, name);
+            }}
+            onCreateFolder={(name) => stores.library.getState().createQueryFolder(name)}
+            hasCachedResult={(id) => savedQueryCacheRef.current.read(id) !== null}
+            onSelectSchema={(schema) => {
+              void handleSelectSchema(schema);
+            }}
+            onDismissSchemaError={() => setSchemaError(null)}
+            onDismissMutationToast={handleDismissMutationToast}
+            onViewMutationTable={handleViewMutationTable}
+          />
         </div>
         {chromeDialogs}
       </main>
