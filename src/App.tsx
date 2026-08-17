@@ -197,6 +197,7 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
 
   // Reset pagination whenever the browsed table (or active tab) changes —
   // page 0 is always the correct start for a newly-selected table.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps are intentional re-run triggers (table/tab change), not values read in the effect body.
   useEffect(() => {
     setBrowsePage(0);
   }, [activeTabId, selectedTableSchema, selectedTableName]);
