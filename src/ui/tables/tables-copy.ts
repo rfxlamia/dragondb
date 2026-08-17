@@ -18,6 +18,7 @@ export const TablesCopy = {
   copy: "Copy",
   done: "Done",
   nextPage: "Next",
+  loadMore: "Load more",
   ddlTitle: "Table DDL",
   exportTitle: "Export table",
   exportCsv: "Export CSV",

@@ -8,6 +8,8 @@ import { TablesAccessibility } from "./tables-accessibility";
 import { TablesCopy } from "./tables-copy";
 import "./tables.css";
 
+const SCHEMA_BATCH_SIZE = 100;
+
 export type TableListProps = {
   tables: TableRef[];
   columnsByTable: Record<string, ColumnInfo[]>;
@@ -45,6 +47,9 @@ export function TableList(props: TableListProps): React.JSX.Element {
   const [ddl, setDdl] = useState<string | null>(null);
   const [ddlError, setDdlError] = useState<string | null>(null);
   const [exportTable, setExportTable] = useState<TableRef | null>(null);
+  const [displayedBySchema, setDisplayedBySchema] = useState<Readonly<Record<string, number>>>(
+    () => ({}),
+  );
 
   const groups = groupTables(tables);
   const firstKey = tables[0] ? catalogKey(tables[0]) : null;
@@ -78,13 +83,24 @@ export function TableList(props: TableListProps): React.JSX.Element {
     setPending(null);
   }
 
+  function loadMoreSchema(schema: string): void {
+    setDisplayedBySchema((current) => {
+      const shown = current[schema] ?? SCHEMA_BATCH_SIZE;
+      return { ...current, [schema]: shown + SCHEMA_BATCH_SIZE };
+    });
+  }
+
   return (
     <div className="table-list" data-testid={TablesAccessibility.list}>
-      {groups.map((group) => (
+      {groups.map((group) => {
+        const displayedCount = displayedBySchema[group.schema] ?? SCHEMA_BATCH_SIZE;
+        const visibleTables = group.tables.slice(0, displayedCount);
+        const hasMore = group.tables.length > displayedCount;
+        return (
         <section key={group.schema} className="table-list__schema">
           <h3 className="table-list__schema-title">{group.schema}</h3>
           <ul className="table-list__rows">
-            {group.tables.map((table) => {
+            {visibleTables.map((table) => {
               const key = catalogKey(table);
               const isExpanded = expanded.has(key);
               const columns = columnsByTable[key] ?? [];
@@ -174,8 +190,18 @@ export function TableList(props: TableListProps): React.JSX.Element {
               );
             })}
           </ul>
+          {hasMore ? (
+            <button
+              type="button"
+              className="table-list__load-more"
+              onClick={() => loadMoreSchema(group.schema)}
+            >
+              {TablesCopy.loadMore}
+            </button>
+          ) : null}
         </section>
-      ))}
+        );
+      })}
 
       {pending ? (
         <div

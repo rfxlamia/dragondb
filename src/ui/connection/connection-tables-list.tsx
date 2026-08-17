@@ -1,7 +1,6 @@
 import type { ColumnInfo, DragonIpc, TableRef } from "../../ipc/contract";
 import { TABLES_LOAD_FAILED } from "../../stores/schema-store";
 import { TableList } from "../tables/table-list";
-import { TablesCopy } from "../tables/tables-copy";
 import { ConnectionAccessibility } from "./connection-accessibility";
 import { ConnectionCopy } from "./connection-copy";
 
@@ -11,8 +10,6 @@ export function ConnectionTablesList(props: {
   tables: TableRef[];
   tablesLoading: boolean;
   tablesErrorMessage: string | null;
-  hasNextPage?: boolean;
-  onNextPage?: () => void;
   onBrowse?: (table: TableRef) => void;
   columnsByTable?: Record<string, ColumnInfo[]>;
   executing?: boolean;
@@ -29,8 +26,6 @@ export function ConnectionTablesList(props: {
     tables,
     tablesLoading,
     tablesErrorMessage,
-    hasNextPage = false,
-    onNextPage,
     onBrowse,
     columnsByTable = {},
     executing = false,
@@ -53,27 +48,20 @@ export function ConnectionTablesList(props: {
     body = <p className="connection-panel__hint">{ConnectionCopy.noTablesFound}</p>;
   } else {
     body = (
-      <>
-        <TableList
-          tables={tables}
-          columnsByTable={columnsByTable}
-          executing={executing}
-          onBrowse={onBrowse ?? noop}
-          onDrop={onDrop ?? noop}
-          onTruncate={onTruncate ?? noop}
-          onGenerateDdl={onGenerateDdl ?? noop}
-          onRunQuery={onRunQuery}
-          onRefresh={onRefresh}
-          onFetchAll={onFetchAll}
-          saveCsvFile={saveCsvFile}
-          saveTextFile={saveTextFile}
-        />
-        {hasNextPage ? (
-          <button type="button" className="table-list__next" onClick={onNextPage}>
-            {TablesCopy.nextPage}
-          </button>
-        ) : null}
-      </>
+      <TableList
+        tables={tables}
+        columnsByTable={columnsByTable}
+        executing={executing}
+        onBrowse={onBrowse ?? noop}
+        onDrop={onDrop ?? noop}
+        onTruncate={onTruncate ?? noop}
+        onGenerateDdl={onGenerateDdl ?? noop}
+        onRunQuery={onRunQuery}
+        onRefresh={onRefresh}
+        onFetchAll={onFetchAll}
+        saveCsvFile={saveCsvFile}
+        saveTextFile={saveTextFile}
+      />
     );
   }
 

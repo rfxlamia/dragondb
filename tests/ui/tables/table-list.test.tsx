@@ -157,6 +157,35 @@ describe("TableList", () => {
     expect(screen.queryByRole("dialog", { name: TablesCopy.exportTitle })).not.toBeInTheDocument();
   });
 
+  it("shows 100 tables per schema then Load more reveals the next batch", async () => {
+    const user = userEvent.setup();
+    const onBrowse = vi.fn();
+    const tables: TableRef[] = Array.from({ length: 101 }, (_, i) => ({
+      schema: "public",
+      name: `table_${String(i).padStart(3, "0")}`,
+      tableType: "regular" as const,
+    }));
+    render(
+      <TableList
+        tables={tables}
+        columnsByTable={{}}
+        executing={false}
+        onBrowse={onBrowse}
+        onDrop={vi.fn()}
+        onTruncate={vi.fn()}
+        onGenerateDdl={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole("button", { name: "table_000" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "table_099" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "table_100" })).toBeNull();
+    expect(screen.getByRole("button", { name: TablesCopy.loadMore })).toBeInTheDocument();
+    screen.getByRole("button", { name: "table_000" }).focus();
+    expect(onBrowse).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: TablesCopy.loadMore }));
+    expect(screen.getByRole("button", { name: "table_100" })).toBeInTheDocument();
+  });
+
   it("Export menuitem is enabled and opens the export sheet when all export callbacks are provided", async () => {
     const user = userEvent.setup();
     render(

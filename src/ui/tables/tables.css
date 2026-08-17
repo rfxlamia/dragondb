@@ -177,6 +177,7 @@
   display: inline-flex;
 }
 
+.table-list__load-more,
 .table-list__next {
   align-self: flex-start;
   background: var(--primary-600);
@@ -191,6 +192,7 @@
   padding: 6px 12px;
 }
 
+.table-list__load-more:hover,
 .table-list__next:hover {
   background: var(--primary-700);
 }

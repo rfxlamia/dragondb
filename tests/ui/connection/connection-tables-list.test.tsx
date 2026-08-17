@@ -70,20 +70,4 @@ describe("ConnectionTablesList", () => {
     expect(screen.queryByRole("button", { name: "users" })).toBeNull();
   });
 
-  it("Next page is offered when browse returned limit+1 rows", async () => {
-    const user = userEvent.setup();
-    const onNextPage = vi.fn();
-    render(
-      <ConnectionTablesList
-        tables={[{ schema: "public", name: "orders", tableType: "regular" }]}
-        tablesLoading={false}
-        tablesErrorMessage={null}
-        hasNextPage
-        onNextPage={onNextPage}
-        onBrowse={vi.fn()}
-      />,
-    );
-    await user.click(screen.getByRole("button", { name: /next/i }));
-    expect(onNextPage).toHaveBeenCalledOnce();
-  });
 });
