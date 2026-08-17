@@ -20,7 +20,8 @@ export type TabRunStatus =
   | { kind: "idle" }
   | { kind: "running" }
   | { kind: "ok"; rowCount: number; durationMs: number }
-  | { kind: "error"; message: string };
+  | { kind: "error"; message: string }
+  | { kind: "cancelled" };
 
 export type MutationToast = {
   title: string;
@@ -73,6 +74,7 @@ export type TabsState = {
     generation?: number,
   ) => boolean;
   applyRunFailure: (tabId: string, message: string, generation?: number) => void;
+  applyRunCancelled: (tabId: string) => void;
   clearTabResults: (tabId: string) => void;
   clearInMemoryResults: () => void;
   setDatabaseName: (tabId: string, databaseName: string | null) => Promise<void>;
@@ -167,7 +169,7 @@ function compactGrid(raw: TabResultGrid): TabResultGrid {
 
 function isThisSessionResultStatus(status: TabRunStatus | undefined): boolean {
   const kind = status?.kind ?? "idle";
-  return kind === "ok" || kind === "running" || kind === "error";
+  return kind === "ok" || kind === "running" || kind === "error" || kind === "cancelled";
 }
 
 function maxOrder(tabs: TabState[]): number {
@@ -458,6 +460,16 @@ export function createTabsStore(ipc: DragonIpc, getters: TabsSessionGetters): St
           raw: null,
           compact: null,
           status: { kind: "error", message },
+        });
+      },
+
+      applyRunCancelled(tabId) {
+        if (!get().tabs.some((t) => t.id === tabId)) return;
+        bumpRunGeneration(tabId);
+        patchTab(tabId, {
+          raw: null,
+          compact: null,
+          status: { kind: "cancelled" },
         });
       },
 

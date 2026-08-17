@@ -3,7 +3,11 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { TabResultGrid, TabRunStatus } from "../../../src/stores/tabs-store";
+import { QueryResultsPane } from "../../../src/ui/results/query-results-pane";
+import { ResultsAccessibility } from "../../../src/ui/results/results-accessibility";
 import { SqlHatch, shouldHighlightSql } from "../../../src/ui/sql-editor/sql-hatch";
 import { SqlHatchCopy } from "../../../src/ui/sql-editor/sql-hatch-copy";
 
@@ -80,24 +84,54 @@ describe("SqlHatch", () => {
     ).toBeInTheDocument();
   });
 
-  it("Esc after 3s calls onCancel", async () => {
+  function SqlHatchCancelHarness(): React.JSX.Element {
+    const [status, setStatus] = useState<TabRunStatus>({ kind: "running" });
+    const [compact, setCompact] = useState<TabResultGrid | null>({
+      columns: ["n"],
+      rows: [[1]],
+    });
+    return (
+      <>
+        <SqlHatch
+          queryText="SELECT pg_sleep(10)"
+          onChange={vi.fn()}
+          onRun={vi.fn()}
+          onCancel={() => {
+            setStatus({ kind: "cancelled" });
+            setCompact(null);
+          }}
+          isConnected={true}
+          databaseName="app"
+          running
+        />
+        <QueryResultsPane status={status} compact={compact} />
+      </>
+    );
+  }
+
+  it("Esc after 3s shows Query cancelled and clears results", async () => {
     vi.useFakeTimers();
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
-    const onCancel = vi.fn();
-    render(
-      <SqlHatch
-        queryText="SELECT pg_sleep(10)"
-        onChange={vi.fn()}
-        onRun={vi.fn()}
-        onCancel={onCancel}
-        isConnected={true}
-        databaseName="app"
-        running
-      />,
-    );
+    render(<SqlHatchCancelHarness />);
+    expect(screen.getByTestId(ResultsAccessibility.loading)).toBeInTheDocument();
+    expect(screen.queryByTestId(ResultsAccessibility.grid)).toBeNull();
     await vi.advanceTimersByTimeAsync(3001);
     await user.keyboard("{Escape}");
-    expect(onCancel).toHaveBeenCalledOnce();
+    expect(screen.getByText(SqlHatchCopy.queryCancelled)).toBeInTheDocument();
+    expect(screen.queryByTestId(ResultsAccessibility.grid)).toBeNull();
+    expect(screen.queryByTestId(ResultsAccessibility.loading)).toBeNull();
+    vi.useRealTimers();
+  });
+
+  it("Stop after 3s shows Query cancelled and clears results", async () => {
+    vi.useFakeTimers();
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    render(<SqlHatchCancelHarness />);
+    await vi.advanceTimersByTimeAsync(3001);
+    await user.click(screen.getByRole("button", { name: SqlHatchCopy.stop }));
+    expect(screen.getByText(SqlHatchCopy.queryCancelled)).toBeInTheDocument();
+    expect(screen.queryByTestId(ResultsAccessibility.grid)).toBeNull();
+    expect(screen.queryByTestId(ResultsAccessibility.loading)).toBeNull();
     vi.useRealTimers();
   });
 

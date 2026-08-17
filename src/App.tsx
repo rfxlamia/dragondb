@@ -504,6 +504,10 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
   function handleCancelSql(): void {
     const liveId = stores.session.getState().connectionId;
     if (liveId === null) return;
+    const tabId = stores.tabs.getState().activeTabId;
+    if (tabId !== null) {
+      stores.tabs.getState().applyRunCancelled(tabId);
+    }
     void ipc.cancelQuery(liveId).catch(() => undefined);
   }
 

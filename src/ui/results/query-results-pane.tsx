@@ -5,6 +5,7 @@ import { determineEditability } from "../../lib/query-editability";
 import type { TabResultGrid, TabRunStatus } from "../../stores/tabs-store";
 import { formatResultCell } from "./format-result-cell";
 import { JsonViewer } from "./json-viewer";
+import { SqlHatchCopy } from "../sql-editor/sql-hatch-copy";
 import { ResultsAccessibility } from "./results-accessibility";
 import { deleteRowsPrompt, ResultsCopy } from "./results-copy";
 import { RowEditor } from "./row-editor";
@@ -61,6 +62,12 @@ function renderPaneBody(
           <h2 className="query-results__error-title">{ResultsCopy.queryFailedTitle}</h2>
           <p className="query-results__error-message">{props.status.message}</p>
         </div>
+      );
+    case "cancelled":
+      return (
+        <p className="query-results__cancelled" data-testid={ResultsAccessibility.cancelled}>
+          {SqlHatchCopy.queryCancelled}
+        </p>
       );
     case "ok":
       return <ResultGrid {...props} dateFormat={dateFormat} />;

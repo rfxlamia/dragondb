@@ -53,6 +53,7 @@ import { QueriesAccessibility } from "../../src/ui/library/queries-accessibility
 import { QueriesCopy } from "../../src/ui/library/queries-copy";
 import { ResultsAccessibility } from "../../src/ui/results/results-accessibility";
 import { ResultsCopy } from "../../src/ui/results/results-copy";
+import { SqlHatchCopy } from "../../src/ui/sql-editor/sql-hatch-copy";
 import { TabBarAccessibility } from "../../src/ui/shell/tab-bar-accessibility";
 import type { MenuEventId } from "../../src/ui/shell/workspace-accelerators";
 import { VisualQueryAccessibility } from "../../src/ui/visual-query/accessibility";
@@ -667,6 +668,55 @@ describe("App wiring regressions after connect (SP-4a)", () => {
     expect(document.querySelector(".vq-canvas__status")?.textContent ?? "").not.toMatch(
       /OK\s*\/\s*1 rows\s*\/\s*9 ms/i,
     );
+  });
+
+  it("cancels SQL hatch after 3s with Query cancelled status and cleared results", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const runQuery = vi.spyOn(ipc, "runQuery").mockImplementation(async () => {
+      await gate;
+      return {
+        columns: ["n"],
+        rows: [[99]],
+        rowsAffected: null,
+        durationMs: 12,
+      };
+    });
+    const cancelQuery = vi.spyOn(ipc, "cancelQuery").mockResolvedValue(undefined);
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
+    await user.selectOptions(screen.getByLabelText("Catalog"), "app");
+    await waitFor(() => expect(document.title).toBe("app"));
+    await user.click(screen.getByRole("radio", { name: /sql/i }));
+    fireEvent.change(screen.getByRole("textbox", { name: "SQL editor" }), {
+      target: { value: "SELECT pg_sleep(10)" },
+    });
+
+    vi.useFakeTimers();
+    try {
+      const timerUser = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+      fireEvent.click(screen.getByRole("button", { name: SqlHatchCopy.run }));
+      await waitFor(() => expect(runQuery).toHaveBeenCalledTimes(1));
+      expect(screen.getByTestId(ResultsAccessibility.loading)).toBeInTheDocument();
+      await vi.advanceTimersByTimeAsync(3001);
+      await timerUser.keyboard("{Escape}");
+    } finally {
+      vi.useRealTimers();
+    }
+
+    expect(cancelQuery).toHaveBeenCalledTimes(1);
+    expect(screen.getByText(SqlHatchCopy.queryCancelled)).toBeInTheDocument();
+    expect(screen.queryByTestId(ResultsAccessibility.grid)).toBeNull();
+    expect(screen.queryByTestId(ResultsAccessibility.loading)).toBeNull();
+    release();
+    await waitFor(() => {
+      expect(screen.getByText(SqlHatchCopy.queryCancelled)).toBeInTheDocument();
+      expect(screen.queryByTestId(ResultsAccessibility.grid)).toBeNull();
+    });
   });
 
   it("runs SQL hatch SELECT and mutation from the synced active-tab buffer", async () => {

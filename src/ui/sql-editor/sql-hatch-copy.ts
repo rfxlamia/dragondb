@@ -4,6 +4,7 @@ export const SqlHatchCopy = {
   stop: "Stop",
   tryAgain: "Try Again",
   cancel: "Cancel",
+  queryCancelled: "Query cancelled",
   selectDatabaseAlert: "Select a database from the sidebar before running queries.",
   queryTimeout: "This query timed out. Try again?",
 } as const;
