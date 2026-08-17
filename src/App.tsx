@@ -179,7 +179,7 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
   }, [ipc]);
 
   useEffect(() => {
-    if (!profilesReady || profileCount === 0 || isConnected) return;
+    if (!profilesReady || profileCount === 0 || stores.session.getState().isConnected) return;
     if (restoreAttemptedRef.current || formVisibilityTouchedRef.current) return;
     restoreAttemptedRef.current = true;
     let cancelled = false;
@@ -254,11 +254,16 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [profilesReady, profileCount, isConnected, ipc, stores]);
+  }, [profilesReady, profileCount, ipc, stores]);
 
   useEffect(() => {
     if (databaseName) document.title = databaseName;
   }, [databaseName]);
+
+  useEffect(() => {
+    if (!tablesLoading) return;
+    setOverlayPhase((current) => (current === null ? null : "Loading tables…"));
+  }, [tablesLoading]);
 
   const handleFormVisibleChange = useCallback((next: boolean) => {
     formVisibilityTouchedRef.current = true;
@@ -451,6 +456,14 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
     stores.tabs.getState().restoreSavedQueryResult(tabId, savedQueryCacheRef.current.read(queryId));
   }
 
+  async function handleSwitchDatabase(name: string): Promise<void> {
+    await stores.session.getState().switchDatabase(name);
+    const tabId = stores.tabs.getState().activeTabId;
+    if (tabId !== null) {
+      await stores.tabs.getState().setDatabaseName(tabId, name);
+    }
+  }
+
   async function handleNewQuery(): Promise<void> {
     const tabId = stores.tabs.getState().activeTabId;
     if (tabId === null) return;
@@ -600,7 +613,7 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
             tablesErrorMessage={tablesErrorMessage}
             connectionId={connectionId}
             databaseName={databaseName}
-            onSwitchDatabase={(name) => stores.session.getState().switchDatabase(name)}
+            onSwitchDatabase={handleSwitchDatabase}
             onCollapse={() => setConnectionCollapsed(true)}
             missingDatabase={missingDatabase}
             connectProfile={(id) => stores.session.getState().connect(id)}

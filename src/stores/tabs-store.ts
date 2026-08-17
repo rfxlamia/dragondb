@@ -75,6 +75,7 @@ export type TabsState = {
   applyRunFailure: (tabId: string, message: string, generation?: number) => void;
   clearTabResults: (tabId: string) => void;
   clearInMemoryResults: () => void;
+  setDatabaseName: (tabId: string, databaseName: string) => Promise<void>;
   setSavedQueryId: (tabId: string, queryId: string | null) => void;
   restoreSavedQueryResult: (
     tabId: string,
@@ -459,6 +460,15 @@ export function createTabsStore(ipc: DragonIpc, getters: TabsSessionGetters): St
             status: { kind: "idle" as const },
           })),
         }));
+      },
+
+      async setDatabaseName(tabId, databaseName) {
+        if (!get().tabs.some((t) => t.id === tabId)) return;
+        patchTab(tabId, { databaseName });
+        const tab = get().tabs.find((t) => t.id === tabId);
+        if (tab) {
+          await get().persistTab(toTabStateDto(tab), { includeCachedResults: false });
+        }
       },
 
       setSavedQueryId(tabId, queryId) {

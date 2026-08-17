@@ -2029,6 +2029,102 @@ describe("App overlay, collapse, and title (SP-4b last slice T6)", () => {
     expect(document.title).toBe("app");
   });
 
+  it("picker persists the active tab database without rewriting the profile", async () => {
+    const ipc = createMockDragonIpc("happy");
+    await ipc.createDatabase("shop");
+    const saveTabState = vi.spyOn(ipc, "saveTabState");
+    const user = userEvent.setup();
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
+
+    const [profileBeforeSwitch] = await ipc.listProfiles();
+    if (!profileBeforeSwitch) throw new Error("Expected the connected profile to exist");
+    await user.selectOptions(screen.getByTestId(ConnectionAccessibility.databasePicker), "shop");
+
+    await waitFor(() =>
+      expect(saveTabState).toHaveBeenCalledWith(
+        expect.objectContaining({ databaseName: "shop", isActive: true }),
+        { includeCachedResults: false },
+      ),
+    );
+    expect(await ipc.getProfile(profileBeforeSwitch.id)).toEqual(profileBeforeSwitch);
+  });
+
+  it("relaunch restores the database persisted by the picker", async () => {
+    const ipc = createMockDragonIpc("happy");
+    const profile = await ipc.saveProfile({
+      profile: { ...fixtureProfileFields(), name: "dev" },
+      secrets: { password: "pw" },
+    });
+    vi.spyOn(ipc, "listTabStates").mockResolvedValue([
+      {
+        id: "persisted-tab",
+        connectionId: profile.id,
+        databaseName: "shop",
+        queryText: "",
+        savedQueryId: null,
+        isActive: true,
+        order: 0,
+        createdAt: "1",
+        lastAccessedAt: "1",
+        selectedTableSchema: null,
+        selectedTableName: null,
+        selectedSchemaFilter: null,
+        cachedResultsData: null,
+        cachedColumnNames: null,
+        visualDocumentJson: null,
+      },
+    ]);
+    vi.spyOn(ipc, "listDatabases").mockResolvedValue(["app", "shop"]);
+    const switchDatabase = vi.spyOn(ipc, "switchDatabase");
+    render(<App ipc={ipc} />);
+
+    await waitFor(() => expect(switchDatabase).toHaveBeenCalledWith(expect.any(String), "shop"));
+  });
+
+  it("keeps Loading tables visible until restore table loading completes", async () => {
+    const ipc = createMockDragonIpc("happy");
+    const profile = await ipc.saveProfile({
+      profile: { ...fixtureProfileFields(), name: "dev" },
+      secrets: { password: "pw" },
+    });
+    vi.spyOn(ipc, "listTabStates").mockResolvedValue([
+      {
+        id: "restored-tab",
+        connectionId: profile.id,
+        databaseName: "app",
+        queryText: "",
+        savedQueryId: null,
+        isActive: true,
+        order: 0,
+        createdAt: "1",
+        lastAccessedAt: "1",
+        selectedTableSchema: null,
+        selectedTableName: null,
+        selectedSchemaFilter: null,
+        cachedResultsData: null,
+        cachedColumnNames: null,
+        visualDocumentJson: null,
+      },
+    ]);
+    let releaseTables!: () => void;
+    const tablesGate = new Promise<void>((resolve) => {
+      releaseTables = resolve;
+    });
+    const listTables = vi.spyOn(ipc, "listTables").mockImplementation(async () => {
+      await tablesGate;
+      return [];
+    });
+
+    render(<App ipc={ipc} />);
+
+    expect(await screen.findByText("Loading tables…")).toBeInTheDocument();
+    expect(listTables).toHaveBeenCalled();
+    expect(screen.getByText("Loading tables…")).toBeInTheDocument();
+    releaseTables();
+    await waitFor(() => expect(screen.queryByText("Loading tables…")).toBeNull());
+  });
+
   it("launch connect failure ends overlay and shows Connection Error", async () => {
     const ipc = createMockDragonIpc("happy");
     await ipc.saveProfile({
