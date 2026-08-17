@@ -17,7 +17,7 @@ import { type AppStores, composeAppStores } from "./stores/compose-app-stores";
 import { runSelectOnActiveTab } from "./stores/run-select-on-active-tab";
 import { runSqlOnActiveTab } from "./stores/run-sql-on-active-tab";
 import { ConnectionCopy, humanIpcErrorMessage } from "./ui/connection/connection-copy";
-import { ConnectionPanel } from "./ui/connection/connection-panel";
+import { ConnectionPanel, type ConnectionPanelHandle } from "./ui/connection/connection-panel";
 import { HelpDialog } from "./ui/help/help-dialog";
 import { SettingsDialog } from "./ui/help/settings-dialog";
 import { ShortcutsDialog } from "./ui/help/shortcuts-dialog";
@@ -130,6 +130,14 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
   const [selectedSchema, setSelectedSchema] = useState<string | null>(null);
   const [schemaError, setSchemaError] = useState<string | null>(null);
   const canvasHandleRef = useRef<VisualQueryCanvasHandle | null>(null);
+  const connectionPanelRef = useRef<ConnectionPanelHandle | null>(null);
+  /**
+   * Pulses true→false around a saved-query selection's queryText load, reusing
+   * the autosave hook's isRestoring skip so the loaded SQL is never mistaken
+   * for a live edit and persisted back (T10 critical fix: selecting a query
+   * must not clobber another SavedQuery's text via a stale debounce).
+   */
+  const [querySelectRestoring, setQuerySelectRestoring] = useState(false);
   const accelCtxRef = useRef<WorkspaceAccelContext>({
     newTab: () => {},
     closeTab: () => {},
@@ -155,10 +163,14 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
 
   useSavedQueryAutosave({
     stores,
-    ipc,
     queryText,
-    isRestoring: overlayPhase !== null || !tabsReady,
+    isRestoring: overlayPhase !== null || !tabsReady || querySelectRestoring,
   });
+
+  useEffect(() => {
+    if (!querySelectRestoring) return;
+    setQuerySelectRestoring(false);
+  }, [querySelectRestoring]);
 
   useEffect(() => {
     if (isConnected && profileId !== null) {
@@ -503,10 +515,25 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
   function handleSelectQuery(queryId: string | null): void {
     const tabId = stores.tabs.getState().activeTabId;
     if (tabId === null) return;
+    const activeTab = stores.tabs.getState().tabs.find((tab) => tab.id === tabId);
+    const previousSavedQueryId = activeTab?.savedQueryId ?? null;
     stores.tabs.getState().setSavedQueryId(tabId, queryId);
     if (queryId === null) {
       stores.tabs.getState().restoreSavedQueryResult(tabId, null);
       return;
+    }
+    if (queryId !== previousSavedQueryId) {
+      // Load the selection's hatch SQL into the active tab's buffer — pulse
+      // querySelectRestoring first so the autosave hook treats this the same
+      // as a tab restore and never schedules a persist for it. Pulsing here
+      // (regardless of whether a matching library entry was found yet) also
+      // cancels any debounce still pending for the query we just navigated
+      // away from, so it can never clobber the newly-selected query's text.
+      setQuerySelectRestoring(true);
+      const query = stores.library.getState().queries.find((item) => item.id === queryId);
+      if (query !== undefined) {
+        stores.tabs.getState().setQueryText(tabId, query.queryText);
+      }
     }
     stores.tabs.getState().restoreSavedQueryResult(tabId, savedQueryCacheRef.current.read(queryId));
   }
@@ -566,7 +593,14 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
     const liveId = stores.session.getState().connectionId;
     if (liveId === null) return;
     await stores.schema.getState().reloadTables(liveId);
-    await ipc.listDatabases(liveId).catch(() => undefined);
+    try {
+      // Applies the refreshed database list to the connection picker instead
+      // of discarding it — the picker owns its own `databases` state, so the
+      // refresh has to be pushed in via this imperative handle.
+      await connectionPanelRef.current?.refreshDatabases();
+    } catch {
+      /* best-effort database list refresh */
+    }
   }
 
   async function handleSelectSchema(schema: string | null): Promise<void> {
@@ -664,6 +698,7 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
           </button>
         ) : (
           <ConnectionPanel
+            ref={connectionPanelRef}
             ipc={ipc}
             isConnected={isConnected}
             activeProfileId={profileId ?? undefined}

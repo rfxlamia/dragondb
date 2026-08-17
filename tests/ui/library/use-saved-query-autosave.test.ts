@@ -33,7 +33,7 @@ describe("useSavedQueryAutosave", () => {
     const stores = composeAppStores(ipc);
     const tab = stores.tabs.getState().createTab();
     const { rerender } = renderHook(
-      ({ queryText }) => useSavedQueryAutosave({ stores, ipc, queryText, isRestoring: false }),
+      ({ queryText }) => useSavedQueryAutosave({ stores, queryText, isRestoring: false }),
       { initialProps: { queryText: "" } },
     );
 
@@ -71,7 +71,6 @@ describe("useSavedQueryAutosave", () => {
       ({ isRestoring }) =>
         useSavedQueryAutosave({
           stores,
-          ipc,
           queryText: "SELECT restored",
           isRestoring,
         }),
@@ -80,5 +79,95 @@ describe("useSavedQueryAutosave", () => {
     rerender({ isRestoring: false });
     await vi.advanceTimersByTimeAsync(500);
     expect(saveSavedQuery).not.toHaveBeenCalled();
+  });
+
+  it("does not persist when the buffer already matches the selected SavedQuery's text", async () => {
+    vi.useFakeTimers();
+    const saveSavedQuery = vi.fn(async (q: SavedQueryDto) => q);
+    const ipc = ipcWithSave(saveSavedQuery);
+    const stores = composeAppStores(ipc);
+    const tab = stores.tabs.getState().createTab();
+    stores.tabs.getState().setSavedQueryId(tab.id, "q1");
+    stores.library.setState({
+      queries: [
+        {
+          id: "q1",
+          name: "Q1",
+          queryText: "SELECT 1",
+          connectionId: null,
+          databaseName: null,
+          createdAt: "1",
+          updatedAt: "1",
+          folderId: null,
+        },
+      ],
+      folders: [],
+    });
+    const { rerender } = renderHook(
+      ({ queryText }) => useSavedQueryAutosave({ stores, queryText, isRestoring: false }),
+      { initialProps: { queryText: "SELECT 1" } },
+    );
+    rerender({ queryText: "SELECT 1" });
+    await vi.advanceTimersByTimeAsync(500);
+    expect(saveSavedQuery).not.toHaveBeenCalled();
+  });
+
+  it("selecting a different query while a debounce is pending cancels it — the previous query's text is not overwritten", async () => {
+    vi.useFakeTimers();
+    const library: SavedQueryDto[] = [
+      {
+        id: "q1",
+        name: "Q1",
+        queryText: "SELECT 1",
+        connectionId: null,
+        databaseName: null,
+        createdAt: "1",
+        updatedAt: "1",
+        folderId: null,
+      },
+      {
+        id: "q2",
+        name: "Q2",
+        queryText: "SELECT 2",
+        connectionId: null,
+        databaseName: null,
+        createdAt: "1",
+        updatedAt: "1",
+        folderId: null,
+      },
+    ];
+    const saveSavedQuery = vi.fn(async (query: SavedQueryDto) => {
+      const idx = library.findIndex((item) => item.id === query.id);
+      if (idx >= 0) library[idx] = query;
+      else library.push(query);
+      return query;
+    });
+    const ipc = ipcWithSave(saveSavedQuery);
+    const stores = composeAppStores(ipc);
+    stores.library.setState({ queries: library.slice(), folders: [] });
+    const tab = stores.tabs.getState().createTab();
+    stores.tabs.getState().setSavedQueryId(tab.id, "q1");
+
+    const { rerender } = renderHook(
+      ({ queryText, isRestoring }) => useSavedQueryAutosave({ stores, queryText, isRestoring }),
+      { initialProps: { queryText: "SELECT 1", isRestoring: false } },
+    );
+
+    // User edits Q1's buffer — schedules a debounce for Q1.
+    rerender({ queryText: "SELECT 1 -- edited", isRestoring: false });
+    await vi.advanceTimersByTimeAsync(200);
+
+    // Before the debounce fires, App.handleSelectQuery switches to Q2: it
+    // loads Q2's text into the buffer and pulses isRestoring true→false
+    // (mirroring App.tsx's querySelectRestoring), which must cancel Q1's
+    // pending timer via effect cleanup.
+    stores.tabs.getState().setSavedQueryId(tab.id, "q2");
+    rerender({ queryText: "SELECT 2", isRestoring: true });
+    rerender({ queryText: "SELECT 2", isRestoring: false });
+
+    await vi.advanceTimersByTimeAsync(600);
+
+    expect(library.find((item) => item.id === "q1")?.queryText).toBe("SELECT 1");
+    expect(library.find((item) => item.id === "q2")?.queryText).toBe("SELECT 2");
   });
 });

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useImperativeHandle, useState } from "react";
 import type {
   ConnectionId,
   ConnectionProfileDto,
@@ -35,7 +35,13 @@ async function waitRemaining(startedAt: number, minimumMs: number): Promise<void
   await new Promise((resolve) => setTimeout(resolve, minimumMs - elapsed));
 }
 
+/** Imperative handle so the sidebar refresh can pull a fresh database list into the picker. */
+export type ConnectionPanelHandle = {
+  refreshDatabases: () => Promise<void>;
+};
+
 export interface ConnectionPanelProps {
+  ref?: React.Ref<ConnectionPanelHandle>;
   ipc: DragonIpc;
   isConnected: boolean;
   activeProfileId?: ProfileId;
@@ -63,6 +69,7 @@ export interface ConnectionPanelProps {
 
 export function ConnectionPanel(props: ConnectionPanelProps): React.JSX.Element {
   const {
+    ref,
     ipc,
     isConnected,
     activeProfileId,
@@ -147,14 +154,28 @@ export function ConnectionPanel(props: ConnectionPanelProps): React.JSX.Element 
     if (databaseNameProp !== undefined) setPickerSelected(databaseNameProp);
   }, [databaseNameProp]);
 
-  async function refreshDatabases(connectionId: ConnectionId): Promise<void> {
-    try {
-      const list = await ipc.listDatabases(connectionId);
-      setDatabases(list);
-    } catch {
-      setDatabases([]);
-    }
-  }
+  const refreshDatabases = useCallback(
+    async (connectionId: ConnectionId): Promise<void> => {
+      try {
+        const list = await ipc.listDatabases(connectionId);
+        setDatabases(list);
+      } catch {
+        setDatabases([]);
+      }
+    },
+    [ipc],
+  );
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      refreshDatabases: async () => {
+        if (liveConnectionId === null) return;
+        await refreshDatabases(liveConnectionId);
+      },
+    }),
+    [liveConnectionId, refreshDatabases],
+  );
 
   useEffect(() => {
     if (!sessionClaimed || liveConnectionId === null) return;

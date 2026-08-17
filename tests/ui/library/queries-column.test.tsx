@@ -1,12 +1,17 @@
 /** @vitest-environment jsdom */
-import { cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { QueriesAccessibility } from "../../../src/ui/library/queries-accessibility";
 import { QueriesColumn } from "../../../src/ui/library/queries-column";
 import { QueriesCopy } from "../../../src/ui/library/queries-copy";
 
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+  // Safety net: a failing assertion inside a fake-timers test can skip its
+  // own vi.useRealTimers() cleanup and hang every test after it.
+  vi.useRealTimers();
+});
 
 const q1 = {
   id: "q1",
@@ -207,7 +212,7 @@ describe("QueriesColumn", () => {
     expect(onDeleteFolder).toHaveBeenCalledWith("f-empty", false);
   });
 
-  it("refresh overlay is visible for at least 0.45s", async () => {
+  it("refresh overlay is visible for at least 0.45s and gone once it elapses", async () => {
     vi.useFakeTimers();
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     const onRefresh = vi.fn(async () => undefined);
@@ -229,7 +234,61 @@ describe("QueriesColumn", () => {
     expect(screen.getByText(QueriesCopy.refreshing)).toBeInTheDocument();
     await vi.advanceTimersByTimeAsync(449);
     expect(screen.getByText(QueriesCopy.refreshing)).toBeInTheDocument();
-    await vi.advanceTimersByTimeAsync(2);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2);
+    });
+    expect(screen.queryByText(QueriesCopy.refreshing)).toBeNull();
+    expect(screen.queryByTestId(QueriesAccessibility.refreshOverlay)).toBeNull();
     vi.useRealTimers();
+  });
+
+  it("Delete key opens the delete-query sheet when the sidebar (not an editor) has focus", async () => {
+    const user = userEvent.setup();
+    const onDeleteQuery = vi.fn();
+    render(
+      <QueriesColumn
+        queries={[q1]}
+        folders={[]}
+        selectedQueryId="q1"
+        onSelectQuery={vi.fn()}
+        onNewQuery={vi.fn()}
+        onRenameQuery={vi.fn()}
+        onDeleteQuery={onDeleteQuery}
+        onMoveQuery={vi.fn()}
+        onDeleteFolder={vi.fn()}
+      />,
+    );
+    document.body.focus();
+    await user.keyboard("{Delete}");
+    expect(screen.getByRole("button", { name: QueriesCopy.confirmDelete })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: QueriesCopy.confirmDelete }));
+    expect(onDeleteQuery).toHaveBeenCalledWith("q1");
+  });
+
+  it("Delete key while a contenteditable hatch editor is focused edits SQL instead of opening the delete sheet", async () => {
+    const user = userEvent.setup();
+    const onDeleteQuery = vi.fn();
+    render(
+      <>
+        <div contentEditable data-testid="fake-hatch">
+          text
+        </div>
+        <QueriesColumn
+          queries={[q1]}
+          folders={[]}
+          selectedQueryId="q1"
+          onSelectQuery={vi.fn()}
+          onNewQuery={vi.fn()}
+          onRenameQuery={vi.fn()}
+          onDeleteQuery={onDeleteQuery}
+          onMoveQuery={vi.fn()}
+          onDeleteFolder={vi.fn()}
+        />
+      </>,
+    );
+    screen.getByTestId("fake-hatch").focus();
+    await user.keyboard("{Delete}");
+    expect(screen.queryByRole("button", { name: QueriesCopy.confirmDelete })).toBeNull();
+    expect(onDeleteQuery).not.toHaveBeenCalled();
   });
 });

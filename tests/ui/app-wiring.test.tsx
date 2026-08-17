@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -1934,6 +1934,74 @@ describe("App Queries column (SP-4b)", () => {
     expect(
       screen.getByRole("button", { name: /^Query \d{2}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/ }),
     ).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("selecting Q1 loads its SQL into the hatch buffer, and switching to Q2 mid-debounce does not clobber Q1's saved text", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    const library = [savedQuery("q1", "Q1", "SELECT 1"), savedQuery("q2", "Q2", "SELECT 2")];
+    vi.spyOn(ipc, "listSavedQueries").mockImplementation(async () => library.slice());
+    vi.spyOn(ipc, "saveSavedQuery").mockImplementation(async (query) => {
+      const idx = library.findIndex((item) => item.id === query.id);
+      if (idx >= 0) library[idx] = query;
+      else library.push(query);
+      return query;
+    });
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
+    await user.click(screen.getByRole("radio", { name: /sql/i }));
+
+    await user.click(await screen.findByRole("button", { name: "Q1" }));
+    const editor = screen.getByRole("textbox", { name: "SQL editor" });
+    expect(editor).toHaveValue("SELECT 1");
+
+    fireEvent.change(editor, { target: { value: "SELECT 1 -- edited" } });
+    await user.click(screen.getByRole("button", { name: "Q2" }));
+    expect(editor).toHaveValue("SELECT 2");
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 700));
+    });
+
+    expect(library.find((item) => item.id === "q1")?.queryText).toBe("SELECT 1");
+    expect(library.find((item) => item.id === "q2")?.queryText).toBe("SELECT 2");
+  });
+
+  it("re-clicking the already-selected query keeps unsaved hatch edits instead of reloading disk text", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    const library = [savedQuery("q1", "Q1", "SELECT 1")];
+    vi.spyOn(ipc, "listSavedQueries").mockImplementation(async () => library.slice());
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
+    await user.click(screen.getByRole("radio", { name: /sql/i }));
+
+    await user.click(await screen.findByRole("button", { name: "Q1" }));
+    const editor = screen.getByRole("textbox", { name: "SQL editor" });
+    expect(editor).toHaveValue("SELECT 1");
+
+    fireEvent.change(editor, { target: { value: "SELECT 1 -- edited" } });
+    await user.click(screen.getByRole("button", { name: "Q1" }));
+    expect(editor).toHaveValue("SELECT 1 -- edited");
+  });
+
+  it("sidebar Refresh applies the re-fetched database list to the connection picker", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    const listDatabases = vi.spyOn(ipc, "listDatabases").mockResolvedValue(["app"]);
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
+
+    const picker = screen.getByLabelText("Catalog") as HTMLSelectElement;
+    expect(Array.from(picker.options).map((option) => option.value)).toContain("app");
+    expect(Array.from(picker.options).map((option) => option.value)).not.toContain("shop");
+
+    listDatabases.mockResolvedValue(["app", "shop"]);
+    await user.click(screen.getByRole("button", { name: QueriesCopy.refresh }));
+    await waitFor(() => expect(listDatabases).toHaveBeenCalledTimes(2));
+    await waitFor(() =>
+      expect(Array.from(picker.options).map((option) => option.value)).toContain("shop"),
+    );
   });
 });
 

@@ -36,6 +36,21 @@ export type QueriesColumnProps = {
 
 const REFRESH_MIN_MS = 450;
 
+/**
+ * True when the Delete keydown target is a text-editing surface — a plain
+ * input/textarea (the jsdom test fallback for the hatch editor) or a
+ * contenteditable element such as CodeMirror's `.cm-content` (the real
+ * runtime hatch editor). Those must handle Delete themselves; only bare
+ * clicks on the Queries list should open the delete-query sheet.
+ */
+function isEditableTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return true;
+  if (target.isContentEditable) return true;
+  if (target.closest('[contenteditable="true"], .cm-content, .cm-editor') !== null) return true;
+  return false;
+}
+
 export function QueriesColumn(props: QueriesColumnProps): React.JSX.Element {
   const {
     queries,
@@ -106,8 +121,7 @@ export function QueriesColumn(props: QueriesColumnProps): React.JSX.Element {
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent): void {
       if (event.key !== "Delete") return;
-      const target = event.target;
-      if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return;
+      if (isEditableTarget(event.target)) return;
       const ids =
         pickedIds.size > 0 ? [...pickedIds] : selectedQueryId !== null ? [selectedQueryId] : [];
       if (ids.length === 0) return;

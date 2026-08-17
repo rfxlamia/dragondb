@@ -37,5 +37,4 @@ export const QueriesCopy = {
   schema: "Schema",
   schemaError: "Could not set the schema search path.",
   ok: "OK",
-  tryAgain: "Try again",
 } as const;
