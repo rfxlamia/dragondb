@@ -9,6 +9,7 @@ import { createTauriDragonIpc } from "./ipc/tauri-client";
 import { newSavedQueryName } from "./lib/new-saved-query-name";
 import { type AppStores, composeAppStores } from "./stores/compose-app-stores";
 import { runSelectOnActiveTab } from "./stores/run-select-on-active-tab";
+import { runSqlOnActiveTab } from "./stores/run-sql-on-active-tab";
 import { ConnectionCopy, humanIpcErrorMessage } from "./ui/connection/connection-copy";
 import { ConnectionPanel } from "./ui/connection/connection-panel";
 import { HelpDialog } from "./ui/help/help-dialog";
@@ -85,6 +86,10 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
   const queryText = useStore(
     stores.tabs,
     (s) => s.tabs.find((t) => t.id === s.activeTabId)?.queryText ?? "",
+  );
+  const activeTabDatabaseName = useStore(
+    stores.tabs,
+    (s) => s.tabs.find((t) => t.id === s.activeTabId)?.databaseName ?? null,
   );
   const status = useStore(
     stores.tabs,
@@ -439,6 +444,25 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
           })
       : undefined;
 
+  const onRunSql =
+    isConnected && connectionId !== null
+      ? (sql: ExecutableSQL) => runSqlOnActiveTab(stores, ipc, sql)
+      : undefined;
+
+  function handleQueryTextChange(text: string): void {
+    const tabId = stores.tabs.getState().activeTabId;
+    if (tabId === null) return;
+    stores.tabs.setState((state) => ({
+      tabs: state.tabs.map((tab) => (tab.id === tabId ? { ...tab, queryText: text } : tab)),
+    }));
+  }
+
+  function handleCancelSql(): void {
+    const liveId = stores.session.getState().connectionId;
+    if (liveId === null) return;
+    void ipc.cancelQuery(liveId).catch(() => undefined);
+  }
+
   function handleClearTabResults(): void {
     const tabId = stores.tabs.getState().activeTabId;
     if (tabId === null) return;
@@ -538,6 +562,12 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
         metadataErrorMessage={metadataErrorMessage}
         isConnected={isConnected}
         onRunQuery={onRunQuery}
+        queryText={queryText}
+        onQueryTextChange={handleQueryTextChange}
+        onRunSql={onRunSql}
+        databaseName={activeTabDatabaseName ?? databaseName}
+        sqlRunning={status.kind === "running"}
+        onCancelSql={handleCancelSql}
         onClearTabResults={handleClearTabResults}
         onCommittedFromChange={handleCommittedFromChange}
         historyStore={stores.history}

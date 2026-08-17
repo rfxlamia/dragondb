@@ -6,6 +6,7 @@ import type { DragonIpc, QueryResult } from "../../ipc/contract";
 import { sameTable } from "../../ipc/table-ref";
 import type { HistoryState } from "../../stores/history-store";
 import { QueryHistorySheet } from "../history/query-history-sheet";
+import { SqlHatch, type SqlHatchHandle } from "../sql-editor/sql-hatch";
 import { VisualQueryAccessibility } from "./accessibility";
 import { ClauseCard } from "./clause-card";
 import { VisualQueryCopy } from "./copy";
@@ -54,6 +55,12 @@ export type VisualQueryCanvasProps = {
   onCommittedFromChange?: (table: TableReference | null) => void;
   historyStore?: StoreApi<HistoryState>;
   saveTextFile?: DragonIpc["saveTextFile"];
+  queryText?: string;
+  onQueryTextChange?: (text: string) => void;
+  onRunSql?: (sql: ExecutableSQL) => Promise<QueryResult>;
+  databaseName?: string | null;
+  sqlRunning?: boolean;
+  onCancelSql?: () => void;
 };
 
 export function VisualQueryCanvas(props: VisualQueryCanvasProps): React.JSX.Element {
@@ -68,6 +75,12 @@ export function VisualQueryCanvas(props: VisualQueryCanvasProps): React.JSX.Elem
     onCommittedFromChange,
     historyStore,
     saveTextFile,
+    queryText = "",
+    onQueryTextChange,
+    onRunSql,
+    databaseName = null,
+    sqlRunning = false,
+    onCancelSql,
     ref,
   } = props;
 
@@ -80,7 +93,9 @@ export function VisualQueryCanvas(props: VisualQueryCanvasProps): React.JSX.Elem
   const [sqlDialogOpen, setSqlDialogOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [runInFlight, setRunInFlight] = useState(false);
+  const [editorMode, setEditorMode] = useState<"visual" | "sql">("visual");
   const runGeneration = useRef(0);
+  const sqlHatchRef = useRef<SqlHatchHandle | null>(null);
 
   useEffect(() => {
     if (!isConnected) {
@@ -173,8 +188,13 @@ export function VisualQueryCanvas(props: VisualQueryCanvasProps): React.JSX.Elem
   }
 
   useImperativeHandle(ref, () => ({
-    canRun: () => canRunQuery,
+    canRun: () => (editorMode === "sql" ? isConnected && !sqlRunning : canRunQuery),
     runIfRunnable: () => {
+      if (editorMode === "sql") {
+        if (!isConnected || sqlRunning) return false;
+        sqlHatchRef.current?.run();
+        return true;
+      }
       if (!canRunQuery) return false;
       void handleRunQuery();
       return true;
@@ -289,85 +309,104 @@ export function VisualQueryCanvas(props: VisualQueryCanvasProps): React.JSX.Elem
             : undefined
         }
         runHelpMessage={runHelpMessage}
+        editorMode={editorMode}
+        onEditorModeChange={setEditorMode}
       />
 
       {metadataErrorMessage ? (
         <div className="vq-canvas__metadata-error">{metadataErrorMessage}</div>
       ) : null}
 
-      <div className="vq-canvas__body">
-        <div className="vq-canvas__stage">
-          <fieldset className="vq-canvas__interaction" disabled={interactionLocked}>
-            <legend className="vq-canvas__interaction__legend">Query builder</legend>
-            {presentation.showsInitialAddButton ? (
-              <div className="vq-canvas__empty">
-                <img className="vq-canvas__empty-mascot" src="/hello.png" alt="" />
-                <div className="vq-canvas__empty-title">{VisualQueryCopy.emptyCanvasTitle}</div>
-                <div className="vq-canvas__empty-body">{VisualQueryCopy.emptyCanvasBody}</div>
-                <div className="vq-canvas__empty-action">
-                  <button
-                    type="button"
-                    className="vq-canvas__add-block"
-                    data-testid={VisualQueryAccessibility.initialAddBlock}
-                    disabled={interactionLocked}
-                    onClick={() => {
-                      if (interactionLocked) return;
-                      setShowStatementPicker((open) => !open);
-                    }}
-                  >
-                    {VisualQueryCopy.addBlockTitle}
-                  </button>
-                  {showStatementPicker ? (
-                    <div className="vq-canvas__menu-anchor">
-                      <StatementPicker onChoose={handleChooseStatement} />
-                    </div>
-                  ) : null}
-                </div>
-              </div>
-            ) : (
-              <div className="vq-canvas__chain">
-                {chainWithConnectors}
-
-                {presentation.showsTrailingAddButton ? (
-                  <div className="vq-canvas__trailing">
+      {editorMode === "visual" ? (
+        <div className="vq-canvas__body">
+          <div className="vq-canvas__stage">
+            <fieldset className="vq-canvas__interaction" disabled={interactionLocked}>
+              <legend className="vq-canvas__interaction__legend">Query builder</legend>
+              {presentation.showsInitialAddButton ? (
+                <div className="vq-canvas__empty">
+                  <img className="vq-canvas__empty-mascot" src="/hello.png" alt="" />
+                  <div className="vq-canvas__empty-title">{VisualQueryCopy.emptyCanvasTitle}</div>
+                  <div className="vq-canvas__empty-body">{VisualQueryCopy.emptyCanvasBody}</div>
+                  <div className="vq-canvas__empty-action">
                     <button
                       type="button"
-                      className="vq-canvas__add-block vq-canvas__add-block--trailing"
-                      data-testid={VisualQueryAccessibility.trailingAddBlock}
+                      className="vq-canvas__add-block"
+                      data-testid={VisualQueryAccessibility.initialAddBlock}
                       disabled={interactionLocked}
                       onClick={() => {
                         if (interactionLocked) return;
-                        setShowClauseMenu((open) => !open);
+                        setShowStatementPicker((open) => !open);
                       }}
                     >
                       {VisualQueryCopy.addBlockTitle}
                     </button>
-                    {showClauseMenu ? (
-                      <div
-                        className="vq-clause-menu"
-                        data-testid={VisualQueryAccessibility.clauseMenu}
-                      >
-                        {VisualQueryCopy.clauseMenuItems(doc).map((item) => (
-                          <button
-                            key={item.kind}
-                            type="button"
-                            className="vq-clause-menu__item"
-                            data-testid={VisualQueryAccessibility.clauseMenuItem(item.kind)}
-                            onClick={() => handleAddClause(item.kind)}
-                          >
-                            <div className="vq-clause-menu__item-title">{item.title}</div>
-                            <div className="vq-clause-menu__item-helper">{item.helper}</div>
-                          </button>
-                        ))}
+                    {showStatementPicker ? (
+                      <div className="vq-canvas__menu-anchor">
+                        <StatementPicker onChoose={handleChooseStatement} />
                       </div>
                     ) : null}
                   </div>
-                ) : null}
-              </div>
-            )}
-          </fieldset>
+                </div>
+              ) : (
+                <div className="vq-canvas__chain">
+                  {chainWithConnectors}
+
+                  {presentation.showsTrailingAddButton ? (
+                    <div className="vq-canvas__trailing">
+                      <button
+                        type="button"
+                        className="vq-canvas__add-block vq-canvas__add-block--trailing"
+                        data-testid={VisualQueryAccessibility.trailingAddBlock}
+                        disabled={interactionLocked}
+                        onClick={() => {
+                          if (interactionLocked) return;
+                          setShowClauseMenu((open) => !open);
+                        }}
+                      >
+                        {VisualQueryCopy.addBlockTitle}
+                      </button>
+                      {showClauseMenu ? (
+                        <div
+                          className="vq-clause-menu"
+                          data-testid={VisualQueryAccessibility.clauseMenu}
+                        >
+                          {VisualQueryCopy.clauseMenuItems(doc).map((item) => (
+                            <button
+                              key={item.kind}
+                              type="button"
+                              className="vq-clause-menu__item"
+                              data-testid={VisualQueryAccessibility.clauseMenuItem(item.kind)}
+                              onClick={() => handleAddClause(item.kind)}
+                            >
+                              <div className="vq-clause-menu__item-title">{item.title}</div>
+                              <div className="vq-clause-menu__item-helper">{item.helper}</div>
+                            </button>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
+              )}
+            </fieldset>
+          </div>
         </div>
-      </div>
+      ) : (
+        <SqlHatch
+          ref={sqlHatchRef}
+          queryText={queryText}
+          onChange={(text) => onQueryTextChange?.(text)}
+          onRun={(text) => {
+            if (onRunSql === undefined) return;
+            void onRunSql({ text, params: [] }).catch(() => undefined);
+          }}
+          isConnected={isConnected}
+          databaseName={databaseName}
+          running={sqlRunning}
+          onCancel={onCancelSql}
+          generatedVisualSql={sql}
+        />
+      )}
 
       {sqlDialogOpen ? (
         <GeneratedSQLDialog sql={sql} onDismiss={() => setSqlDialogOpen(false)} />

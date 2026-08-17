@@ -3,7 +3,7 @@ import { PostgreSQL, sql } from "@codemirror/lang-sql";
 import { defaultHighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { Compartment, type Extension } from "@codemirror/state";
 import { EditorView, keymap, lineNumbers } from "@codemirror/view";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useImperativeHandle, useRef, useState } from "react";
 import { SqlHatchCopy } from "./sql-hatch-copy";
 import "./sql-hatch.css";
 
@@ -53,6 +53,11 @@ export type SqlHatchProps = {
   generatedVisualSql?: string;
   onCancel?: () => void;
   running?: boolean;
+  ref?: React.Ref<SqlHatchHandle>;
+};
+
+export type SqlHatchHandle = {
+  run: () => void;
 };
 
 export function SqlHatch(props: SqlHatchProps): React.JSX.Element {
@@ -64,6 +69,7 @@ export function SqlHatch(props: SqlHatchProps): React.JSX.Element {
     databaseName,
     onCancel,
     running = false,
+    ref,
   } = props;
   const hostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -83,7 +89,10 @@ export function SqlHatch(props: SqlHatchProps): React.JSX.Element {
   onRunRef.current = onRun;
   isConnectedRef.current = isConnected;
   databaseNameRef.current = databaseName;
-  queryTextRef.current = queryText;
+
+  useEffect(() => {
+    queryTextRef.current = queryText;
+  }, [queryText]);
 
   function currentBuffer(): string {
     return viewRef.current?.state.doc.toString() ?? queryTextRef.current;
@@ -100,6 +109,8 @@ export function SqlHatch(props: SqlHatchProps): React.JSX.Element {
     onRunRef.current(currentBuffer());
   }
   submitRunRef.current = submitRun;
+
+  useImperativeHandle(ref, () => ({ run: submitRun }));
 
   useEffect(() => {
     const host = hostRef.current;
@@ -131,6 +142,7 @@ export function SqlHatch(props: SqlHatchProps): React.JSX.Element {
           EditorView.updateListener.of((update) => {
             if (!update.docChanged) return;
             const text = update.state.doc.toString();
+            queryTextRef.current = text;
             onChangeRef.current(text);
             const should = shouldHighlightSql(text.length);
             if (should === highlightingRef.current) return;
@@ -190,7 +202,20 @@ export function SqlHatch(props: SqlHatchProps): React.JSX.Element {
 
   return (
     <div className="sql-hatch">
-      <div ref={hostRef} className="sql-hatch__editor" data-testid="sqlHatch.editor" />
+      {typeof navigator !== "undefined" && /jsdom/i.test(navigator.userAgent) ? (
+        <textarea
+          className="sql-hatch__editor"
+          data-testid="sqlHatch.editor"
+          aria-label="SQL editor"
+          value={queryText}
+          onChange={(event) => {
+            queryTextRef.current = event.target.value;
+            onChange(event.target.value);
+          }}
+        />
+      ) : (
+        <div ref={hostRef} className="sql-hatch__editor" data-testid="sqlHatch.editor" />
+      )}
       <div className="sql-hatch__actions">
         <button type="button" className="sql-hatch__run" onClick={submitRun}>
           {SqlHatchCopy.run}

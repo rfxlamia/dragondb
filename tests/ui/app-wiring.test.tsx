@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -665,6 +665,31 @@ describe("App wiring regressions after connect (SP-4a)", () => {
     expect(document.querySelector(".vq-canvas__status")?.textContent ?? "").not.toMatch(
       /OK\s*\/\s*1 rows\s*\/\s*9 ms/i,
     );
+  });
+
+  it("runs SQL hatch SELECT and mutation from the synced active-tab buffer", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    const runQuery = vi.spyOn(ipc, "runQuery");
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
+    await user.selectOptions(screen.getByLabelText("Catalog"), "app");
+    await waitFor(() => expect(document.title).toBe("app"));
+
+    await user.click(screen.getByRole("radio", { name: /sql/i }));
+    const editor = screen.getByRole("textbox", { name: "SQL editor" });
+    fireEvent.change(editor, { target: { value: "SELECT 1 AS n" } });
+    expect(editor).toHaveValue("SELECT 1 AS n");
+    await user.click(document.querySelector(".sql-hatch__run") as HTMLButtonElement);
+    await waitFor(() => expect(runQuery).toHaveBeenCalledTimes(1));
+    expect(runQuery.mock.calls[0]?.[1]).toMatchObject({ text: "SELECT 1 AS n" });
+
+    fireEvent.change(editor, { target: { value: "UPDATE users SET name = 'Ada' WHERE false" } });
+    await user.click(screen.getByRole("button", { name: "Run" }));
+    await waitFor(() => expect(runQuery).toHaveBeenCalledTimes(2));
+    expect(runQuery.mock.calls[1]?.[1]).toMatchObject({
+      text: "UPDATE users SET name = 'Ada' WHERE false",
+    });
   });
 
   it("ignores stale listColumns resolution", async () => {

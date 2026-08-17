@@ -1,5 +1,5 @@
 /** @vitest-environment jsdom */
-import { cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SqlHatch, shouldHighlightSql } from "../../../src/ui/sql-editor/sql-hatch";
@@ -102,5 +102,25 @@ describe("SqlHatch", () => {
   it("skips highlight above 50_000 characters but keeps the editor host", () => {
     expect(shouldHighlightSql(50_000)).toBe(true);
     expect(shouldHighlightSql(50_001)).toBe(false);
+  });
+
+  it("offers Try Again after 300s and reruns the current buffer", async () => {
+    vi.useFakeTimers();
+    const onRun = vi.fn();
+    render(
+      <SqlHatch
+        queryText="SELECT pg_sleep(301)"
+        onChange={vi.fn()}
+        onRun={onRun}
+        isConnected={true}
+        databaseName="app"
+        running
+      />,
+    );
+
+    await act(async () => vi.advanceTimersByTimeAsync(300_000));
+    fireEvent.click(screen.getByRole("button", { name: SqlHatchCopy.tryAgain }));
+    expect(onRun).toHaveBeenCalledWith("SELECT pg_sleep(301)");
+    vi.useRealTimers();
   });
 });

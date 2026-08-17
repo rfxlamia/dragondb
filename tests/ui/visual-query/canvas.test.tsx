@@ -1,15 +1,20 @@
 /** @vitest-environment jsdom */
+
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { createRef } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { QueryDocument } from "../../../src/core";
 import type { DragonIpc, QueryResult } from "../../../src/ipc/contract";
 import { createHistoryStore } from "../../../src/stores/history-store";
 import { HistoryAccessibility } from "../../../src/ui/history/history-accessibility";
 import { VisualQueryAccessibility } from "../../../src/ui/visual-query/accessibility";
-import { VisualQueryCanvas } from "../../../src/ui/visual-query/canvas";
+import {
+  VisualQueryCanvas,
+  type VisualQueryCanvasHandle,
+} from "../../../src/ui/visual-query/canvas";
 import { VisualQueryCopy } from "../../../src/ui/visual-query/copy";
 
 afterEach(() => {
@@ -26,6 +31,46 @@ async function openGeneratedSqlDialog(user: ReturnType<typeof userEvent.setup>) 
 }
 
 describe("VisualQueryCanvas layout chrome", () => {
+  it("switches to the SQL hatch, hides the visual canvas, and shows tab query text", async () => {
+    const user = userEvent.setup();
+    const { container } = render(
+      <VisualQueryCanvas
+        tables={tables}
+        columnNames={[]}
+        metadataErrorMessage={null}
+        isConnected={true}
+        databaseName="app"
+        queryText="SELECT 42 AS answer"
+      />,
+    );
+
+    expect(container.querySelector(".vq-canvas__body")).not.toBeNull();
+    await user.click(screen.getByRole("radio", { name: /sql/i }));
+
+    expect(container.querySelector(".vq-canvas__body")).toBeNull();
+    expect(screen.getByRole("textbox", { name: "SQL editor" })).toHaveValue("SELECT 42 AS answer");
+  });
+
+  it("routes active SQL-surface execution to the hatch no-database alert", async () => {
+    const user = userEvent.setup();
+    const handle = createRef<VisualQueryCanvasHandle>();
+    render(
+      <VisualQueryCanvas
+        ref={handle}
+        tables={tables}
+        columnNames={[]}
+        metadataErrorMessage={null}
+        isConnected={true}
+        databaseName={null}
+        queryText="SELECT 1"
+      />,
+    );
+
+    await user.click(screen.getByRole("radio", { name: /sql/i }));
+    expect(handle.current?.runIfRunnable()).toBe(true);
+    expect(await screen.findByText(/select a database from the sidebar/i)).toBeInTheDocument();
+  });
+
   it("does not place .vq-sql-preview as a sibling under the canvas body", async () => {
     const user = userEvent.setup();
     const { container } = render(
