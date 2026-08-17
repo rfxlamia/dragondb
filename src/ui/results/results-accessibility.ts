@@ -19,6 +19,11 @@ export const ResultsAccessibility = {
       ResultsAccessibility.error,
       ResultsAccessibility.empty,
       ResultsAccessibility.splitSeparator,
+      ResultsAccessibility.filter,
+      ResultsAccessibility.toolbar,
+      ResultsAccessibility.jsonViewer,
+      ResultsAccessibility.rowEditor,
+      ResultsAccessibility.pagination,
     ];
   },
 } as const;

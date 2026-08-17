@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { toCsv } from "../../lib/csv-exporter";
-import { compactCell } from "../../lib/result-compactor";
 import { ResultsAccessibility } from "./results-accessibility";
 import { ResultsCopy } from "./results-copy";
 import "./query-results.css";
@@ -26,10 +25,10 @@ export function JsonViewer(props: {
   async function copyJson(): Promise<void> {
     try {
       await navigator.clipboard.writeText(pretty);
+      setCopied(true);
     } catch {
       // Clipboard may be unavailable in tests / locked webviews.
     }
-    setCopied(true);
   }
 
   function downloadCsv(): void {
@@ -75,12 +74,8 @@ function prettyJsonFromRaw(columns: string[], rows: unknown[][]): string {
   return JSON.stringify(objects, null, 2);
 }
 
-/** compactCell is called only to discard truncation — displayed JSON stays raw. */
+/** Stringify raw cell values for JSON export. */
 function jsonCell(value: unknown): unknown {
-  if (typeof value === "string") {
-    compactCell(value);
-    return value;
-  }
   return value ?? null;
 }
 

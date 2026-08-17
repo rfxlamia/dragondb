@@ -77,7 +77,7 @@ export function RowEditor(props: {
           const isPk = pkSet.has(column);
           const isNull = nullFlags[index] === true;
           return (
-            <label key={column} className="query-results__editor-field">
+            <div key={column} className="query-results__editor-field">
               <span>{column}</span>
               <input
                 type="text"
@@ -96,7 +96,7 @@ export function RowEditor(props: {
                   {ResultsCopy.setNull}
                 </label>
               )}
-            </label>
+            </div>
           );
         })}
       </div>

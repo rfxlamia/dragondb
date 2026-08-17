@@ -73,7 +73,7 @@ function ResultGrid(
   const compact = props.compact;
   const columns = compact?.columns ?? [];
   const rows = compact?.rows ?? [];
-  const rawGrid = props.raw ?? compact;
+  const rawGrid = props.raw;
   const dateFormat = props.dateFormat;
   const pkColumns = props.primaryKeyColumns ?? [];
 
@@ -191,7 +191,7 @@ function ResultGrid(
           <button
             type="button"
             className="query-results__btn"
-            disabled={selected.length === 0}
+            disabled={selected.length === 0 || !rawGrid}
             onClick={openJson}
           >
             {ResultsCopy.viewJson}
@@ -199,7 +199,7 @@ function ResultGrid(
           <button
             type="button"
             className="query-results__btn"
-            disabled={selected.length === 0}
+            disabled={selected.length === 0 || !rawGrid}
             onClick={downloadSelectedCsv}
           >
             {ResultsCopy.downloadCsv}

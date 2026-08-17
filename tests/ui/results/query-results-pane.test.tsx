@@ -4,8 +4,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it } from "vitest";
-import { toCsv } from "../../../src/lib/csv-exporter";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { determineEditability } from "../../../src/lib/query-editability";
 import { compactCell } from "../../../src/lib/result-compactor";
 import type { TabResultGrid, TabRunStatus } from "../../../src/stores/tabs-store";
@@ -147,17 +146,42 @@ describe("QueryResultsPane", () => {
     expect(screen.getByText(/8\/15\/2026/)).toBeInTheDocument();
   });
 
-  it("Download CSV uses raw RFC4180 via toCsv, not compact cells", () => {
+  it("Download CSV uses raw buffer through pane, not compact cells", async () => {
+    const user = userEvent.setup();
     const raw = "x".repeat(3000);
-    const csv = toCsv(["body"], [[raw]]);
+    const compactDisplay = compactCell(raw);
+    const onSaveCsv = vi.fn();
+    render(
+      <QueryResultsPane
+        status={{ kind: "ok", rowCount: 1, durationMs: 1 }}
+        compact={{ columns: ["body"], rows: [[compactDisplay]] }}
+        raw={{ columns: ["body"], rows: [[raw]] }}
+        onSaveCsv={onSaveCsv}
+      />,
+    );
+    await user.click(screen.getAllByRole("row")[1]!);
+    await user.click(screen.getByRole("button", { name: ResultsCopy.downloadCsv }));
+    expect(onSaveCsv).toHaveBeenCalledTimes(1);
+    const csv = onSaveCsv.mock.calls[0]![0] as string;
     expect(csv).toContain(raw);
-    expect(csv).not.toContain(compactCell(raw));
+    expect(csv).not.toContain(compactDisplay);
   });
 
-  it("JOIN without leftover selectedTable disables edit with Swift title", () => {
-    const result = determineEditability("SELECT * FROM a JOIN b ON a.id = b.id", {});
-    expect(result.isEditable).toBe(false);
-    expect(result.reason?.title).toBe("Can't Edit Joined Results");
+  it("JOIN without leftover selectedTable disables edit with Swift title through pane", () => {
+    render(
+      <QueryResultsPane
+        status={{ kind: "ok", rowCount: 1, durationMs: 1 }}
+        compact={{ columns: ["id"], rows: [["1"]] }}
+        raw={{ columns: ["id"], rows: [["1"]] }}
+        query="SELECT * FROM a JOIN b ON a.id = b.id"
+      />,
+    );
+    const editBtn = screen.getByRole("button", { name: ResultsCopy.edit });
+    expect(editBtn).toBeDisabled();
+    expect(editBtn).toHaveAttribute("title", "Can't Edit Joined Results");
+    const deleteBtn = screen.getByRole("button", { name: ResultsCopy.delete });
+    expect(deleteBtn).toBeDisabled();
+    expect(deleteBtn).toHaveAttribute("title", "Can't Edit Joined Results");
   });
 
   it("leftover selectedTable after JOIN hatch stays editable (Swift short-circuit)", () => {

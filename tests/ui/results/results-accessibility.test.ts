@@ -8,6 +8,11 @@ const EXPECTED = [
   "queryResults.error",
   "queryResults.empty",
   "queryResults.splitSeparator",
+  "queryResults.filter",
+  "queryResults.toolbar",
+  "queryResults.jsonViewer",
+  "queryResults.rowEditor",
+  "queryResults.pagination",
 ] as const;
 
 describe("ResultsAccessibility", () => {
