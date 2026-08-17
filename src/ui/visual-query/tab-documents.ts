@@ -13,6 +13,7 @@ import {
 export type TabDocuments = {
   get: (id: string) => QueryDocument | undefined;
   getOrCreate: (id: string) => QueryDocument;
+  hydrate: (id: string, json: string) => QueryDocument;
   resetAll: (ids: string[]) => void;
   delete: (id: string) => void;
 };
@@ -114,6 +115,12 @@ export function createTabDocuments(): TabDocuments {
     return created;
   }
 
+  function hydrate(id: string, json: string): QueryDocument {
+    const restored = hydrateQueryDocument(json);
+    documents.set(id, restored);
+    return restored;
+  }
+
   function resetAll(ids: string[]): void {
     documents.clear();
     for (const id of ids) {
@@ -128,6 +135,7 @@ export function createTabDocuments(): TabDocuments {
   return {
     get,
     getOrCreate,
+    hydrate,
     resetAll,
     delete: deleteEntry,
   };

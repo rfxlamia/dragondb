@@ -31,6 +31,20 @@ describe("createTabDocuments", () => {
     expect(docs.get("a")).toBe(created);
   });
 
+  it("hydrates persisted visual JSON into the requested tab slot", () => {
+    const source = new QueryDocument();
+    source.chooseStatement("select");
+    source.addClause("from");
+    source.selectFromTable("orders", "public");
+    const docs = createTabDocuments();
+
+    const restored = docs.hydrate("restored", serializeQueryDocument(source));
+
+    expect(restored.statementKind).toBe("select");
+    expect(restored.fromTable).toEqual({ schema: "public", name: "orders" });
+    expect(docs.get("restored")).toBe(restored);
+  });
+
   it("serializes visual cards to JSON and hydrates without using queryText", () => {
     const doc = new QueryDocument();
     doc.chooseStatement("select");

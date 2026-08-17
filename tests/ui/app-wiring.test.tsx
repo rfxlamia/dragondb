@@ -38,7 +38,8 @@ vi.mock("@tauri-apps/api/event", () => ({
 
 import type { UserEvent } from "@testing-library/user-event";
 import App from "../../src/App";
-import type { DragonIpc, SavedQueryDto } from "../../src/ipc/contract";
+import { QueryDocument } from "../../src/core";
+import type { DragonIpc, SavedQueryDto, TabStateDto } from "../../src/ipc/contract";
 import {
   createMockDragonIpc,
   FIXTURE_CONNECTION_ID,
@@ -56,6 +57,7 @@ import { TabBarAccessibility } from "../../src/ui/shell/tab-bar-accessibility";
 import type { MenuEventId } from "../../src/ui/shell/workspace-accelerators";
 import { VisualQueryAccessibility } from "../../src/ui/visual-query/accessibility";
 import { VisualQueryCopy } from "../../src/ui/visual-query/copy";
+import { serializeQueryDocument } from "../../src/ui/visual-query/tab-documents";
 import { WelcomeAccessibility } from "../../src/ui/welcome/welcome-accessibility";
 import { WelcomeCopy } from "../../src/ui/welcome/welcome-copy";
 
@@ -2191,5 +2193,160 @@ describe("App overlay, collapse, and title (SP-4b last slice T6)", () => {
     render(<App ipc={ipc} />);
     expect(await screen.findByText(/Connection Error/i)).toBeInTheDocument();
     expect(screen.queryByText(/Initializing/)).toBeNull();
+  });
+});
+
+describe("App tab remainder (SP-4b last slice T11)", () => {
+  function persistedTab(overrides: Partial<TabStateDto>): TabStateDto {
+    return {
+      id: "tab-1",
+      connectionId: null,
+      databaseName: "app",
+      queryText: "",
+      savedQueryId: null,
+      isActive: true,
+      order: 0,
+      createdAt: "1",
+      lastAccessedAt: "1",
+      selectedTableSchema: null,
+      selectedTableName: null,
+      selectedSchemaFilter: null,
+      cachedResultsData: null,
+      cachedColumnNames: null,
+      visualDocumentJson: null,
+      ...overrides,
+    };
+  }
+
+  it("renders saved-query and connection/database titles from live app data", async () => {
+    const ipc = createMockDragonIpc("happy");
+    const profile = await ipc.saveProfile({
+      profile: { ...fixtureProfileFields(), name: "dev", database: "shop" },
+      secrets: { password: "pw" },
+    });
+    const daily: SavedQueryDto = {
+      id: "daily",
+      name: "Daily",
+      queryText: "SELECT 1",
+      connectionId: profile.id,
+      databaseName: "shop",
+      createdAt: "1",
+      updatedAt: "1",
+      folderId: null,
+    };
+    vi.spyOn(ipc, "listSavedQueries").mockResolvedValue([daily]);
+    vi.spyOn(ipc, "listTabStates").mockResolvedValue([
+      persistedTab({
+        id: "saved",
+        connectionId: profile.id,
+        databaseName: "shop",
+        savedQueryId: "daily",
+        isActive: true,
+      }),
+      persistedTab({
+        id: "plain",
+        connectionId: profile.id,
+        databaseName: "shop",
+        isActive: false,
+        order: 1,
+      }),
+    ]);
+
+    render(<App ipc={ipc} />);
+
+    expect(await screen.findByRole("tab", { name: "shop / Daily" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "dev / shop" })).toBeInTheDocument();
+  });
+
+  it("hydrates the active canvas from visualDocumentJson on launch", async () => {
+    const ipc = createMockDragonIpc("happy");
+    const profile = await ipc.saveProfile({
+      profile: { ...fixtureProfileFields(), name: "dev" },
+      secrets: { password: "pw" },
+    });
+    const document = new QueryDocument();
+    document.chooseStatement("select");
+    document.addClause("from");
+    document.selectFromTable("orders", "public");
+    vi.spyOn(ipc, "listTabStates").mockResolvedValue([
+      persistedTab({
+        connectionId: profile.id,
+        visualDocumentJson: serializeQueryDocument(document),
+      }),
+    ]);
+
+    render(<App ipc={ipc} />);
+
+    expect(
+      await screen.findByTestId(VisualQueryAccessibility.clauseCard("from")),
+    ).toBeInTheDocument();
+  });
+
+  it("shows Closing while deleteTabState is pending", async () => {
+    let releaseDelete!: () => void;
+    const deleteGate = new Promise<void>((resolve) => {
+      releaseDelete = resolve;
+    });
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    vi.spyOn(ipc, "deleteTabState").mockImplementation(async () => deleteGate);
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
+    await user.click(screen.getByTestId(TabBarAccessibility.newTab));
+
+    const [firstClose] = screen.getAllByRole("button", { name: /close tab/i });
+    if (firstClose === undefined) throw new Error("Expected a close button");
+    await user.click(firstClose);
+
+    expect(screen.getByRole("tab", { name: "Closing..." })).toBeInTheDocument();
+    releaseDelete();
+    await waitFor(() => expect(screen.queryByText("Closing...")).toBeNull());
+  });
+
+  it("persists visual edits in visualDocumentJson without replacing queryText", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    const saveTabState = vi.spyOn(ipc, "saveTabState");
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
+
+    await user.click(await screen.findByTestId(VisualQueryAccessibility.initialAddBlock));
+    await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("select")));
+
+    await waitFor(() =>
+      expect(saveTabState).toHaveBeenCalledWith(
+        expect.objectContaining({
+          queryText: "",
+          visualDocumentJson: expect.stringContaining('"statementKind":"select"'),
+        }),
+        { includeCachedResults: false },
+      ),
+    );
+  });
+
+  it("persists and restores the SQL buffer when switching tabs", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    const saveTabState = vi.spyOn(ipc, "saveTabState");
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
+    await user.click(screen.getByRole("radio", { name: /sql/i }));
+    fireEvent.change(screen.getByRole("textbox", { name: "SQL editor" }), {
+      target: { value: "SELECT 42" },
+    });
+
+    await user.click(screen.getByTestId(TabBarAccessibility.newTab));
+
+    await waitFor(() =>
+      expect(saveTabState).toHaveBeenCalledWith(
+        expect.objectContaining({ queryText: "SELECT 42", isActive: false }),
+        { includeCachedResults: false },
+      ),
+    );
+    const [firstTab] = screen.getAllByRole("tab");
+    if (firstTab === undefined) throw new Error("Expected the first tab");
+    await user.click(firstTab);
+    await user.click(screen.getByRole("radio", { name: /sql/i }));
+    expect(screen.getByRole("textbox", { name: "SQL editor" })).toHaveValue("SELECT 42");
   });
 });

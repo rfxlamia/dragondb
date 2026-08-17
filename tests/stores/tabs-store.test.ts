@@ -48,6 +48,39 @@ describe("tabs-store", () => {
     ]);
   });
 
+  it("stores visual IR separately and persists the updated tab", async () => {
+    const saveTabState = vi.fn(async () => undefined);
+    const ipc = {
+      saveTabState,
+      deleteTabState: vi.fn(async () => undefined),
+      listTabStates: vi.fn(async () => []),
+    } as unknown as DragonIpc;
+    const store = createTabsStore(ipc, {
+      getConnectionId: () => "c1",
+      getDatabaseName: () => "app",
+    });
+    store.setState({
+      tabs: [baseTab({ id: "active", queryText: "SELECT 1" })],
+      activeTabId: "active",
+    });
+    const ir = JSON.stringify({ statementKind: "select", fromTable: { name: "orders" } });
+
+    await store.getState().setVisualDocumentJson("active", ir);
+
+    expect(store.getState().tabs[0]).toMatchObject({
+      queryText: "SELECT 1",
+      visualDocumentJson: ir,
+    });
+    expect(saveTabState).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "active",
+        queryText: "SELECT 1",
+        visualDocumentJson: ir,
+      }),
+      { includeCachedResults: false },
+    );
+  });
+
   it("persistTab includeCachedResults false does not wipe an existing results blob", async () => {
     const saveTabState = vi.fn(
       async (_dto: TabStateDto, _opts?: { includeCachedResults?: boolean }) => undefined,
@@ -101,7 +134,7 @@ describe("tabs-store", () => {
     expect(store.getState().activeTabId).toBe(created.id);
   });
 
-  it("closeTab among N activates MRU by lastAccessedAt", () => {
+  it("closeTab among N activates MRU by lastAccessedAt", async () => {
     const ipc = {
       saveTabState: vi.fn(async () => undefined),
       deleteTabState: vi.fn(async () => undefined),
@@ -120,8 +153,10 @@ describe("tabs-store", () => {
       activeTabId: "t2",
     });
     store.getState().closeTab("t2");
-    expect(store.getState().tabs.map((t) => t.id)).toEqual(["t1", "t3"]);
     expect(store.getState().activeTabId).toBe("t1");
+    await vi.waitFor(() => {
+      expect(store.getState().tabs.map((t) => t.id)).toEqual(["t1", "t3"]);
+    });
   });
 
   it("closeTab MRU compares lastAccessedAt numerically", () => {
@@ -146,7 +181,7 @@ describe("tabs-store", () => {
     expect(store.getState().activeTabId).toBe("t3");
   });
 
-  it("closeTab on last tab recreates empty active tab", () => {
+  it("closeTab on last tab recreates empty active tab", async () => {
     const ipc = {
       saveTabState: vi.fn(async () => undefined),
       deleteTabState: vi.fn(async () => undefined),
@@ -161,12 +196,49 @@ describe("tabs-store", () => {
       activeTabId: "only",
     });
     store.getState().closeTab("only");
-    expect(store.getState().tabs).toHaveLength(1);
-    const next = store.getState().tabs[0];
+    const next = store.getState().tabs.find((tab) => tab.id !== "only");
     expect(next).toBeDefined();
     expect(next?.id).not.toBe("only");
     expect(next?.queryText).toBe("");
     expect(store.getState().activeTabId).toBe(next?.id);
+    await vi.waitFor(() => {
+      expect(store.getState().tabs).toEqual([next]);
+    });
+  });
+
+  it("keeps a closing tab visible until deleteTabState settles", async () => {
+    let releaseDelete!: () => void;
+    const deleteGate = new Promise<void>((resolve) => {
+      releaseDelete = resolve;
+    });
+    const ipc = {
+      saveTabState: vi.fn(async () => undefined),
+      deleteTabState: vi.fn(async () => deleteGate),
+      listTabStates: vi.fn(async () => []),
+    } as unknown as DragonIpc;
+    const store = createTabsStore(ipc, {
+      getConnectionId: () => null,
+      getDatabaseName: () => null,
+    });
+    store.setState({
+      tabs: [
+        baseTab({ id: "closing", isActive: true, lastAccessedAt: "2" }),
+        baseTab({ id: "next", isActive: false, lastAccessedAt: "1" }),
+      ],
+      activeTabId: "closing",
+    });
+
+    store.getState().closeTab("closing");
+
+    expect(store.getState().tabs.map((tab) => tab.id)).toContain("closing");
+    expect(store.getState().pendingDeletedIds.has("closing")).toBe(true);
+    expect(store.getState().activeTabId).toBe("next");
+
+    releaseDelete();
+    await deleteGate;
+    await vi.waitFor(() => {
+      expect(store.getState().tabs.map((tab) => tab.id)).not.toContain("closing");
+    });
   });
 
   it("pending-deleted tab ids ignore subsequent writes", async () => {

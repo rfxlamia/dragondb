@@ -77,6 +77,7 @@ export type TabsState = {
   clearInMemoryResults: () => void;
   setDatabaseName: (tabId: string, databaseName: string) => Promise<void>;
   setQueryText: (tabId: string, text: string) => void;
+  setVisualDocumentJson: (tabId: string, json: string) => Promise<void>;
   setSavedQueryId: (tabId: string, queryId: string | null) => void;
   restoreSavedQueryResult: (
     tabId: string,
@@ -257,6 +258,13 @@ export function createTabsStore(ipc: DragonIpc, getters: TabsSessionGetters): St
         patchTab(tabId, { queryText: text });
       },
 
+      async setVisualDocumentJson(tabId, json) {
+        patchTab(tabId, { visualDocumentJson: json });
+        const tab = get().tabs.find((candidate) => candidate.id === tabId);
+        if (tab === undefined) return;
+        await get().persistTab(toTabStateDto(tab), { includeCachedResults: false });
+      },
+
       switchTab(id) {
         if (!get().tabs.some((t) => t.id === id)) return;
         const ts = nowMillis();
@@ -271,39 +279,49 @@ export function createTabsStore(ipc: DragonIpc, getters: TabsSessionGetters): St
       },
 
       closeTab(id) {
-        const { tabs, activeTabId } = get();
+        const { tabs, activeTabId, pendingDeletedIds } = get();
+        if (pendingDeletedIds.has(id) || !tabs.some((tab) => tab.id === id)) return;
         const remaining = tabs.filter((t) => t.id !== id);
         runGenerations.delete(id);
 
         set((state) => {
           const pending = new Set(state.pendingDeletedIds);
           pending.add(id);
-          return { pendingDeletedIds: pending };
-        });
-
-        void ipc.deleteTabState(id).catch(() => {
-          /* keep pendingDeletedIds so refresh cannot resurrect the tab */
+          return {
+            tabs: state.tabs.map((tab) => (tab.id === id ? { ...tab, isActive: false } : tab)),
+            pendingDeletedIds: pending,
+          };
         });
 
         if (remaining.length === 0) {
           const next = emptyTab(getters.getConnectionId(), getters.getDatabaseName(), 0);
-          set({ tabs: [next], activeTabId: next.id });
+          set((state) => ({ tabs: [...state.tabs, next], activeTabId: next.id }));
           queueMetadataPersist(next);
-          return;
+        } else {
+          let nextActive = activeTabId;
+          if (activeTabId === id) {
+            nextActive = mruId(remaining);
+          }
+          set((state) => ({
+            tabs: state.tabs.map((t) => ({
+              ...t,
+              isActive: t.id === nextActive,
+            })),
+            activeTabId: nextActive,
+          }));
+          syncMetadataForCurrentTabs();
         }
 
-        let nextActive = activeTabId;
-        if (activeTabId === id) {
-          nextActive = mruId(remaining);
-        }
-        set({
-          tabs: remaining.map((t) => ({
-            ...t,
-            isActive: t.id === nextActive,
-          })),
-          activeTabId: nextActive,
-        });
-        syncMetadataForCurrentTabs();
+        void ipc.deleteTabState(id).then(
+          () => {
+            // Keep the tombstone so an in-flight persist still compensates its raced save.
+            set((state) => ({ tabs: state.tabs.filter((tab) => tab.id !== id) }));
+          },
+          () => {
+            // Keep the id pending so a later refresh cannot resurrect a failed deletion.
+            set((state) => ({ tabs: state.tabs.filter((tab) => tab.id !== id) }));
+          },
+        );
       },
 
       async persistTab(dto, opts) {

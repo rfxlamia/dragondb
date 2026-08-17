@@ -2,8 +2,14 @@ import { listen } from "@tauri-apps/api/event";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Group, Panel, Separator } from "react-resizable-panels";
 import { useStore } from "zustand";
-import type { ExecutableSQL, TableReference } from "./core";
-import type { ConnectResult, DragonIpc, IpcError, ProfileId } from "./ipc/contract";
+import type { ExecutableSQL, QueryDocument, TableReference } from "./core";
+import type {
+  ConnectionProfileDto,
+  ConnectResult,
+  DragonIpc,
+  IpcError,
+  ProfileId,
+} from "./ipc/contract";
 import { coreToTableRef, tableRefToCore } from "./ipc/table-ref";
 import { createTauriDragonIpc } from "./ipc/tauri-client";
 import { newSavedQueryName } from "./lib/new-saved-query-name";
@@ -22,7 +28,7 @@ import { useSavedQueryAutosave } from "./ui/library/use-saved-query-autosave";
 import { QueryResultsPane } from "./ui/results/query-results-pane";
 import { LoadingOverlay } from "./ui/shell/loading-overlay";
 import { TabBar } from "./ui/shell/tab-bar";
-import { TabBarCopy } from "./ui/shell/tab-bar-copy";
+import { formatTabTitle } from "./ui/shell/tab-bar-copy";
 import {
   handleMenuEvent,
   handleWorkspaceKeydown,
@@ -33,7 +39,7 @@ import {
 import { WorkspaceSplit } from "./ui/shell/workspace-split";
 import { VisualQueryCanvas, type VisualQueryCanvasHandle } from "./ui/visual-query/canvas";
 import { VisualQueryCopy } from "./ui/visual-query/copy";
-import { createTabDocuments } from "./ui/visual-query/tab-documents";
+import { createTabDocuments, serializeQueryDocument } from "./ui/visual-query/tab-documents";
 import { WelcomeView } from "./ui/welcome/welcome-view";
 import "./App.css";
 
@@ -79,6 +85,7 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
   const tabs = useStore(stores.tabs, (s) => s.tabs);
   const activeTabId = useStore(stores.tabs, (s) => s.activeTabId);
   const tabsReady = useStore(stores.tabs, (s) => s.tabsReady);
+  const pendingDeletedIds = useStore(stores.tabs, (s) => s.pendingDeletedIds);
   const savedQueryId = useStore(
     stores.tabs,
     (s) => s.tabs.find((t) => t.id === s.activeTabId)?.savedQueryId ?? null,
@@ -109,6 +116,7 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
   const tabDocumentsRef = useRef(createTabDocuments());
   const savedQueryCacheRef = useRef(createSavedQueryResultCache());
   const [profilesReady, setProfilesReady] = useState(false);
+  const [profiles, setProfiles] = useState<ConnectionProfileDto[]>([]);
   const [profileCount, setProfileCount] = useState(0);
   const [formVisible, setFormVisible] = useState(false);
   const [docsEpoch, setDocsEpoch] = useState(0);
@@ -164,6 +172,7 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
       .listProfiles()
       .then((list) => {
         if (cancelled) return;
+        setProfiles(list);
         setProfileCount(list.length);
         if (!formVisibilityTouchedRef.current) {
           setFormVisible(list.length > 0);
@@ -276,9 +285,13 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
     setFormVisible(next);
   }, []);
 
-  const handleProfilesLoaded = useCallback((count: number) => {
-    setProfileCount(count);
-  }, []);
+  const handleProfilesLoaded = useCallback(
+    (count: number) => {
+      setProfileCount(count);
+      void ipc.listProfiles().then(setProfiles, () => undefined);
+    },
+    [ipc],
+  );
 
   useEffect(() => {
     void stores.tabs
@@ -304,9 +317,14 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
   useLayoutEffect(() => {
     if (activeTabId === null) return;
     if (tabDocumentsRef.current.get(activeTabId) !== undefined) return;
-    tabDocumentsRef.current.getOrCreate(activeTabId);
+    const activeTab = stores.tabs.getState().tabs.find((tab) => tab.id === activeTabId);
+    if (activeTab?.visualDocumentJson) {
+      tabDocumentsRef.current.hydrate(activeTabId, activeTab.visualDocumentJson);
+    } else {
+      tabDocumentsRef.current.getOrCreate(activeTabId);
+    }
     setDocsEpoch((value) => value + 1);
-  }, [activeTabId]);
+  }, [activeTabId, stores]);
 
   useLayoutEffect(() => {
     accelCtxRef.current = {
@@ -455,6 +473,17 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
     stores.tabs.getState().setQueryText(tabId, text);
   }
 
+  function handleDocumentChange(document: QueryDocument): void {
+    const tabId = stores.tabs.getState().activeTabId;
+    if (tabId === null) return;
+    void stores.tabs
+      .getState()
+      .setVisualDocumentJson(tabId, serializeQueryDocument(document))
+      .catch(() => {
+        /* best-effort visual document persistence */
+      });
+  }
+
   function handleCancelSql(): void {
     const liveId = stores.session.getState().connectionId;
     if (liveId === null) return;
@@ -560,6 +589,7 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
         metadataErrorMessage={metadataErrorMessage}
         isConnected={isConnected}
         onRunQuery={onRunQuery}
+        onDocumentChange={handleDocumentChange}
         queryText={queryText}
         onQueryTextChange={handleQueryTextChange}
         onRunSql={onRunSql}
@@ -690,11 +720,28 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
                 {workspaceReady ? (
                   <>
                     <TabBar
-                      tabs={tabs.map((tab) => ({
-                        id: tab.id,
-                        title: TabBarCopy.untitled,
-                        isActive: tab.id === activeTabId,
-                      }))}
+                      tabs={tabs.map((tab, index) => {
+                        const savedQueryName = libraryQueries.find(
+                          (query) => query.id === tab.savedQueryId,
+                        )?.name;
+                        const profile =
+                          profiles.find((candidate) => candidate.id === tab.connectionId) ??
+                          profiles.find((candidate) => candidate.id === profileId);
+                        const connectionDisplayName = profile
+                          ? profile.name?.trim() || profile.host
+                          : null;
+                        return {
+                          id: tab.id,
+                          title: formatTabTitle({
+                            databaseName: tab.databaseName,
+                            savedQueryName,
+                            connectionDisplayName,
+                            index: index + 1,
+                          }),
+                          isActive: tab.id === activeTabId,
+                          pendingClose: pendingDeletedIds.has(tab.id),
+                        };
+                      })}
                       onNewTab={handleNewTab}
                       onSwitchTab={(id) => stores.tabs.getState().switchTab(id)}
                       onCloseTab={handleCloseTab}
