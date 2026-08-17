@@ -2351,6 +2351,7 @@ describe("App overlay, collapse, and title (SP-4b last slice T6)", () => {
     const user = userEvent.setup();
     await user.selectOptions(combobox, "app");
     await waitFor(() => expect(combobox).toHaveValue("app"));
+    expect(screen.queryByText(ConnectionCopy.selectDbPulse)).toBeNull();
   });
 
   it("keeps Loading tables visible until restore table loading completes", async () => {

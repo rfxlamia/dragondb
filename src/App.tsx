@@ -563,6 +563,7 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
 
   async function handleSwitchDatabase(name: string): Promise<void> {
     await stores.session.getState().switchDatabase(name);
+    setMissingDatabase(false);
     const tabId = stores.tabs.getState().activeTabId;
     if (tabId !== null) {
       await stores.tabs.getState().setDatabaseName(tabId, name);
