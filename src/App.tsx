@@ -522,11 +522,16 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
     if (tabId === null) return;
     const activeTab = stores.tabs.getState().tabs.find((tab) => tab.id === tabId);
     const previousSavedQueryId = activeTab?.savedQueryId ?? null;
-    stores.tabs.getState().setSavedQueryId(tabId, queryId);
     if (queryId === null) {
+      // Pulse querySelectRestoring so any pending autosave debounce is
+      // cancelled before savedQueryId clears — otherwise persistHatchText
+      // would auto-create an extra SavedQuery from the stale hatch buffer.
+      setQuerySelectRestoring(true);
+      stores.tabs.getState().setSavedQueryId(tabId, null);
       stores.tabs.getState().restoreSavedQueryResult(tabId, null);
       return;
     }
+    stores.tabs.getState().setSavedQueryId(tabId, queryId);
     if (queryId !== previousSavedQueryId) {
       // Load the selection's hatch SQL into the active tab's buffer — pulse
       // querySelectRestoring first so the autosave hook treats this the same

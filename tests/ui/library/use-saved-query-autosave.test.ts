@@ -170,4 +170,44 @@ describe("useSavedQueryAutosave", () => {
     expect(library.find((item) => item.id === "q1")?.queryText).toBe("SELECT 1");
     expect(library.find((item) => item.id === "q2")?.queryText).toBe("SELECT 2");
   });
+
+  it("deselect while a debounce is pending cancels it — no extra SavedQuery is auto-created", async () => {
+    vi.useFakeTimers();
+    const saveSavedQuery = vi.fn(async (q: SavedQueryDto) => q);
+    const ipc = ipcWithSave(saveSavedQuery);
+    const stores = composeAppStores(ipc);
+    const tab = stores.tabs.getState().createTab();
+    stores.tabs.getState().setSavedQueryId(tab.id, "q1");
+    stores.library.setState({
+      queries: [
+        {
+          id: "q1",
+          name: "Q1",
+          queryText: "SELECT 1",
+          connectionId: null,
+          databaseName: null,
+          createdAt: "1",
+          updatedAt: "1",
+          folderId: null,
+        },
+      ],
+      folders: [],
+    });
+
+    const { rerender } = renderHook(
+      ({ queryText, isRestoring }) => useSavedQueryAutosave({ stores, queryText, isRestoring }),
+      { initialProps: { queryText: "SELECT 1", isRestoring: false } },
+    );
+
+    rerender({ queryText: "SELECT 1 -- edited", isRestoring: false });
+    await vi.advanceTimersByTimeAsync(200);
+
+    // Deselect mirrors App.handleSelectQuery: clear savedQueryId and pulse isRestoring.
+    stores.tabs.getState().setSavedQueryId(tab.id, null);
+    rerender({ queryText: "SELECT 1 -- edited", isRestoring: true });
+    rerender({ queryText: "SELECT 1 -- edited", isRestoring: false });
+
+    await vi.advanceTimersByTimeAsync(600);
+    expect(saveSavedQuery).not.toHaveBeenCalled();
+  });
 });

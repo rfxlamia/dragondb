@@ -51,6 +51,11 @@ function isEditableTarget(target: EventTarget | null): boolean {
   return false;
 }
 
+function isQueriesColumnTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  return target.closest(`[data-testid="${QueriesAccessibility.column}"]`) !== null;
+}
+
 export function QueriesColumn(props: QueriesColumnProps): React.JSX.Element {
   const {
     queries,
@@ -121,6 +126,7 @@ export function QueriesColumn(props: QueriesColumnProps): React.JSX.Element {
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent): void {
       if (event.key !== "Delete") return;
+      if (!isQueriesColumnTarget(event.target)) return;
       if (isEditableTarget(event.target)) return;
       const ids =
         pickedIds.size > 0 ? [...pickedIds] : selectedQueryId !== null ? [selectedQueryId] : [];

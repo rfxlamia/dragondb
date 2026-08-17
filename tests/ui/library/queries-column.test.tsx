@@ -242,7 +242,7 @@ describe("QueriesColumn", () => {
     vi.useRealTimers();
   });
 
-  it("Delete key opens the delete-query sheet when the sidebar (not an editor) has focus", async () => {
+  it("Delete key opens the delete-query sheet when focus is inside the Queries column", async () => {
     const user = userEvent.setup();
     const onDeleteQuery = vi.fn();
     render(
@@ -258,11 +258,102 @@ describe("QueriesColumn", () => {
         onDeleteFolder={vi.fn()}
       />,
     );
-    document.body.focus();
+    await user.click(screen.getByRole("button", { name: "Q1" }));
     await user.keyboard("{Delete}");
     expect(screen.getByRole("button", { name: QueriesCopy.confirmDelete })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: QueriesCopy.confirmDelete }));
     expect(onDeleteQuery).toHaveBeenCalledWith("q1");
+  });
+
+  it("Delete key outside the Queries column does not open the delete-query sheet", async () => {
+    const user = userEvent.setup();
+    const onDeleteQuery = vi.fn();
+    render(
+      <>
+        <div data-testid="outside">outside</div>
+        <QueriesColumn
+          queries={[q1]}
+          folders={[]}
+          selectedQueryId="q1"
+          onSelectQuery={vi.fn()}
+          onNewQuery={vi.fn()}
+          onRenameQuery={vi.fn()}
+          onDeleteQuery={onDeleteQuery}
+          onMoveQuery={vi.fn()}
+          onDeleteFolder={vi.fn()}
+        />
+      </>,
+    );
+    screen.getByTestId("outside").focus();
+    await user.keyboard("{Delete}");
+    expect(screen.queryByRole("button", { name: QueriesCopy.confirmDelete })).toBeNull();
+    expect(onDeleteQuery).not.toHaveBeenCalled();
+  });
+
+  it("schema picker calls onSelectSchema when a schema is chosen", async () => {
+    const user = userEvent.setup();
+    const onSelectSchema = vi.fn();
+    render(
+      <QueriesColumn
+        queries={[q1]}
+        folders={[]}
+        selectedQueryId={null}
+        onSelectQuery={vi.fn()}
+        onNewQuery={vi.fn()}
+        onRenameQuery={vi.fn()}
+        onDeleteQuery={vi.fn()}
+        onMoveQuery={vi.fn()}
+        onDeleteFolder={vi.fn()}
+        schemas={["public", "analytics"]}
+        selectedSchema={null}
+        onSelectSchema={onSelectSchema}
+      />,
+    );
+    await user.selectOptions(screen.getByTestId(QueriesAccessibility.schemaPicker), "public");
+    expect(onSelectSchema).toHaveBeenCalledWith("public");
+  });
+
+  it("schema error OK dismisses the error banner", async () => {
+    const user = userEvent.setup();
+    const onDismissSchemaError = vi.fn();
+    render(
+      <QueriesColumn
+        queries={[q1]}
+        folders={[]}
+        selectedQueryId={null}
+        onSelectQuery={vi.fn()}
+        onNewQuery={vi.fn()}
+        onRenameQuery={vi.fn()}
+        onDeleteQuery={vi.fn()}
+        onMoveQuery={vi.fn()}
+        onDeleteFolder={vi.fn()}
+        schemaError={QueriesCopy.schemaError}
+        onDismissSchemaError={onDismissSchemaError}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: QueriesCopy.ok }));
+    expect(onDismissSchemaError).toHaveBeenCalledOnce();
+  });
+
+  it("duplicate calls onDuplicateQuery with the selected query id", async () => {
+    const user = userEvent.setup();
+    const onDuplicateQuery = vi.fn();
+    render(
+      <QueriesColumn
+        queries={[q1]}
+        folders={[]}
+        selectedQueryId="q1"
+        onSelectQuery={vi.fn()}
+        onNewQuery={vi.fn()}
+        onRenameQuery={vi.fn()}
+        onDeleteQuery={vi.fn()}
+        onMoveQuery={vi.fn()}
+        onDeleteFolder={vi.fn()}
+        onDuplicateQuery={onDuplicateQuery}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: QueriesCopy.duplicate }));
+    expect(onDuplicateQuery).toHaveBeenCalledWith("q1");
   });
 
   it("Delete key while a contenteditable hatch editor is focused edits SQL instead of opening the delete sheet", async () => {
