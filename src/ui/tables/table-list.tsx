@@ -43,14 +43,23 @@ export function TableList(props: TableListProps): React.JSX.Element {
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
   const [pending, setPending] = useState<PendingAdmin | null>(null);
   const [ddl, setDdl] = useState<string | null>(null);
+  const [ddlError, setDdlError] = useState<string | null>(null);
   const [exportTable, setExportTable] = useState<TableRef | null>(null);
 
   const groups = groupTables(tables);
   const firstKey = tables[0] ? catalogKey(tables[0]) : null;
+  const canExport = Boolean(onFetchAll && saveCsvFile && saveTextFile);
 
   async function handleDdl(table: TableRef): Promise<void> {
-    const result = await Promise.resolve(onGenerateDdl(table));
-    if (typeof result === "string") setDdl(result);
+    setDdlError(null);
+    try {
+      const result = await Promise.resolve(onGenerateDdl(table));
+      if (typeof result === "string") setDdl(result);
+    } catch (err) {
+      setDdlError(
+        err instanceof Error && err.message.length > 0 ? err.message : TablesCopy.ddlFailed,
+      );
+    }
   }
 
   function toggleExpanded(key: string): void {
@@ -123,9 +132,12 @@ export function TableList(props: TableListProps): React.JSX.Element {
                     </button>
                     <TableContextMenu
                       executing={executing}
+                      exportDisabled={!canExport}
                       onRefresh={() => onRefresh?.(table)}
                       onDdl={() => void handleDdl(table)}
-                      onExport={() => setExportTable(table)}
+                      onExport={() => {
+                        if (canExport) setExportTable(table);
+                      }}
                       onTruncate={() => setPending({ table, kind: "truncate" })}
                       onDrop={() => setPending({ table, kind: "drop" })}
                     />
@@ -188,9 +200,17 @@ export function TableList(props: TableListProps): React.JSX.Element {
         </div>
       ) : null}
 
-      <TableDdlSheet open={ddl !== null} ddl={ddl ?? ""} onClose={() => setDdl(null)} />
+      <TableDdlSheet
+        open={ddl !== null || ddlError !== null}
+        ddl={ddl ?? ""}
+        error={ddlError}
+        onClose={() => {
+          setDdl(null);
+          setDdlError(null);
+        }}
+      />
 
-      {exportTable && onFetchAll && saveCsvFile && saveTextFile ? (
+      {exportTable && canExport && onFetchAll && saveCsvFile && saveTextFile ? (
         <TableExportSheet
           key={catalogKey(exportTable)}
           open

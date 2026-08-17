@@ -4,9 +4,10 @@ import { TablesCopy } from "./tables-copy";
 export function TableDdlSheet(props: {
   open: boolean;
   ddl: string;
+  error?: string | null;
   onClose: () => void;
 }): React.JSX.Element | null {
-  const { open, ddl, onClose } = props;
+  const { open, ddl, error = null, onClose } = props;
   if (!open) return null;
 
   async function handleCopy(): Promise<void> {
@@ -32,6 +33,7 @@ export function TableDdlSheet(props: {
       <pre className="table-sheet__text" data-testid={TablesAccessibility.ddlText}>
         {ddl}
       </pre>
+      {error ? <p className="table-sheet__error">{error}</p> : null}
       <div className="table-sheet__actions">
         <button
           type="button"

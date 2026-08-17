@@ -4,13 +4,15 @@ import { TablesCopy } from "./tables-copy";
 
 export function TableContextMenu(props: {
   executing: boolean;
+  exportDisabled?: boolean;
   onRefresh: () => void;
   onDdl: () => void;
   onExport: () => void;
   onTruncate: () => void;
   onDrop: () => void;
 }): React.JSX.Element {
-  const { executing, onRefresh, onDdl, onExport, onTruncate, onDrop } = props;
+  const { executing, exportDisabled = false, onRefresh, onDdl, onExport, onTruncate, onDrop } =
+    props;
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const menuId = useId();
@@ -62,7 +64,12 @@ export function TableContextMenu(props: {
           <button type="button" role="menuitem" disabled={executing} onClick={() => run(onDdl)}>
             {TablesCopy.ddl}
           </button>
-          <button type="button" role="menuitem" disabled={executing} onClick={() => run(onExport)}>
+          <button
+            type="button"
+            role="menuitem"
+            disabled={executing || exportDisabled}
+            onClick={() => run(onExport)}
+          >
             {TablesCopy.export}
           </button>
           <button

@@ -98,4 +98,85 @@ describe("TableList", () => {
     expect(screen.getByRole("menuitem", { name: TablesCopy.drop })).toBeDisabled();
     expect(screen.getByRole("menuitem", { name: TablesCopy.truncate })).toBeDisabled();
   });
+
+  it("shows an error on the DDL sheet when generateTableDdl rejects, instead of throwing unhandled", async () => {
+    const user = userEvent.setup();
+    const onGenerateDdl = vi.fn().mockRejectedValue(new Error("boom"));
+    render(
+      <TableList
+        tables={[orders]}
+        columnsByTable={{}}
+        executing={false}
+        onBrowse={vi.fn()}
+        onDrop={vi.fn()}
+        onTruncate={vi.fn()}
+        onGenerateDdl={onGenerateDdl}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: TablesCopy.menu }));
+    await user.click(screen.getByRole("menuitem", { name: TablesCopy.ddl }));
+    expect(await screen.findByText("boom")).toBeInTheDocument();
+  });
+
+  it("shows a generic DDL error when the rejection has no message", async () => {
+    const user = userEvent.setup();
+    const onGenerateDdl = vi.fn().mockRejectedValue(new Error(""));
+    render(
+      <TableList
+        tables={[orders]}
+        columnsByTable={{}}
+        executing={false}
+        onBrowse={vi.fn()}
+        onDrop={vi.fn()}
+        onTruncate={vi.fn()}
+        onGenerateDdl={onGenerateDdl}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: TablesCopy.menu }));
+    await user.click(screen.getByRole("menuitem", { name: TablesCopy.ddl }));
+    expect(await screen.findByText(TablesCopy.ddlFailed)).toBeInTheDocument();
+  });
+
+  it("Export menuitem is disabled when onFetchAll/saveCsvFile/saveTextFile are not all provided", async () => {
+    const user = userEvent.setup();
+    render(
+      <TableList
+        tables={[orders]}
+        columnsByTable={{}}
+        executing={false}
+        onBrowse={vi.fn()}
+        onDrop={vi.fn()}
+        onTruncate={vi.fn()}
+        onGenerateDdl={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: TablesCopy.menu }));
+    const exportItem = screen.getByRole("menuitem", { name: TablesCopy.export });
+    expect(exportItem).toBeDisabled();
+    await user.click(exportItem);
+    expect(screen.queryByRole("dialog", { name: TablesCopy.exportTitle })).not.toBeInTheDocument();
+  });
+
+  it("Export menuitem is enabled and opens the export sheet when all export callbacks are provided", async () => {
+    const user = userEvent.setup();
+    render(
+      <TableList
+        tables={[orders]}
+        columnsByTable={{}}
+        executing={false}
+        onBrowse={vi.fn()}
+        onDrop={vi.fn()}
+        onTruncate={vi.fn()}
+        onGenerateDdl={vi.fn()}
+        onFetchAll={vi.fn().mockResolvedValue({ columns: [], rows: [] })}
+        saveCsvFile={vi.fn()}
+        saveTextFile={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: TablesCopy.menu }));
+    const exportItem = screen.getByRole("menuitem", { name: TablesCopy.export });
+    expect(exportItem).toBeEnabled();
+    await user.click(exportItem);
+    expect(await screen.findByText(TablesCopy.exportTitle)).toBeInTheDocument();
+  });
 });

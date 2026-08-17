@@ -25,4 +25,5 @@ export const TablesCopy = {
   dropPrompt: "Drop this table? This cannot be undone.",
   truncatePrompt: "Remove all rows from this table? This cannot be undone.",
   exportFailed: "Could not export this table. Try again.",
+  ddlFailed: "Could not generate the DDL. Try again.",
 } as const;
