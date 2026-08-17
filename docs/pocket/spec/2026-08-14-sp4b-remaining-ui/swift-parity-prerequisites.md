@@ -39,13 +39,13 @@ Already-decided **out of SP-4b product chrome** (still listed where Swift screen
 | Extra capabilities with no §12.2 row | **14** (included in §2 “Capabilities without screens”) |
 | DROP (dead) view files | **3** (`ConnectionsListView`, `ResizableSplitView`, `ColumnRowView`) + `Badge` only used by dead `ColumnRowView` |
 | Swift test files under `DragonDBTests/` | 25 (UI/service-relevant ones cited per cluster; visual-query suites are SP-4a) |
-| Tauri UI today | `App.tsx` = welcome **or** `ConnectionPanel` (profiles + URI mode + tables names) \| resizable Queries column \| `TabBar` + vertical `WorkspaceSplit` (per-tab `VisualQueryCanvas` above read-only `QueryResultsPane`). History sheet from canvas toolbar. Native Help / Shortcuts / Settings. SQL hatch on canvas toolbar. **No** collapsible connection sidebar or Show All Rows. |
+| Tauri UI today | `App.tsx` = welcome **or** collapsible `ConnectionPanel` (profiles + URI mode + database picker + tables names) \| resizable Queries column \| `TabBar` + vertical `WorkspaceSplit` (per-tab `VisualQueryCanvas` or SQL hatch above results). History sheet from canvas toolbar. Native Help / Shortcuts / Settings. Loading overlay on launch restore. **No** Show All Rows (`ConnectionPanel` does not pass `onBrowse`). |
 
 **Headline Tauri status**
 
-- **DONE (UI):** SP-4a canvas plus SP-4b first-slice (shell + read-only grid) plus SP-4b workspace chrome (2026-08-15, `feat/sp-4b-ui` `e7b97f5`): welcome gating, “No connections”, tables names in the connection column (click does not run), connection-string mode, Queries column + B′ session cache, in-session per-tab visual documents, tab bar (hidden at 1 tab, `+` always), history sheet + JSON/CSV/SQL export, native Help / Shortcuts / Settings, Accel+T/W/Enter. SP-2/SP-3 connection panel (save / connect / disconnect / switch / delete / SSL / SSH).
-- **PARTIAL:** saved-query filter/sort/duplicate/green-dot; tab titles still Untitled; folders are headings not disclosure groups; result-grid editability UI attaches but `RowOperationError` kinds don't surface distinct messages; table-browse pagination doesn't cache pages (T12, SP-4b last slice: mutation toast, DetailContent modals — JSON viewer / row editor / delete confirm / date-format-applied grid / pagination — and background persist shipped).
-- **MISSING UI:** remaining SEQUENCE (table browse Show All Rows / **collapsible connection sidebar** / database picker / loading overlay). Workspace-chrome spec: `docs/pocket/spec/2026-08-15-sp4b-workspace-chrome/workspace-chrome.md`.
+- **DONE (UI):** SP-4a canvas plus SP-4b first-slice (shell + read-only grid) plus SP-4b workspace chrome (2026-08-15, `feat/sp-4b-ui` `e7b97f5`) plus last-slice connection chrome / SQL hatch: welcome gating, “No connections”, tables names in the connection column (click does not run), connection-string mode, Queries column + B′ session cache, per-tab visual documents (persisted `visualDocumentJson`), tab bar (hidden at 1 tab, `+` always, Swift-style titles), history sheet + JSON/CSV/SQL export + relative dates, native Help / Shortcuts / Settings, Accel+T/W/Enter, collapsible connection sidebar, database picker, launch restore + loading overlay, Visual\|SQL hatch. SP-2/SP-3 connection panel (save / connect / disconnect / switch / delete / SSL / SSH).
+- **PARTIAL:** result-grid editability UI attaches but `RowOperationError` kinds don't surface distinct messages; table-browse pagination doesn't cache pages; Edit row uses plain text inputs (no typed pickers); context-mismatch help is missing. T12 last slice: mutation toast, DetailContent modals, background persist shipped.
+- **MISSING UI:** remaining SEQUENCE (table browse Show All Rows — `ConnectionPanel` does not pass `onBrowse`). Workspace-chrome spec: `docs/pocket/spec/2026-08-15-sp4b-workspace-chrome/workspace-chrome.md`.
 
 ---
 
@@ -59,19 +59,19 @@ Parent §12.1: `MainSplitView`, `RootView`, split/loading/badge/toast primitives
 
 - [x] **Welcome vs main chrome.** Swift: `RootView.body` + `shouldShowWelcomeScreen(connectionCount:isShowingConnectionForm:)` in `Logic/AppLaunchDecisions.swift` (true iff 0 profiles and form not showing). Tauri: **DONE** `WelcomeView` when 0 profiles and form hidden (`public/onboarding.png`, “Hello, and welcome!”, “Connect to Server...”); workspace when ≥1 profile or form showing. **Done:** Given 0 saved profiles, When app launches, Then a welcome/empty state with a control that opens create-profile is shown; Given ≥1 profile, Then the connected workspace is shown. **WORKSPACE-CHROME**.
 - [x] **Connection-form cancel (inline, not a sheet).** Swift: `RootView` `.sheet` on `appState.navigation.isShowingConnectionForm`, clears `connectionToEdit` on dismiss. Tauri: **DONE** for behavior — form stays inline in `ConnectionPanel`; form-level Cancel hides without saving; 0 profiles + hidden form returns to welcome. Literal Swift sheet is not required. **WORKSPACE-CHROME**.
-- [ ] **Create-database sheet host.** Swift: `RootView` sheet on `isShowingCreateDatabase`, `onConnect` → `RootViewModel.selectDatabase`. Tauri: **MISSING** (no IPC either). **Done:** after successful create, the new database becomes the session database and table list reloads. **SEQUENCE**; blocked by Database management IPC.
+- [x] **Create-database sheet host.** Swift: `RootView` sheet on `isShowingCreateDatabase`, `onConnect` → `RootViewModel.selectDatabase`. Tauri: **DONE** `CreateDatabaseDialog` hosted from the database picker (not a RootView sheet); `handleCreateDatabase` → `ipc.createDatabase` then `switchDatabase` + picker refresh (tables reload via `onDatabaseSwitched` → `reloadTables`). Failed create keeps the previous selection (`createDatabaseError`). **Done:** after successful create, the new database becomes the session database and table list reloads. **SEQUENCE**.
 - [x] **Keyboard-shortcuts sheet host.** Swift: `RootView` observes `.showKeyboardShortcuts`. Tauri: **DONE** `ShortcutsDialog` from native menu + `handleMenuEvent("shortcuts")`. **Done:** Help/Shortcuts command opens a dismissible list of New Tab / Close Tab / Run Query. **WORKSPACE-CHROME**.
 - [x] **Help sheet host.** Swift: `RootView` observes `.showHelp` → `HelpView`. Tauri: **DONE** `HelpDialog`; Support `https://github.com/rfxlamia/dragondb/issues`; Done dismisses. **WORKSPACE-CHROME**.
-- [ ] **Launch restore + loading overlay.** Swift: `RootView.task` → `RootViewModel.initializeApp`; `LoadingOverlayView(phase:)` while `loadingState.isLoading`; phases in `LoadingState.LoadingPhase` (`Initializing...`, `Restoring tabs...`, `Connecting to database...`, `Loading databases...`, `Loading tables...`). Tauri: **MISSING** overlay; `App.tsx` hydrates tabs best-effort (`tabs.refresh().catch`) with no phase copy. **Done:** Given persisted tabs + last profile, When app launches, Then overlay shows until connect+schema load finishes or fails with `Connection Error` alert (`RootView` initializationError). **SEQUENCE** (first-slice: at least a non-blocking connect error, not the full phase machine).
+- [x] **Launch restore + loading overlay.** Swift: `RootView.task` → `RootViewModel.initializeApp`; `LoadingOverlayView(phase:)` while `loadingState.isLoading`; phases in `LoadingState.LoadingPhase` (`Initializing...`, `Restoring tabs...`, `Connecting to database...`, `Loading databases...`, `Loading tables...`). Tauri: **DONE** `App.tsx` restore path sets those phase strings and mounts `LoadingOverlay`; failure shows `Connection Error` (`ConnectionCopy.connectionError`). **Done:** Given persisted tabs + last profile, When app launches, Then overlay shows until connect+schema load finishes or fails with `Connection Error` alert. **SEQUENCE**.
 - [x] **Background persist.** Swift: `scenePhase == .background` → `saveCurrentStateToTab` + `cleanupOnWindowClose`. Tauri: **DONE** `useBackgroundPersist` wired in `App.tsx` (visibilitychange + `beforeunload`/window-close hook) persists the active tab's query text; cached results are not persisted unless `includeCachedResults`. **Done:** hiding/closing the window persists active tab query text (and does not persist results unless `includeCachedResults`). **SEQUENCE**.
 - [x] **Results + editor vertical split, resizable.** Swift: `MainSplitView` `VSplitView` editor row `minHeight: 250, idealHeight: 320` + results `minHeight: 300`. Tauri: **DONE** `WorkspaceSplit` (`react-resizable-panels` vertical `Group`) in `App.tsx`; canvas remounts with `key={\`${activeTabId}:${docsEpoch}\`}` (not `canvasEpoch`); canvas `minSize={250}` / results `minSize={300}`; `.app-main-column` `min-height: 550px`; divider not persisted. **Done:** canvas (primary) sits above a results pane; user can drag the divider; neither pane collapses below a min height. **FIRST-SLICE**.
 - [x] **Do not clone Swift three-pane editor row.** Swift: `HSplitView` saved-queries (200–260) \| `QueryEditorView`. Tauri canvas-primary. **Done:** saved-queries are **not** required beside the canvas in first-slice; they SEQUENCE in Sidebar cluster. Literal SQL-primary clone is **rejected**. **FIRST-SLICE** (constraint). Workspace-chrome slice (2026-08-15) places Queries left of canvas without making SQL the default editor.
-- [ ] **Collapsible connection sidebar (`NavigationSplitView`).** Swift: connection/tables chrome can collapse. Tauri workspace-chrome (2026-08-15) keeps Connection column always visible (**Option A**). **Done:** user can hide/show the connection column without losing Queries | canvas. **SEQUENCE — next grinding after workspace-chrome** (was Option C; must not silent-drop).
+- [x] **Collapsible connection sidebar (`NavigationSplitView`).** Swift: connection/tables chrome can collapse. Tauri: **DONE** `connectionCollapsed` + `.app-shell--collapsed` hide the Connection column; `ConnectionCopy.showConnection` / `collapseConnection` restore it without unmounting Queries | canvas. **Done:** user can hide/show the connection column without losing Queries | canvas. **SEQUENCE**.
 - [x] **Tab bar appears only when `tabs.count > 1`.** Swift: `MainSplitView` `if tabManager.tabs.count > 1 { TabBarView() }`. Tauri: **DONE** tab **strip** (`role="tablist"`) hidden at 1 tab; New Tab `+` still visible; strip at ≥2. At 1 tab a solo Untitled label + close still render (needed for close-last). **WORKSPACE-CHROME**.
 - [x] **Mutation toast overlay.** Swift: `MainSplitView` bottom-trailing `MutationToastView` when `appState.query.mutationToast != nil`; View Table selects table + `requestTableQuery` if already selected; auto-dismiss 5s (`QueryState.showMutationToast`). Tauri: **DONE** `MutationToast` hosted in `AppWorkspace` above `QueryResultsPane`; successful 0-row mutation shows toast with title from `SUCCESS_TITLES`; DROP TABLE hides View Table; auto-dismisses after 5s; View Table browses the schema-qualified table (`extractTableName` schema threaded through `MutationToast.tableSchema`) — Tauri has no reactive `.onChange(of: selectedTable)` watcher, so `runBrowseOnActiveTab` is the single call that both selects and loads the table on every click rather than only when already selected. **Done:** successful mutation with 0 returned rows shows toast with title from `QueryType.successTitle`; DROP TABLE hides View Table (`MutationToastData.showViewTableButton`). **SEQUENCE**.
 - [x] **DetailContent modals host.** Swift: `DetailContentModalsWrapper` on `MainSplitView`. Tauri: **DONE** `QueryResultsPane` now receives `raw`/`dateFormat`/`query`/`sourceTable`/`primaryKeyColumns`/pagination/`onUpdateRow`/`onDeleteRows`/`onSaveCsv` from `AppWorkspace`/`App.tsx`, so the JSON viewer, row editor, and delete-confirm modals attach to the results shell and call `ipc.updateRow`/`ipc.deleteRows`/`ipc.saveCsvFile`. **Done:** JSON / row editor / delete confirm attach to the shell that owns the grid. **SEQUENCE**.
-- [ ] **Window title = selected database.** Swift: `.navigationTitle(appState.connection.selectedDatabase?.name ?? "")`. Tauri: **MISSING**. **Done:** window/document title reflects current database name or empty. **SEQUENCE**.
-- [ ] **`LoadingOverlayView`.** Swift primitive 36 LOC. Tauri: **MISSING**. **Done:** dimmed overlay + `phase.rawValue` headline. **SEQUENCE**.
+- [x] **Window title = selected database.** Swift: `.navigationTitle(appState.connection.selectedDatabase?.name ?? "")`. Tauri: **DONE** `document.title = databaseName ?? "DragonDB"` (`App.tsx`). Deviation: Swift falls back to an empty string; Tauri uses `"DragonDB"` when no database is selected. **Done:** window/document title reflects current database name (or the DragonDB fallback). **SEQUENCE**.
+- [x] **`LoadingOverlayView`.** Swift primitive 36 LOC. Tauri: **DONE** `src/ui/shell/loading-overlay.tsx` (`role="status"` + phase headline); mounted from `App.tsx` while `overlayPhase` is set. **Done:** dimmed overlay + phase headline. **SEQUENCE**.
 - [x] **`EmptyQueryResultsView`.** Swift: `"No rows found"` vs `"Run a query to see results"` gated by `hasExecutedQuery`. Tauri: **DONE** `ResultsCopy.runQueryEmpty` / `noRowsFound`; idle (including hydrated cache) vs 0-row `ok`. **Done:** those two strings (English) in the results pane. **FIRST-SLICE**.
 - [ ] **`ResizableSplitView`.** Swift: **DROP (dead)** — defined, never instantiated; live splits are SwiftUI `NavigationSplitView` / `VSplitView` / `HSplitView`. Do not port the NSSplitView wrapper.
 - [ ] **`Badge`.** Swift: only used by unreachable `ColumnRowView`. **DROP (dead)** as a standalone screen. PK/FK icons in the *table expander* (`TableColumnRowView`) remain SEQUENCE under Table browser.
@@ -85,41 +85,41 @@ Parent §12.1: form, list, dropdown, database picker, status banner — 5 files,
 - [x] **New Connection.** Swift: `ConnectionDropdown.newConnectionButton` → `showConnectionForm()`. Tauri: **DONE** `ConnectionCopy.newProfile` → `startNewProfile`. **FIRST-SLICE**.
 - [x] **Edit connection.** Swift: pencil in dropdown → `connectionToEdit` + form sheet. Tauri: **DONE** for first-slice — selecting a profile fills the form; `saveProfile` with that id. No distinct Edit affordance. **SEQUENCE** if a pencil/sheet is required. **FIRST-SLICE**.
 - [x] **Delete connection with confirm.** Swift: trash → `ConnectionAlertsModifier` “Delete Connection?” irreversible copy. Tauri: **DONE** `pendingDeleteId` + `ConnectionCopy.deletePrompt`; disconnects if active then `deleteProfile`. **FIRST-SLICE**.
-- [ ] **Test connection (does not persist session).** Swift: `ConnectionFormView.test` → `ConnectionFormViewModel.testConnection` (SSH then DB, teardown tunnel, `ConnectionStatusBanner` testing/testingSSH/success/error, min 150ms). Tauri: **MISSING** (no test IPC; Connect is save-then-connect). **Done:** Test does not leave `isConnected`; banner states match Swift copy. **SEQUENCE**; **needs-decision** whether to add `testConnection` IPC or reuse connect+disconnect.
-- [ ] **Save-then-Connect prompt on create.** Swift: `showConnectionSavedAlert` “Connection Created” / “Connect now?” / Not Now. Tauri: **MISSING** as a prompt; user Save then Connect separately (`canConnect` requires saved + not dirty). **Done:** cannot Connect an unsaved dirty form (already true). Optional post-save Connect prompt is **needs-decision**. **SEQUENCE**.
-- [ ] **Individual fields: name optional, host, port, SSL, database, username, password show/hide, keychain load.** Swift: `ConnectionFormView.individualFieldsView`. Tauri: **PARTIAL** — `connection-form.tsx` has name/host/port/user/database/password/ssl/ssh; no show-password, no keychain reveal of stored secret, no optional-name plus-button (name is always a field). **Done:** secrets never appear in sqlite (`ConnectionProfileDto` has no password); empty password on edit means “keep stored”. **SEQUENCE** for show/hide; persistence already SP-2.
+- [x] **Test connection (does not persist session).** Swift: `ConnectionFormView.test` → `ConnectionFormViewModel.testConnection` (SSH then DB, teardown tunnel, `ConnectionStatusBanner` testing/testingSSH/success/error, min 150ms). Tauri: **DONE** `ConnectionForm` Test → `ipc.testConnection` (`TEST_BANNER_MIN_MS = 150`); banner phases `testing` / `testingSSH` / `success` / `error`; does not call `connect` / does not set `sessionClaimed`. **Done:** Test does not leave `isConnected`; banner states match Swift copy. **SEQUENCE**.
+- [x] **Save-then-Connect prompt on create.** Swift: `showConnectionSavedAlert` “Connection Created” / “Connect now?” / Not Now. Tauri: **DONE** `ConnectionCreatedDialog` after first save of a new profile (`connectionCreated` / `connectNowPrompt` / Connect now / Not now). `canConnect` still requires saved + not dirty. **Done:** cannot Connect an unsaved dirty form; post-save Connect prompt ships. **SEQUENCE**.
+- [x] **Individual fields: name optional, host, port, SSL, database, username, password show/hide, keychain load.** Swift: `ConnectionFormView.individualFieldsView`. Tauri: **DONE** for show/hide — `connection-form.tsx` toggles password `type` via `showPassword`. Name is always a field (empty → `null`; Swift plus-button not ported). Keychain *reveal* of a stored secret is not a separate control; empty password on edit still means “keep stored”. **Done:** secrets never appear in sqlite (`ConnectionProfileDto` has no password); empty password on edit means “keep stored”; show/hide ships. **SEQUENCE**.
 - [x] **SSL modes + SSH collapse.** Swift: `SSLMode.allCases` picker + hover tooltip; SP-2 table: allow/prefer → disable TLS; verify-ca/verify-full hidden when SSH. Tauri: **DONE** `SSL_MODES_SSH` vs `SSL_MODES_ALL` in `connection-form.tsx`; Rust collapse documented in SP-2 spec. **FIRST-SLICE**.
 - [x] **SSH tunnel fields + key browse (contents to keyring, path hint only).** Swift: `browseForPrivateKey` + passphrase optional. Tauri: **DONE** file input reads `file.text()` into `secrets.sshPrivateKey`. **FIRST-SLICE**.
 - [x] **Connection-string input mode.** Swift: toolbar toggle individual ↔ URI; URI **read-only when editing** with Copy. Tauri: **DONE** `connection-string-fields.tsx` + `parseConnectionString` on Save; edit = read-only + Copy (`YOUR_PASSWORD`). **WORKSPACE-CHROME**.
 - [x] **Keychain denied alert.** Swift: `showKeychainAlert`. Tauri: save failure surfaces as `errorMessage` via `IpcError`. **Done:** keyring failure is a human message, profile row not half-saved (SP-2 atomicity). **FIRST-SLICE**.
-- [ ] **Status banner.** Swift: `ConnectionStatusBanner` four non-idle states. Tauri: **PARTIAL** — single `role="status"` error line; no success/testing banners. **SEQUENCE**.
-- [ ] **Database picker (list + switch).** Swift: `ConnectionDatabasePicker` after a connection is selected; disabled until `isConnected`; empty `"No databases"`; pulse `"⚠️ Select DB"`. Tauri: **MISSING** UI and **MISSING** `listDatabases` IPC. Connect uses `profile.database` only (`session-store` `databaseName` from `ConnectResult.database`). **Done:** Given connected session, When user picks another database on the same server, Then tables reload for that database. **SEQUENCE**; blocked by new Rust (switch-database / list-databases).
-- [ ] **Create Database entry from picker.** Swift: picker footer → `navigation.showCreateDatabase()`. Tauri: **MISSING**. **SEQUENCE** (Database management).
-- [ ] **Delete database from picker row.** Swift: trash → confirm “Delete Database?” → `ConnectionSidebarViewModel.deleteDatabase`. Tests: `ConnectionSidebarViewModelTests`, `DatabaseServiceDeleteDatabaseTests`. Tauri: **MISSING** IPC (`commands.rs` “No createDatabase / deleteDatabase”). **SEQUENCE**.
-- [ ] **Restore last connection on launch.** Swift: `ConnectionsDatabasesSidebar.task` `restoreLastConnection`; `RootViewModel.initializeApp` uses active tab’s `connectionId`. Tauri: **MISSING** auto-connect (user must click Connect). **SEQUENCE**.
+- [x] **Status banner.** Swift: `ConnectionStatusBanner` four non-idle states. Tauri: **DONE** `ConnectionStatusBanner` phases `testing` / `testingSSH` / `success` / `error`, plus a connected line when idle+connected. **SEQUENCE**.
+- [x] **Database picker (list + switch).** Swift: `ConnectionDatabasePicker` after a connection is selected; disabled until `isConnected`; empty `"No databases"`; pulse `"⚠️ Select DB"`. Tauri: **DONE** `connection-database-picker.tsx` after connect; `ipc.listDatabases` / `switchDatabase`; empty `"No databases"`; pulse `ConnectionCopy.selectDbPulse`. **Done:** Given connected session, When user picks another database on the same server, Then tables reload for that database. **SEQUENCE**.
+- [x] **Create Database entry from picker.** Swift: picker footer → `navigation.showCreateDatabase()`. Tauri: **DONE** picker Create database button opens `CreateDatabaseDialog`. **SEQUENCE**.
+- [x] **Delete database from picker row.** Swift: trash → confirm “Delete Database?” → `ConnectionSidebarViewModel.deleteDatabase`. Tests: `ConnectionSidebarViewModelTests`, `DatabaseServiceDeleteDatabaseTests`. Tauri: **DONE** picker Drop database → confirm → `ipc.deleteDatabase` + list refresh; error copy `deleteDatabaseError` leaves the previous selection. Confirm reuses the irreversible profile-delete prompt rather than Swift “Delete Database?”. **SEQUENCE**.
+- [x] **Restore last connection on launch.** Swift: `ConnectionsDatabasesSidebar.task` `restoreLastConnection`; `RootViewModel.initializeApp` uses active tab’s `connectionId`. Tauri: **DONE** launch restore auto-connects the active tab’s profile (else first profile) after profiles hydrate; overlay + `Connection Error` on failure. **SEQUENCE**.
 - [ ] **`ConnectionsListView` (600×500 management window).** Swift: **DROP (dead)** — no caller outside its own file / preview. Behaviors duplicated by dropdown + form. Favorite **star** is display-only here; `isFavorite` is never written in any Swift view (**needs-decision**: keep field on DTO, no UI).
 
 ### 2.3 Sidebar, saved queries, folders
 
 Parent §12.1: 8 files, 1,544 LOC.
 
-- [x] **Tables names in the connection column after connect.** Swift: `ConnectionsDatabasesSidebar.mainContent` (also schema picker + db picker). Tauri: **DONE** `ConnectionTablesList` — loading / names / “No tables found” / fail copy; clear on disconnect; click does **not** run a query. Schema picker, SET search_path, sidebar refresh overlay remain **SEQUENCE**. **WORKSPACE-CHROME**.
-- [ ] **Sidebar refresh.** Swift: toolbar `arrow.clockwise` → `refreshOnDemandFromToolbar`, min 0.45s spinner (`isRefreshingSidebarMetadata`). Tests: `ConnectionSidebarViewModelTests`. Tauri: **MISSING**. **Done:** refresh re-fetches database list (if that IPC exists) and `listTables`; overlay on tables; help “Refreshes database list and table list.” **SEQUENCE**.
-- [ ] **Schema filter when `schemas.count > 1`.** Swift: `SchemaPicker` “All Schemas” vs named; clears selected table if schema mismatch; `setSchemaSearchPathDebounced`; `tabManager.updateActiveTabSchemaFilter`. Tauri: **MISSING** UI; SP-3 explicitly deferred `SET search_path` to SP-4b. `listTables` already returns `schema` (`postgres/query.rs` `LIST_TABLES_SQL`). **Done:** filter is client-side on `TableRef.schema`; selecting a schema runs `SET search_path TO <schema>, public` (or equivalent) on the live connection. **SEQUENCE**; search_path needs `runQuery` of SET or a dedicated command (**needs-decision**).
-- [ ] **Schema error alert.** Swift: `appState.connection.schemaError`. Tauri: **MISSING**. **Done:** failed SET search_path shows alert, OK clears. **SEQUENCE**.
+- [x] **Tables names in the connection column after connect.** Swift: `ConnectionsDatabasesSidebar.mainContent` (also schema picker + db picker). Tauri: **DONE** `ConnectionTablesList` — loading / names / “No tables found” / fail copy; clear on disconnect; click does **not** run a query (Show All Rows still unwired). Schema picker + SET search_path live on the Queries toolbar; sidebar Refresh reloads tables + picker databases. **WORKSPACE-CHROME**.
+- [x] **Sidebar refresh.** Swift: toolbar `arrow.clockwise` → `refreshOnDemandFromToolbar`, min 0.45s spinner (`isRefreshingSidebarMetadata`). Tests: `ConnectionSidebarViewModelTests`. Tauri: **DONE** Queries-column Refresh (`REFRESH_MIN_MS = 450`) calls `library.refresh` + `reloadTables` + `ConnectionPanel.refreshDatabases`; overlay on the Queries column (not the tables list). Button label is `Refresh`, not Swift’s longer help string. **Done:** refresh re-fetches database list and `listTables`. **SEQUENCE**.
+- [x] **Schema filter when `schemas.count > 1`.** Swift: `SchemaPicker` “All Schemas” vs named; clears selected table if schema mismatch; `setSchemaSearchPathDebounced`; `tabManager.updateActiveTabSchemaFilter`. Tauri: **DONE** Queries toolbar schema `<select>` when `schemaNames.length > 1`; client-side filter on `TableRef.schema`; `handleSelectSchema` → `ipc.setSearchPath` then `loadTables`. **Done:** filter is client-side on `TableRef.schema`; selecting a schema runs `SET search_path`. **SEQUENCE**.
+- [x] **Schema error alert.** Swift: `appState.connection.schemaError`. Tauri: **DONE** Queries toolbar `role="alert"` + OK (`QueriesCopy.schemaError` / `onDismissSchemaError`). **Done:** failed SET search_path shows alert, OK clears. **SEQUENCE**.
 - [ ] **Table-load timeout alert.** Swift: 300s `Constants.Timeout.databaseOperation`, Try Again / Cancel. Tauri: **MISSING**. **SEQUENCE**.
-- [x] **Saved-queries column: title Queries + new query.** Swift: `SavedQueriesSidebarSection` also has filter field + six-way sort. Tauri: **DONE** resizable `QueriesColumn` left of canvas (including disconnected); `+` names `Query yy-MM-dd H:mm:ss` and clears the active tab canvas+grid. Filter field, six-way sort, duplicate, multi-select, green cache dot remain **SEQUENCE**. **WORKSPACE-CHROME**.
-- [x] **Empty copy.** Swift: `"No saved queries"` / `"No matching queries"`. Tauri: **DONE** `"No saved queries"`. `"No matching queries"` waits on the filter field (**SEQUENCE**). **WORKSPACE-CHROME**.
-- [ ] **Folders as disclosure groups; unfoldered queries below.** Swift: `folderDisclosureGroup` + `QueryFolderRowView`. Tauri: **PARTIAL** — unfoldered queries then folder `<h3>` groups; not collapsible disclosure. **SEQUENCE** for disclosure/collapse.
-- [x] **Select query restores B′ cached results; does not rebuild visual cards from SQL.** Swift: `handleSelectionChange` + `SavedQueriesViewModel.loadQuery` also loads SQL text. Tauri: **DONE** for canvas-primary — click sets tab `savedQueryId` and restores last **successful** Run grid; cards unchanged; cache dropped on profile switch. Loading `queryText` into visual IR remains **SEQUENCE** (SQL hatch). **WORKSPACE-CHROME**.
-- [ ] **Deselect clears tab savedQueryId.** Swift: `tabManager.clearActiveTabSavedQueryId`. Tauri: **MISSING**. **SEQUENCE**.
-- [x] **Rename query sheet.** Swift: `EditQuerySheet` / `EditFolderSheet`; Save disabled on blank; Enter submits. Tauri: **DONE** rename query (Save disabled if blank). Rename **folder** sheet remains **SEQUENCE**. **WORKSPACE-CHROME**.
-- [x] **Move to folder.** Swift: `MoveToFolderSheet` also has No Folder / New Folder. Tauri: **DONE** move to an existing folder. No Folder / New Folder remain **SEQUENCE**. **WORKSPACE-CHROME**.
-- [ ] **Duplicate query.** Swift: `duplicateQuery`. Tauri: **MISSING** UI; IPC `duplicateSavedQuery` **DONE**. **SEQUENCE**.
-- [x] **Delete query confirm (single).** Swift: confirmationDialog + Delete key (`onDeleteCommand`) also covers N. Tauri: **DONE** confirm then `deleteSavedQueries([id])`. Multi-select delete + Delete key remain **SEQUENCE**. **WORKSPACE-CHROME**.
+- [x] **Saved-queries column: title Queries + new query.** Swift: `SavedQueriesSidebarSection` also has filter field + six-way sort. Tauri: **DONE** resizable `QueriesColumn` left of canvas (including disconnected); `+` names `Query yy-MM-dd H:mm:ss` and clears the active tab canvas+grid. Filter field, six-way sort, duplicate, multi-select, green cache dot **shipped**. **WORKSPACE-CHROME**.
+- [x] **Empty copy.** Swift: `"No saved queries"` / `"No matching queries"`. Tauri: **DONE** `"No saved queries"` and `"No matching queries"` when the filter matches nothing. **WORKSPACE-CHROME**.
+- [x] **Folders as disclosure groups; unfoldered queries below.** Swift: `folderDisclosureGroup` + `QueryFolderRowView`. Tauri: **DONE** `QueriesFolderRow` `aria-expanded` disclosure; unfiled queries render *above* folders (Swift puts unfoldered below). **SEQUENCE**.
+- [x] **Select query restores B′ cached results; does not rebuild visual cards from SQL.** Swift: `handleSelectionChange` + `SavedQueriesViewModel.loadQuery` also loads SQL text. Tauri: **DONE** for canvas-primary — click sets tab `savedQueryId`, loads hatch `queryText`, and restores last **successful** Run grid; cards unchanged; cache dropped on profile switch. Loading `queryText` into visual IR remains **SEQUENCE**. **WORKSPACE-CHROME**.
+- [x] **Deselect clears tab savedQueryId.** Swift: `tabManager.clearActiveTabSavedQueryId`. Tauri: **DONE** Queries Deselect → `onSelectQuery(null)` → `setSavedQueryId(tabId, null)`. **SEQUENCE**.
+- [x] **Rename query sheet.** Swift: `EditQuerySheet` / `EditFolderSheet`; Save disabled on blank; Enter submits. Tauri: **DONE** rename query and rename folder (Save disabled if blank). **WORKSPACE-CHROME**.
+- [x] **Move to folder.** Swift: `MoveToFolderSheet` also has No Folder / New Folder. Tauri: **DONE** move to an existing folder, No Folder (`folderId: null`), and New Folder (`createQueryFolder` then move). **WORKSPACE-CHROME**.
+- [x] **Duplicate query.** Swift: `duplicateQuery`. Tauri: **DONE** Queries Duplicate → `library.duplicateSavedQuery`. **SEQUENCE**.
+- [x] **Delete query confirm (single).** Swift: confirmationDialog + Delete key (`onDeleteCommand`) also covers N. Tauri: **DONE** confirm then `deleteSavedQueries([id])`; multi-select (meta/ctrl) + Delete key confirm the picked set. **WORKSPACE-CHROME**.
 - [x] **Delete folder: folder-only vs folder+queries.** Swift: two destructive buttons; IPC already `deleteFolder(id, deleteQueries)`. Tauri: **DONE** both actions in `QueriesColumn`, but only when a **selected query lives in that folder** (empty folders have no delete control). **WORKSPACE-CHROME**.
-- [ ] **Executing spinner + cached-results green dot on row.** Swift: `SavedQueryRowView.isExecuting` / `shouldShowCachedRowCount`. Tauri: **MISSING**. **SEQUENCE**.
-- [ ] **Debounced auto-save of editor SQL into current SavedQuery (500ms, skip while restoring).** Swift: `QueryEditorViewModel.handleQueryTextChange`. Tauri: **MISSING**. **SEQUENCE** (SQL editor cluster); do not auto-save visual-canvas IR into SavedQuery unless decided (**needs-decision**: Swift visual path still updates `queryText` via generator? visual VM has `onDocumentChange` on tab, not SavedQuery).
+- [x] **Executing spinner + cached-results green dot on row.** Swift: `SavedQueryRowView.isExecuting` / `shouldShowCachedRowCount`. Tauri: **DONE** `QueriesQueryRow` spinner when `executingQueryId` matches; cache dot when B′ has a hit. **SEQUENCE**.
+- [x] **Debounced auto-save of editor SQL into current SavedQuery (500ms, skip while restoring).** Swift: `QueryEditorViewModel.handleQueryTextChange`. Tauri: **DONE** `useSavedQueryAutosave` (`AUTOSAVE_MS = 500`) persists hatch `queryText`; skips while `isRestoring` / overlay / query-select pulse; auto-creates a SavedQuery when none is selected; never writes visual IR into `SavedQuery.queryText`. **SEQUENCE**.
 
 ### 2.4 Results grid and row editing
 
@@ -149,46 +149,46 @@ Parent §12.1: 6 files, 1,164 LOC.
 - [x] **Tables list after connect.** Swift: `TablesListIsolated`; loading spinner if empty+loading; “No tables found”; refresh overlay. Tauri: **DONE** names in the connection column (`ConnectionTablesList`); loading / empty / fail copy; no refresh overlay. Click still does **not** Show All Rows (next grinding). **WORKSPACE-CHROME**.
 - [ ] **Click table name = Show All Rows (does not auto-run on mere selection).** Swift: `TableListRowComponent.onShowAllRows` → `requestTableQuery`; `QueryResultsViewModel.handleTableSelectionChange` comment: no auto-execute. Tests: `AppStateTests` race/supersede. Tauri: **MISSING**. **Done:** click runs paginated `SELECT` for that table into the results grid; switching selection without click does not fetch. **SEQUENCE**.
 - [ ] **Expand table → columns (lazy fetch).** Swift: `TableListRowView.toggleExpanded` / `fetchColumnInfo` + PK merge; `TableColumnRowView` simplified types + key icons. Tauri: `listColumns` exists but **PK/unique/FK enrichment deferred** (`postgres/query.rs` comment). **Done:** expander shows names + data types; PK/FK icons **needs-decision** until catalog enrichment exists (row-ops already query PK separately). **SEQUENCE**.
-- [ ] **Grouped schemas + Load more (100).** Swift: `SchemaGroupView` / `displayedCount` batch 100. Tauri: **MISSING**. **SEQUENCE**.
+- [x] **Grouped schemas + Load more (100).** Swift: `SchemaGroupView` / `displayedCount` batch 100. Tauri: **DONE** `TableList` groups by schema and batches 100 with Load more (`SCHEMA_BATCH_SIZE`). **SEQUENCE**.
 - [ ] **Context menu: Refresh, Generate DDL, Export, Truncate, Drop** — disabled while `isExecutingQuery`. Swift: `TableListRowComponent.tableMenuContent`. Tauri: **MISSING**. Truncate/Drop/DDL have **no IPC** (could `runQuery` raw SQL — **needs-decision**). **SEQUENCE**.
 - [ ] **DDL sheet + copy.** Swift: `TableDDLSheet`. Tauri: **MISSING**. **SEQUENCE**.
 - [ ] **Export sheet: Fetch Data → CSV/JSON preview counts → native save.** Swift: `TableExportSheet` + `fetchAllTableData`. Tauri: **MISSING** UI; `saveCsvFile` + `toCsv` ready; JSON export not in IPC (client-side stringify is enough). **SEQUENCE**.
 - [ ] **Truncate / Drop confirms** with irreversible copy. Swift: `TableContextMenuModals`. Tauri: **MISSING**. **SEQUENCE**.
-- [ ] **Foreign table icon.** Swift: `table.tableType == .foreign`. Tauri `TableRef` has no `tableType`. **needs-decision**. **SEQUENCE**.
+- [x] **Foreign table icon.** Swift: `table.tableType == .foreign`. Tauri: **DONE** `TableRef.tableType`; `TableList` shows `TablesCopy.foreignTable` when `tableType === "foreign"`. **SEQUENCE**.
 
 ### 2.6 Query editor (SQL)
 
 Parent §12.1: 4 files, 937 LOC. **Not first-slice** (canvas stays primary).
 
 - [x] **View generated SQL dialog (Swift 1:1).** Swift: toolbar → `GeneratedSQLPreviewView` sheet (Copy, Done, `—`). Tauri: **DONE** `GeneratedSQLDialog`; always-on `.vq-sql-preview` **removed**. **FIRST-SLICE**.
-- [ ] **SQL mode as escape hatch, not the default layout.** Swift: segmented `QueryEditorMode` sql/visual; SQL is default. Tauri: visual is default/only. **Done:** a control reveals a SQL buffer bound to `tabs.active.queryText`; visual remains the default surface. **SEQUENCE**.
-- [x] **Run Query + ⌘↵ on the visual surface.** Swift: `QueryEditorComponent` `keyboardShortcut(.return, modifiers: [.command])`. Tauri: **DONE** Accel+Enter via `handleWorkspaceKeydown` + native menu `CmdOrCtrl+Enter`; no-op when Run disabled; welcome ignores it. SQL-focused hatch remains **SEQUENCE**. **WORKSPACE-CHROME**.
+- [x] **SQL mode as escape hatch, not the default layout.** Swift: segmented `QueryEditorMode` sql/visual; SQL is default. Tauri: **DONE** canvas toolbar Visual\|SQL (`toolbar.tsx`); default `editorMode` is `"visual"` (`canvas.tsx`); SQL mode mounts `SqlHatch` bound to `tabs.active.queryText`. **Done:** a control reveals a SQL buffer bound to `tabs.active.queryText`; visual remains the default surface. **SEQUENCE**.
+- [x] **Run Query + ⌘↵ on the visual surface.** Swift: `QueryEditorComponent` `keyboardShortcut(.return, modifiers: [.command])`. Tauri: **DONE** Accel+Enter via `handleWorkspaceKeydown` + native menu `CmdOrCtrl+Enter`; hatch also binds `Mod-Enter`; no-op when Run disabled; welcome ignores it. **WORKSPACE-CHROME**.
 - [x] **No database selected alert.** Swift: `QueryEditorView` “Select a database from the sidebar before running queries.” Tauri: run throws `Not connected`. **Done:** disconnected/no-db disables Run with help, not a silent no-op. Canvas already disables Run when `!isConnected`. SQL editor must match. **SEQUENCE**.
-- [ ] **Cancel after 3s elapsed + Esc.** Swift: Stop button when `isExecuting && displayedElapsedTime > 3`; `tab.cancelQuery()` + `query.cancelCurrentQuery()` clears results and status “Query cancelled”. Tauri: **MISSING** cancel IPC and UI. **SEQUENCE**; blocked by interrupt/cancel in Rust (**needs-decision** vs wait-for-finish).
-- [ ] **Elapsed / last executed / status / timeout 300s Try Again.** Swift: `QueryEditorView` timeout alert. Tauri: **MISSING**. **SEQUENCE**.
+- [x] **Cancel after 3s elapsed + Esc.** Swift: Stop button when `isExecuting && displayedElapsedTime > 3`; `tab.cancelQuery()` + `query.cancelCurrentQuery()` clears results and status “Query cancelled”. Tauri: **DONE** hatch Stop/Esc after `CANCEL_AFTER_MS = 3_000`; `App.handleCancelSql` → `ipc.cancelQuery` + `applyRunCancelled`. **SEQUENCE**.
+- [x] **Elapsed / last executed / status / timeout 300s Try Again.** Swift: `QueryEditorView` timeout alert. Tauri: **DONE** hatch `QUERY_TIMEOUT_MS = 300_000`; Try Again re-runs the current buffer, Cancel calls `onCancel`. Elapsed / last-executed status labels are not shown on the hatch. **SEQUENCE**.
 - [x] **History button opens `QueryHistoryView`.** Swift: clock button (SQL-mode toolbar only). Tauri: **DONE** History on the canvas toolbar (`QueryHistorySheet`). **WORKSPACE-CHROME**.
-- [ ] **Syntax highlighting + line numbers.** Swift: `SyntaxHighlightedEditor` + `LineNumberRulerView`; skip highlight if `count > 50_000`. Tauri: **MISSING**. **SEQUENCE**.
-- [x] **Visual mode hosts a per-tab document (in-session).** Swift: `restoreVisualViewModelIfNeeded`. Tauri: **DONE** `tab-documents.ts` keyed by tab id; switch restores cards+grid; not persisted on `TabStateDto` after quit. Persist IR JSON remains **SEQUENCE**. **WORKSPACE-CHROME**.
+- [x] **Syntax highlighting + line numbers.** Swift: `SyntaxHighlightedEditor` + `LineNumberRulerView`; skip highlight if `count > 50_000`. Tauri: **DONE** CodeMirror `lineNumbers` + `syntaxHighlighting`; `shouldHighlightSql` skips highlight when length > 50_000. **SEQUENCE**.
+- [x] **Visual mode hosts a per-tab document (in-session).** Swift: `restoreVisualViewModelIfNeeded`. Tauri: **DONE** `tab-documents.ts` keyed by tab id; switch restores cards+grid; `visualDocumentJson` on `TabStateDto` persists via `setVisualDocumentJson` / `persistTab` and hydrates on tab activate. **WORKSPACE-CHROME**.
 - [x] **CREATE confirmation in visual — SELECT-only recorded.** Swift: `VisualQueryCanvasView.createConfirmationSheet`. Tauri: Run disabled unless connected + `statementKind === "select"` + `canRun`; CREATE/UPDATE/DELETE cannot fire `runQuery`. **Done (first-slice):** keep SELECT-only; decision recorded 2026-08-15 in first-slice spec. Port confirm+execute remains **SEQUENCE** if that decision is reversed. **needs-decision** closed for first-slice.
 
 ### 2.7 Query history
 
 Parent §12.1: 1 file, 232 LOC.
 
-- [x] **History sheet list newest-first.** Swift: `@Query(sort: \QueryHistory.executionDate, order: .reverse)` **global** (all profiles). Tauri: **DONE** `listHistory({ limit: 50 })` without profileId; row shows success/fail, duration, SQL (5-line). Database column is N/A (`HistoryDto` has no databaseName). **Relative date is NOT done:** `formatRelativeDate` uses `Date.parse` but rusqlite `created_at` is epoch-millis text (`src-tauri/src/storage/history.rs` `chrono_like_utc_now`), so the UI echoes the raw number. Tests pass because they feed ISO strings. Applying relative labels remains **SEQUENCE**. **WORKSPACE-CHROME**.
+- [x] **History sheet list newest-first.** Swift: `@Query(sort: \QueryHistory.executionDate, order: .reverse)` **global** (all profiles). Tauri: **DONE** `listHistory({ limit: 50 })` without profileId; row shows success/fail, duration, SQL (5-line). Database column is N/A (`HistoryDto` has no databaseName). Relative dates **DONE** (`formatRelativeDate` parses epoch-millis `created_at` as well as ISO). **WORKSPACE-CHROME**.
 - [x] **Empty state.** Swift: “No Query History” / “Executed queries will appear here.” Tauri: **DONE**; `listHistory` failure shows an error, not this empty copy. **WORKSPACE-CHROME**.
-- [x] **Copy SQL.** Swift: `QueryHistoryRow.onCopy` with 1.2s checkmark. Tauri: **DONE** Copy writes SQL to the clipboard. 1.2s checkmark animation remains **SEQUENCE**. **WORKSPACE-CHROME**.
+- [x] **Copy SQL.** Swift: `QueryHistoryRow.onCopy` with 1.2s checkmark. Tauri: **DONE** Copy writes SQL to the clipboard; `COPY_CHECKMARK_MS = 1200` shows Copied. **WORKSPACE-CHROME**.
 - [x] **Export JSON / CSV / SQL** via save panel; Export disabled when empty. Swift: `QueryHistoryView.exportHistory` + `QueryHistoryExporter`. Tauri: **DONE** `query-history-exporter.ts` + `saveTextFile` (JSON/CSV/SQL filters); cancel writes nothing. **WORKSPACE-CHROME**.
-- [ ] **History relative date labels.** Swift: relative `executionDate`. Tauri: `formatRelativeDate` expects ISO; live `created_at` is epoch-millis text so the sheet shows the raw number. **SEQUENCE**.
+- [x] **History relative date labels.** Swift: relative `executionDate`. Tauri: **DONE** `formatRelativeDate` accepts epoch-millis text and ISO. **SEQUENCE**.
 - [ ] **Do not require per-row delete / clear in UI** unless we choose Tauri extras. Swift UI has **no** delete/clear; SP-3 IPC `deleteHistory` / `clearHistory(profileId)` is net-new. **needs-decision** to expose. Persistence of successful **and** failed runs: Swift inserts on every `executeQuery` (`QueryEditorViewModel`); Tauri SP-2 writes history on `runQuery` (SELECT). **needs-decision** whether SQL-editor mutations also write history.
 
 ### 2.8 Tab bar
 
 Parent §12.1: 1 file, 170 LOC.
 
-- [x] **Horizontal tabs + + button.** Swift: `TabBarView`; label = `db / savedQuery.name` or `connection.displayName / db` or `New Tab N`. Tauri: **DONE** `TabBar` + store `createTab/switchTab/closeTab`. Titles currently `Untitled` — Swift-style labels remain **SEQUENCE**. **WORKSPACE-CHROME**.
-- [ ] **Pending deletion shows “Closing...” and ignores clicks.** Swift: `tab.isPendingDeletion`. Tauri: `pendingDeletedIds`. **SEQUENCE**.
-- [ ] **Switch saves query text of previous tab, not connection/database (those already on tab).** Swift: `selectTab` comment. `RootView` `.tabDidChange` → `handleTabChange`. **SEQUENCE**.
+- [x] **Horizontal tabs + + button.** Swift: `TabBarView`; label = `db / savedQuery.name` or `connection.displayName / db` or `New Tab N`. Tauri: **DONE** `TabBar` + store `createTab/switchTab/closeTab`; titles via `formatTabTitle` (`db / savedQuery` or `connection / db` or `New Tab N`). **WORKSPACE-CHROME**.
+- [x] **Pending deletion shows “Closing...” and ignores clicks.** Swift: `tab.isPendingDeletion`. Tauri: **DONE** `pendingDeletedIds` → `TabBarCopy.closing`; click on a pending tab is ignored. **SEQUENCE**.
+- [x] **Switch saves query text of previous tab, not connection/database (those already on tab).** Swift: `selectTab` comment. `RootView` `.tabDidChange` → `handleTabChange`. Tauri: **DONE** `switchTab` → `syncMetadataForCurrentTabs` → `persistTab(..., { includeCachedResults: false })` so the previous tab’s `queryText` is saved without wiping a results blob. **SEQUENCE**.
 - [x] **Close last tab recreates empty active.** Swift: `TabManager.closeTab`; SP-3 tabs-store same. Tauri: **DONE** UI calls `closeTab`; store recreates. **WORKSPACE-CHROME**.
 - [x] **Close among N activates MRU `lastAccessedAt`.** SP-3 / Swift. Tauri: **DONE** via existing store + tab bar close. **WORKSPACE-CHROME**.
 - [x] **⌘T / ⌘W** via menu notifications `.createNewTab` / `.closeCurrentTab` (`DragonDBApp.commands`). Tauri: **DONE** native menu `CmdOrCtrl+T`/`CmdOrCtrl+W` + `handleWorkspaceKeydown`; welcome ignores them. **WORKSPACE-CHROME**.
@@ -198,8 +198,8 @@ Parent §12.1: 1 file, 170 LOC.
 
 Parent §12.1: `CreateDatabaseView` 102 LOC.
 
-- [ ] **Create Database modal.** Swift: name field, Create disabled if blank/creating/success, Enter submits, error label, success “Database created” + Connect. Calls `databaseService.createDatabase` then `fetchDatabases`. Tauri: **MISSING** UI **and** IPC (SP-2 deferred). **SEQUENCE**; blocked on Rust.
-- [ ] **Delete database** (picker + confirm + error alert). Covered in Connection cluster. **SEQUENCE**; blocked on Rust.
+- [ ] **Create Database modal.** Swift: name field, Create disabled if blank/creating/success, Enter submits, error label, success “Database created” + Connect. Calls `databaseService.createDatabase` then `fetchDatabases`. Tauri: **PARTIAL** — picker-hosted `CreateDatabaseDialog` has name field, Create disabled if blank/busy, error label; success auto-switches the session (`handleCreateDatabase`) instead of a success+Connect step; Enter-to-submit is not wired. **SEQUENCE**.
+- [x] **Delete database** (picker + confirm + error alert). Covered in Connection cluster. **SEQUENCE**.
 
 ### 2.10 Static pages
 
@@ -208,7 +208,7 @@ Parent §12.1: help, keyboard shortcuts, welcome, settings — 4 files, 230 LOC.
 - [x] **WelcomeView.** Swift: logo, “Hello, and welcome!”, “Connect to Server...”. Tauri: **DONE** `src/ui/welcome/welcome-view.tsx` + `public/onboarding.png`. **WORKSPACE-CHROME**.
 - [x] **HelpView.** Swift: Support link `https://github.com/rfxlamia/dragon-db/issues` (**stale repo name** — port uses `rfxlamia/dragondb/issues`), plus embedded shortcuts. Tauri: **DONE** `HelpDialog`. **WORKSPACE-CHROME**.
 - [x] **KeyboardShortcutsView.** Swift: General ⌘T/⌘W, Query Editor ⌘↵. Tauri: **DONE** `ShortcutsDialog`; Windows lists Ctrl bindings that are actually registered. **WORKSPACE-CHROME**.
-- [x] **SettingsView date format radios.** Swift: `Settings { SettingsView() }` scene; radio `QueryResultsDateFormat`. Tauri: **DONE** `SettingsDialog` + `localStorage` `dragondb.queryResultsDateFormat`. Applying the format to grid cells / history labels remains **SEQUENCE** (2.4 Date formatting). **WORKSPACE-CHROME**.
+- [x] **SettingsView date format radios.** Swift: `Settings { SettingsView() }` scene; radio `QueryResultsDateFormat`. Tauri: **DONE** `SettingsDialog` + `localStorage` `dragondb.queryResultsDateFormat`. Grid cells apply the format (§2.4 Date formatting). History labels are relative, not Settings-driven. **WORKSPACE-CHROME**.
 - [x] **App menu commands.** Swift: replace New Item with New Tab/Close Tab; after appInfo Help and Support + Keyboard Shortcuts; replace Help with DragonDB Help. Tauri: **DONE** native `MenuBuilder` in `src-tauri/src/lib.rs` (Help, Keyboard Shortcuts, Settings, New Tab, Close Tab, Run Query). **WORKSPACE-CHROME**.
 
 ### 2.11 Capabilities without screens (§12.2 + extras)
@@ -217,31 +217,31 @@ Every §12.2 row appears here. Extras flagged `§12.2 miss`.
 
 | Capability | Swift | Tauri status | Done criterion | Slice | Disposition |
 |---|---|---|---|---|---|
-| CSV export | `CSVExporter` + `TableExportSheet` + JSON viewer Download CSV | Util **DONE** `src/lib/csv-exporter.ts`; IPC **DONE** `saveCsvFile`; UI **MISSING** | Save dialog writes RFC4180 CSV (quote only when needed; null → empty field) | SEQUENCE | SHIP |
+| CSV export | `CSVExporter` + `TableExportSheet` + JSON viewer Download CSV | Util **DONE** `src/lib/csv-exporter.ts`; IPC **DONE** `saveCsvFile`; JSON viewer Download CSV **DONE**; table-export sheet not wired from `ConnectionPanel` | Save dialog writes RFC4180 CSV (quote only when needed; null → empty field) | SEQUENCE | SHIP — JSON viewer path **done** |
 | Multi-statement queries | `SQLStatementSplitter` | Util **DONE** `src/lib/sql-statement-splitter.ts`; execute multi **out of SP-3** | Splitter available to SQL editor; executing multiple statements is **needs-decision** (Swift `QueryService` behavior unread in full) | SEQUENCE | needs-decision on execute |
-| Query type detection | `QueryTypeDetector` | Util **DONE** `src/lib/query-type-detector.ts` | Mutations take toast path not grid replace; DROP TABLE hides View Table | SEQUENCE | SHIP |
-| Result-grid editability | `QueryEditability` + `RowOperationsService` | Util **DONE**; IPC `updateRow`/`deleteRows` **DONE**; UI **PARTIAL** — Edit/Delete now attach and call `ipc.updateRow`/`ipc.deleteRows` gated on `isEditable` (`determineEditability`); the six `RowOperationError` kinds are not yet distinguished/surfaced (a rejected call fails silently) | Edit/delete only when `isEditable`; six `RowOperationError` kinds surface | SEQUENCE | SHIP |
-| Create / delete database | `DatabaseManagementService` | **MISSING** Rust (`commands.rs` header; SP-2 spec “Not in SP-2 IPC”) | CREATE DATABASE / DROP DATABASE succeed and refresh picker | SEQUENCE | SHIP (needs Rust) |
+| Query type detection | `QueryTypeDetector` | Util **DONE** `src/lib/query-type-detector.ts`; mutation toast path **DONE** | Mutations take toast path not grid replace; DROP TABLE hides View Table | SEQUENCE | SHIP — **done** |
+| Result-grid editability | `QueryEditability` + `RowOperationsService` | Util **DONE**; IPC `updateRow`/`deleteRows` **DONE**; UI **PARTIAL** — Edit/Delete now attach and call `ipc.updateRow`/`ipc.deleteRows` gated on `isEditable` (`determineEditability`); the six `RowOperationError` kinds are not yet distinguished/surfaced (a rejected call fails silently); context-mismatch help **MISSING** | Edit/delete only when `isEditable`; six `RowOperationError` kinds surface | SEQUENCE | SHIP |
+| Create / delete database | `DatabaseManagementService` | **DONE** `ipc.createDatabase` / `deleteDatabase` + picker dialogs; success refreshes the picker | CREATE DATABASE / DROP DATABASE succeed and refresh picker | SEQUENCE | SHIP — **done** |
 | Connection string parsing | `ConnectionStringParser` | Util **DONE**; UI **DONE** URI mode on Save | Paste URI fills form on Save; invalid URI errors | WORKSPACE-CHROME | SHIP — **done** |
 | Large-result compaction | `TableBrowseResultCompactor` | Util **DONE**; tabs-store applies `compactCell` on run success; grid binds `compact` | Grid cells never exceed 2048 including suffix | FIRST-SLICE | SHIP — **done** |
 | Query history persistence | `QueryHistory` + SwiftData | rusqlite write-on-`runQuery` **DONE**; `listHistory` **DONE**; UI **DONE** `QueryHistorySheet` | After SELECT, history list contains the SQL | WORKSPACE-CHROME | SHIP — **done** |
-| Saved queries and folders | `SavedQuery`, `QueryFolder` | IPC+store **DONE**; UI **PARTIAL** `QueriesColumn` (no filter/sort/duplicate) | CRUD matrix in sidebar | SEQUENCE remainder | SHIP |
-| Tab state persistence | `TabState`, `TabManager`, `TabService` | IPC+store **DONE**; tab bar **DONE**; visual IR not on DTO | Relaunch restores tabs (query text; results blob optional). In-session visual cards **done**; persist IR **SEQUENCE** | WORKSPACE-CHROME / SEQUENCE | SHIP |
+| Saved queries and folders | `SavedQuery`, `QueryFolder` | IPC+store **DONE**; UI **DONE** `QueriesColumn` (filter/sort/duplicate/folders/deselect/autosave) | CRUD matrix in sidebar | SEQUENCE remainder | SHIP — **done** |
+| Tab state persistence | `TabState`, `TabManager`, `TabService` | IPC+store **DONE**; tab bar **DONE**; `visualDocumentJson` on DTO persists + hydrates | Relaunch restores tabs (query text; results blob optional). Visual cards persist **done** | WORKSPACE-CHROME | SHIP — **done** |
 | SSL modes | `SSLMode` | Form+Rust **DONE** | Six modes; SSH hides verify-ca/full | FIRST-SLICE | SHIP — **done** |
 | Keyboard shortcuts | `KeyboardShortcutsView` + `DragonDBApp.commands` | **DONE** native menu + Accel+T/W/Enter | ⌘T/W/↵ documented and bound | WORKSPACE-CHROME | SHIP — **done** |
-| Cancel query | `QueryState.cancelCurrentQuery` + Stop after 3s | **MISSING** | Esc/Stop cancels in-flight run, status “Query cancelled”, results cleared | SEQUENCE | SHIP; §12.2 miss |
-| Query timeout 300s | `QueryEditorView` / table-load alerts | **MISSING** | Try Again reissues; Cancel dismisses | SEQUENCE | SHIP; §12.2 miss |
+| Cancel query | `QueryState.cancelCurrentQuery` + Stop after 3s | **DONE** hatch Stop/Esc after 3s + `ipc.cancelQuery` | Esc/Stop cancels in-flight run, status “Query cancelled”, results cleared | SEQUENCE | SHIP; §12.2 miss — **done** |
+| Query timeout 300s | `QueryEditorView` / table-load alerts | Hatch timeout **DONE** (`QUERY_TIMEOUT_MS = 300_000` Try Again / Cancel); table-load timeout **MISSING** | Try Again reissues; Cancel dismisses | SEQUENCE | SHIP; §12.2 miss — hatch **done** |
 | Pagination | `QueryState` page cache + `requestPaginatedTableQuery` | **PARTIAL** — page navigation **DONE** (`App.tsx` `browsePage`, `onNextPage`/`onPrevPage`, 100 rows/page, Prev disabled page 0); cached-pages-skip-refetch **not implemented** (every nav re-fetches) | Page N of table browse is 100 rows; cached pages skip refetch | SEQUENCE | SHIP |
 | JSON viewer | `JSONViewerView` | **DONE** UI — `JsonViewer` now reachable with real `raw` data | Space/toolbar opens pretty JSON of selection | SEQUENCE | SHIP; §12.2 miss — **done** |
 | Mutation toast | `MutationToastView` + `QueryState.showMutationToast` | **DONE** — hosted in `AppWorkspace`; 5s auto-dismiss; View Table browses the schema-qualified table | 5s toast; View Table re-runs browse | SEQUENCE | SHIP; §12.2 miss — **done** |
 | Welcome gating | `shouldShowWelcomeScreen` | **DONE** `WelcomeView` | 0 profiles → welcome | WORKSPACE-CHROME | SHIP; §12.2 miss — **done** |
-| Test connection | `ConnectionFormViewModel.testConnection` | **MISSING** | Test does not keep session | SEQUENCE | needs-decision IPC; §12.2 miss |
-| SET search_path | `AppState.setSchemaSearchPath` | **MISSING** (SP-3 deferred) | Schema picker changes query search_path | SEQUENCE | SHIP; §12.2 miss |
+| Test connection | `ConnectionFormViewModel.testConnection` | **DONE** `ipc.testConnection` + banner; does not keep session | Test does not keep session | SEQUENCE | SHIP; §12.2 miss — **done** |
+| SET search_path | `AppState.setSchemaSearchPath` | **DONE** schema picker → `ipc.setSearchPath` | Schema picker changes query search_path | SEQUENCE | SHIP; §12.2 miss — **done** |
 | History export | `QueryHistoryExporter` | **DONE** `query-history-exporter.ts` + `saveTextFile` | JSON/CSV/SQL files | WORKSPACE-CHROME | SHIP; §12.2 miss — **done** |
-| Auto-save SQL | `QueryEditorViewModel` 500ms | **MISSING** | Typing persists SavedQuery without Save button | SEQUENCE | SHIP; §12.2 miss |
-| Restore last connection | `RootViewModel.initializeApp` | **MISSING** auto-connect | Launch reconnects active tab’s profile | SEQUENCE | SHIP; §12.2 miss |
-| Sidebar metadata refresh | toolbar refresh | **MISSING** | Reloads tables without reconnect | SEQUENCE | SHIP; §12.2 miss |
-| Truncate / Drop / DDL | `TableContextMenuViewModel` | **MISSING** IPC | Confirms then mutates; DDL copyable | SEQUENCE | needs-decision IPC vs `runQuery`; §12.2 miss |
+| Auto-save SQL | `QueryEditorViewModel` 500ms | **DONE** `useSavedQueryAutosave` | Typing persists SavedQuery without Save button | SEQUENCE | SHIP; §12.2 miss — **done** |
+| Restore last connection | `RootViewModel.initializeApp` | **DONE** launch restore auto-connect | Launch reconnects active tab’s profile | SEQUENCE | SHIP; §12.2 miss — **done** |
+| Sidebar metadata refresh | toolbar refresh | **DONE** Queries Refresh reloads tables + picker databases | Reloads tables without reconnect | SEQUENCE | SHIP; §12.2 miss — **done** |
+| Truncate / Drop / DDL | `TableContextMenuViewModel` | Menu chrome exists in `TableList`; `ConnectionPanel` does **not** wire `onDrop` / `onTruncate` / `onGenerateDdl` (no-ops) | Confirms then mutates; DDL copyable | SEQUENCE | needs-decision IPC vs `runQuery`; §12.2 miss |
 | Visual CREATE confirm | `VisualQueryCanvasView.createConfirmationSheet` | First-slice: SELECT-only Run (disabled for CREATE); confirm+execute not ported | Decision recorded 2026-08-15; SEQUENCE if reversed | SEQUENCE | decision recorded; §12.2 miss |
 | Favorite flag | `ConnectionProfile.isFavorite` | DTO field, no UI | **needs-decision** | — | needs-decision; display-only dead UI |
 | SwiftData importer | — | Out of SP-4b | Release notes until SP-6 | out of chrome | already decided |
@@ -272,7 +272,7 @@ Every §12.2 row appears here. Extras flagged `§12.2 miss`.
 
 **Tests:** `AppStateTests` (table-query races, supersession interrupt — shell-adjacent). `QueryStateTests` pins `rowsPerPage` default 100. No dedicated RootView UI test.
 
-**Tauri gap:** `src/App.tsx` welcome **or** connection column | main (`App.css` two-column grid). Main hosts horizontal Queries | (`TabBar` + vertical `WorkspaceSplit`). Native Help/Shortcuts/Settings. No overlay, toast, or collapsible connection sidebar. `composeAppStores` hydrates tabs; first-slice pane gates on this-session `status` (idle ignores cache). Per-tab `QueryDocument` is session memory only.
+**Tauri gap:** `src/App.tsx` welcome **or** connection column | main (`App.css` two-column grid, collapsible). Main hosts horizontal Queries | (`TabBar` + vertical `WorkspaceSplit`). Native Help/Shortcuts/Settings. Loading overlay + mutation toast + collapsible connection sidebar **shipped**. `composeAppStores` hydrates tabs; first-slice pane gates on this-session `status` (idle ignores cache). Per-tab `QueryDocument` hydrates from persisted `visualDocumentJson`.
 
 **Dependencies:** Results cluster for empty/error; Connection for welcome gate; Tabs for bar visibility.
 
@@ -297,7 +297,7 @@ Every §12.2 row appears here. Extras flagged `§12.2 miss`.
 
 **Tests:** `ConnectionStateTests`, `ConnectionStringParser` tests, `ConnectionSidebarViewModelTests` (delete database, refresh). Form VM not fully covered in the suites listed.
 
-**Tauri:** `src/ui/connection/connection-panel.tsx` + `connection-form.tsx` — Save/Connect/Disconnect/Switch/Delete/SSL/SSH **DONE**; URI mode **DONE**; “No connections” **DONE**; tables names **DONE** (click does not run). Missing: Test, database list/switch, status banner states, show-password.
+**Tauri:** `src/ui/connection/connection-panel.tsx` + `connection-form.tsx` — Save/Connect/Disconnect/Switch/Delete/SSL/SSH **DONE**; URI mode **DONE**; “No connections” **DONE**; tables names **DONE** (click does not run). Test, database list/switch, status banner states, show-password **DONE**. Show All Rows still unwired.
 
 **Dependencies:** Database management IPC for picker create/delete; new list/switch-database for picker.
 
@@ -325,7 +325,7 @@ Every §12.2 row appears here. Extras flagged `§12.2 miss`.
 
 **Tests:** `ConnectionSidebarViewModelTests`. No SavedQueriesViewModel test file.
 
-**Tauri:** `library-store.ts` bound in `QueriesColumn` (list, +, rename query, delete confirm, move, dual folder-delete, B′ result cache). Filter/sort/duplicate/green-dot/SQL-load still **MISSING**. `schema-store.ts` tables shown in the connection column and the canvas FROM picker.
+**Tauri:** `library-store.ts` bound in `QueriesColumn` (list, +, rename query/folder, delete confirm, move + No Folder/New Folder, dual folder-delete, B′ result cache, filter/sort/duplicate/green-dot, schema picker). `schema-store.ts` tables shown in the connection column and the canvas FROM picker.
 
 **Dependencies:** Connection (session); Table browser (list widget); Tabs (`savedQueryId`); SQL editor (load text). search_path needs a SET path.
 
@@ -352,7 +352,7 @@ Every §12.2 row appears here. Extras flagged `§12.2 miss`.
 
 **Tests:** `QueryEditabilityTests` (large), `QueryResultNormalizerTests`, `TableBrowseResultCompactorTests`, `CSVExporterTests`, `AppStateTests` pagination/cache.
 
-**Tauri:** `runSelectOnActiveTab` writes tab `raw`/`compact`/`status`; `QueryResultsPane` renders this-session `status` + `compact` (idle/loading/error/grid/NULL). Canvas `OK / N rows / ms` strip **removed**. Filter/sort/JSON/edit/delete/pagination still **MISSING**.
+**Tauri:** `runSelectOnActiveTab` writes tab `raw`/`compact`/`status`; `QueryResultsPane` renders this-session `status` + `compact` (idle/loading/error/grid/NULL). Canvas `OK / N rows / ms` strip **removed**. Filter/sort/JSON/edit/delete/pagination **shipped**; typed row-editor pickers and context-mismatch help remain SEQUENCE.
 
 **Dependencies:** Tabs store (already); row-ops IPC (already) for SEQUENCE edit; Settings for dates; Table browser for pagination.
 
@@ -402,7 +402,7 @@ Every §12.2 row appears here. Extras flagged `§12.2 miss`.
 
 **Tests:** `QueryEditor` path covered indirectly by `QueryStateTests`, `VisualQueryRunIntegrationTests` (SP-4a), `SQLStatementSplitterTests`, `QueryTypeDetectorTests`.
 
-**Tauri:** No SQL editor hatch. Canvas toolbar Run SELECT only + History. Generated SQL is a **dismissible dialog** (`GeneratedSQLDialog`). Accel+Enter bound on the visual surface.
+**Tauri:** SQL hatch on the canvas toolbar (Visual default; SQL bound to `queryText`). Canvas toolbar Run SELECT only + History. Generated SQL is a **dismissible dialog** (`GeneratedSQLDialog`). Accel+Enter bound on the visual surface and hatch `Mod-Enter`.
 
 **Dependencies:** History sheet; tabs visual-document persistence; cancel IPC.
 
@@ -432,7 +432,7 @@ Every §12.2 row appears here. Extras flagged `§12.2 miss`.
 
 **Tests:** none dedicated; store tests live in Tauri `tests/stores/*`.
 
-**Tauri:** `TabBar` in `App.tsx`; strip at count ≥ 2; `+` always; Accel+T/W. In-session per-tab `QueryDocument` via `tab-documents.ts`. Visual IR is **not** persisted on `TabStateDto`. Tab titles are `Untitled`. No “Closing...” pending-deletion chrome.
+**Tauri:** `TabBar` in `App.tsx`; strip at count ≥ 2; `+` always; Accel+T/W. Per-tab `QueryDocument` via `tab-documents.ts` + persisted `visualDocumentJson`. Tab titles via `formatTabTitle`. Pending-deletion shows “Closing...”.
 
 **Dependencies:** RootViewModel-equivalent to reload query/results/connection on switch.
 
@@ -448,7 +448,7 @@ Every §12.2 row appears here. Extras flagged `§12.2 miss`.
 
 **Tests:** `DatabaseServiceDeleteDatabaseTests` (reconnect-while-connected). Create path untested at UI.
 
-**Tauri:** explicitly absent in `src-tauri/src/commands.rs` and `postgres/mod.rs`.
+**Tauri:** `ipc.createDatabase` / `deleteDatabase` + picker-hosted `CreateDatabaseDialog` (Enter-to-submit and success+Connect chrome still PARTIAL).
 
 **Dependencies:** new IPC; session must support database name change without new profile (Swift reconnects with stored credentials).
 
@@ -525,16 +525,16 @@ Visual-query cards remain 767 LOC; canvas container 281 — SP-4a arithmetic sti
 | CSV save dialog | `saveCsvFile` + `toCsv`; history uses `saveTextFile` | Grid/table export UI |
 | Row update/delete | `updateRow` / `deleteRows` + `query-editability.ts` | No (UI only) |
 | Query type / splitter / compaction / CSV escape | `src/lib/*` | No |
-| List/switch databases on server | — | **Yes** (`listDatabases` / reconnect-to-db) |
-| Create / delete database | — | **Yes** (SP-2 deferred) |
-| Generate DDL / truncate / drop / fetch-all-for-export | — | **Yes**, or blessed `runQuery` SQL + refresh |
-| SET search_path | could `runQuery({ display, exec })` | **needs-decision** dedicated vs runQuery |
-| Test connection without session | — | **needs-decision** |
-| Cancel in-flight query | — | **Yes** |
-| Per-tab visual document | In-session `tab-documents.ts` **DONE** | DTO column after quit **SEQUENCE** |
+| List/switch databases on server | `listDatabases` / `switchDatabase` + picker **DONE** | No |
+| Create / delete database | `createDatabase` / `deleteDatabase` + picker dialogs **DONE** | No |
+| Generate DDL / truncate / drop / fetch-all-for-export | TableList menu chrome exists; ConnectionPanel does not wire handlers | **Yes**, or blessed `runQuery` SQL + refresh |
+| SET search_path | `ipc.setSearchPath` + schema picker **DONE** | No |
+| Test connection without session | `ipc.testConnection` **DONE** | No |
+| Cancel in-flight query | `ipc.cancelQuery` + hatch Stop/Esc **DONE** | No |
+| Per-tab visual document | `visualDocumentJson` on DTO persist + hydrate **DONE** | No |
 | SwiftData importer | out of SP-4b | SP-6 / release notes |
 
-**Rule:** SP-3 store/IPC existence ≠ UI done. Workspace chrome **binds** welcome, tables names, Queries, tabs, history, URI mode, and native menus. Remaining SEQUENCE clusters still need UI (collapse sidebar, SQL hatch, grid mutation, Show All Rows).
+**Rule:** SP-3 store/IPC existence ≠ UI done. Workspace chrome **binds** welcome, tables names, Queries, tabs, history, URI mode, and native menus. Last slice binds collapse sidebar, SQL hatch, grid mutation, database picker, loading overlay. Remaining SEQUENCE still needs Show All Rows wiring (`onBrowse`).
 
 ---
 
@@ -567,7 +567,7 @@ Extracted from §2 (FIRST-SLICE rows only):
 
 ## 6.1 Workspace-chrome subset (shipped 2026-08-15)
 
-**Status: shipped** 2026-08-15 on `feat/sp-4b-ui` (HEAD at ledger update: `e7b97f5`). Spec: `docs/pocket/spec/2026-08-15-sp4b-workspace-chrome/workspace-chrome.md`. Collapsible connection sidebar stays **SEQUENCE — next grinding**.
+**Status: shipped** 2026-08-15 on `feat/sp-4b-ui` (HEAD at ledger update: `e7b97f5`). Spec: `docs/pocket/spec/2026-08-15-sp4b-workspace-chrome/workspace-chrome.md`. Collapsible connection sidebar **shipped** in the last slice.
 
 1. [x] Welcome iff 0 profiles and form hidden; Cancel / delete-last returns to welcome.
 2. [x] “No connections” when the form is showing and the list is empty.
@@ -575,10 +575,10 @@ Extracted from §2 (FIRST-SLICE rows only):
 4. [x] Connection-string mode (parse on Save; edit read-only + Copy).
 5. [x] Queries column left of canvas, including disconnected; B′ success cache; + named query clears active tab; rename / delete confirm / move / dual folder-delete.
 6. [x] Tab bar hidden at 1 tab, `+` visible; in-session per-tab visual documents; close last recreates; Accel+T/W.
-7. [x] History sheet from canvas toolbar; global list; Copy; export JSON/CSV/SQL; fail ≠ empty copy. Relative date labels still SEQUENCE (epoch `created_at` vs `Date.parse`).
-8. [x] Native Help / Keyboard Shortcuts / Settings; Accel+Enter Run (SELECT-only, no-op if disabled); Settings radios persist (grid dates unchanged).
+7. [x] History sheet from canvas toolbar; global list; Copy; export JSON/CSV/SQL; fail ≠ empty copy. Relative date labels shipped (epoch `created_at`).
+8. [x] Native Help / Keyboard Shortcuts / Settings; Accel+Enter Run (SELECT-only, no-op if disabled); Settings radios persist (grid dates applied).
 
-**Still SEQUENCE after this slice:** collapsible connection sidebar; Show All Rows / table expander; saved-query filter/sort/duplicate; tab title labels; persist visual IR; database picker; loading overlay; history relative-date labels (epoch `created_at`); context-mismatch editability help; row-editor typed pickers / saving-state disable.
+**Still SEQUENCE after this slice:** Show All Rows / table expander (`ConnectionPanel` does not pass `onBrowse` / `columnsByTable`); table context menu / DDL / export / truncate-drop (menu chrome exists, handlers unwired); context-mismatch editability help; row-editor typed pickers / saving-state disable; table-load timeout 300s; pagination cached-pages-skip-refetch.
 
 ---
 
@@ -598,21 +598,21 @@ Extracted from §2 (FIRST-SLICE rows only):
 
 ### Residual product risks (needs-decision, not guessed)
 
-1. **Database-as-picker vs database-as-profile-field** — largest functional gap vs Swift.
-2. **Per-tab visual IR after quit** vs in-session documents (in-session **done** 2026-08-15).
+1. **Database-as-picker vs database-as-profile-field** — picker + switch **shipped**; profile.database remains the connect default.
+2. **Per-tab visual IR after quit** — **done** (`visualDocumentJson` persist + hydrate).
 3. **History from canvas** — **done** 2026-08-15 (Swift visual mode hid the button; Tauri exposes it on the canvas toolbar).
 4. **SELECT-only canvas run** vs Swift CREATE confirm — **recorded 2026-08-15:** keep SELECT-only for first-slice; confirm+execute remains SEQUENCE if reversed.
-5. **Cancel query** without Rust interrupt.
-6. **Truncate/Drop/DDL** via raw `runQuery` vs new commands.
-7. **Favorites**, **foreign tables**, **PK badges** without catalog enrichment.
-8. **Auto-create SavedQuery** on SQL typing.
+5. **Cancel query** — hatch Stop/Esc + `ipc.cancelQuery` **shipped**; table-load timeout still missing.
+6. **Truncate/Drop/DDL** via raw `runQuery` vs new commands — menu chrome exists; ConnectionPanel handlers unwired.
+7. **Favorites**, **PK badges** without catalog enrichment (foreign-table icon shipped).
+8. **Auto-create SavedQuery** on SQL typing — **done** (`useSavedQueryAutosave`).
 9. **Global vs per-profile history** UI — **done** global list 2026-08-15.
 10. **JSON/CSV from grid** using compact vs raw tab buffers.
 
 ### Stop conditions honored
 
 - All 52 `Views/` files listed; none missing on disk.
-- First-slice implementation shipped 2026-08-15; workspace chrome shipped 2026-08-15 (`e7b97f5`); remaining SEQUENCE clusters not silently dropped (collapse sidebar is the next grinding).
+- First-slice implementation shipped 2026-08-15; workspace chrome shipped 2026-08-15 (`e7b97f5`); remaining SEQUENCE clusters not silently dropped (Show All Rows is still unwired).
 - No DROP without unreachable-file evidence.
 - SP-2/SP-3 not claimed incomplete where files show shipped IPC/stores; SEQUENCE UI still missing.
 
