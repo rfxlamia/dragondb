@@ -271,6 +271,9 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
             stores.session.setState({ databaseName: null });
             setMissingDatabase(true);
           }
+          if (!stores.schema.getState().tablesLoading) {
+            setOverlayPhase(null);
+          }
         } catch (error) {
           if (cancelled) return;
           setOverlayPhase(null);
