@@ -55,6 +55,8 @@ export interface ConnectionPanelProps {
   databaseName?: string | null;
   /** Session switchDatabase — picker must not rewrite profile.database. */
   onSwitchDatabase?: (name: string) => Promise<void>;
+  /** Clear session/tab database selection when the active catalog is dropped. */
+  onClearDatabase?: () => Promise<void>;
   onCollapse?: () => void;
   missingDatabase?: boolean;
   /** Session connect via store (generation-guarded). Profile CRUD stays on ipc. */
@@ -86,6 +88,7 @@ export function ConnectionPanel(props: ConnectionPanelProps): React.JSX.Element 
     connectionId: connectionIdProp,
     databaseName: databaseNameProp,
     onSwitchDatabase,
+    onClearDatabase,
     onCollapse,
     missingDatabase = false,
   } = props;
@@ -323,7 +326,10 @@ export function ConnectionPanel(props: ConnectionPanelProps): React.JSX.Element 
   async function handleDeleteDatabase(name: string): Promise<void> {
     await ipc.deleteDatabase(name);
     if (liveConnectionId) await refreshDatabases(liveConnectionId);
-    if (pickerSelected === name) setPickerSelected(null);
+    if (pickerSelected === name) {
+      setPickerSelected(null);
+      if (onClearDatabase) await onClearDatabase();
+    }
   }
 
   async function handleConnect(): Promise<void> {
@@ -336,6 +342,8 @@ export function ConnectionPanel(props: ConnectionPanelProps): React.JSX.Element 
       setConnectedProfileId(result.profileId);
       setLiveConnectionId(result.connectionId);
       setPickerSelected(result.database);
+      setBannerPhase("idle");
+      setBannerMessage(null);
       onConnected(result);
     } catch (error) {
       setSessionClaimed(false);

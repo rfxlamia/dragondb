@@ -75,6 +75,26 @@ describe("ConnectionDatabasePicker", () => {
     expect(screen.getByRole("dialog", { name: ConnectionCopy.createDatabase })).toBeInTheDocument();
   });
 
+  it("create dialog clears the name field when closed and reopened", async () => {
+    const user = userEvent.setup();
+    render(
+      <ConnectionDatabasePicker
+        isConnected={true}
+        databases={["postgres"]}
+        selected="postgres"
+        onSelect={vi.fn()}
+        onCreateDatabase={vi.fn(async () => undefined)}
+        profileDatabase="postgres"
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: ConnectionCopy.createDatabase }));
+    const nameField = screen.getByLabelText(ConnectionCopy.databaseName);
+    await user.type(nameField, "shop");
+    await user.click(screen.getByRole("button", { name: ConnectionCopy.cancel }));
+    await user.click(screen.getByRole("button", { name: ConnectionCopy.createDatabase }));
+    expect(screen.getByLabelText(ConnectionCopy.databaseName)).toHaveValue("");
+  });
+
   it("delete failure rolls picker back to the pre-delete snapshot", async () => {
     const user = userEvent.setup();
     const onDelete = vi.fn(async () => {

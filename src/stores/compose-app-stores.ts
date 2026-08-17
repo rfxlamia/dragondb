@@ -47,7 +47,8 @@ export function composeAppStores(ipc: DragonIpc): AppStores {
   });
 
   tabs = createTabsStore(ipc, {
-    getConnectionId: () => session.getState().connectionId,
+    // TabStateDto.connectionId stores profileId for relaunch restore — not the live session token.
+    getConnectionId: () => session.getState().profileId,
     getDatabaseName: () => session.getState().databaseName,
   });
 

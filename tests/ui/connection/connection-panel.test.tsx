@@ -634,6 +634,37 @@ describe("ConnectionPanel Save-then-Connect", () => {
     expect(screen.getByLabelText(/database/i)).toHaveValue("");
   });
 
+  it("successful Connect resets the test banner so Connected copy shows after a prior Test", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    const saved = await ipc.saveProfile({
+      profile: baseProfileFields(),
+      secrets: { password: "pw" },
+    });
+    render(
+      <ConnectionPanel
+        ipc={ipc}
+        {...formGateProps()}
+        isConnected={false}
+        activeProfileId={saved.id}
+        {...sessionPropsFromIpc(ipc)}
+        onConnected={vi.fn()}
+        onDisconnected={vi.fn()}
+        onSwitchSuccess={vi.fn()}
+        onSwitchFailure={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: ConnectionCopy.test }));
+    expect(await screen.findByText(ConnectionCopy.testSuccess)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: ConnectionCopy.connect }));
+    await waitFor(() =>
+      expect(screen.getByTestId(ConnectionAccessibility.statusBanner)).toHaveTextContent(
+        ConnectionCopy.connected,
+      ),
+    );
+    expect(screen.queryByText(ConnectionCopy.testSuccess)).toBeNull();
+  });
+
   it("edit mode Connection String URI is read-only and Copy uses YOUR_PASSWORD", async () => {
     const user = userEvent.setup();
     const ipc = createMockDragonIpc("happy");

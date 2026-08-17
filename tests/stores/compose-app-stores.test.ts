@@ -166,6 +166,27 @@ describe("composeAppStores", () => {
     unsub();
   });
 
+  it("new tabs persist profileId on connectionId, not the live session token", async () => {
+    const ipc = {
+      connectProfile: vi.fn(async (id: string) => ({
+        connectionId: "live-session-token",
+        profileId: id,
+        database: "app",
+      })),
+      disconnect: vi.fn(async () => undefined),
+      listTables: vi.fn(async () => []),
+      listColumns: vi.fn(async () => []),
+      saveTabState: vi.fn(async () => undefined),
+      deleteTabState: vi.fn(async () => undefined),
+      listTabStates: vi.fn(async () => []),
+    } as unknown as DragonIpc;
+    const stores = composeAppStores(ipc);
+    await stores.session.getState().connect("P");
+    const tab = stores.tabs.getState().createTab();
+    expect(tab.connectionId).toBe("P");
+    expect(tab.connectionId).not.toBe("live-session-token");
+  });
+
   it("exposes library and history stores and library.refresh hits saved-query IPC", async () => {
     const listSavedQueries = vi.fn(async () => []);
     const listQueryFolders = vi.fn(async () => []);

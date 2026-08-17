@@ -2149,7 +2149,8 @@ describe("App overlay, collapse, and title (SP-4b last slice T6)", () => {
     const user = userEvent.setup();
     render(<App ipc={ipc} />);
     await connectFirst(user, ipc);
-    expect(document.title).toBe("app");
+    await user.selectOptions(screen.getByTestId(ConnectionAccessibility.databasePicker), "app");
+    await waitFor(() => expect(document.title).toBe("app"));
   });
 
   it("picker persists the active tab database without rewriting the profile", async () => {
@@ -2171,6 +2172,61 @@ describe("App overlay, collapse, and title (SP-4b last slice T6)", () => {
       ),
     );
     expect(await ipc.getProfile(profileBeforeSwitch.id)).toEqual(profileBeforeSwitch);
+  });
+
+  it("relaunch connects the persisted profile id instead of falling back to list[0]", async () => {
+    const ipc = createMockDragonIpc("happy");
+    const profileA = await ipc.saveProfile({
+      profile: { ...fixtureProfileFields(), name: "A", host: "a.db" },
+      secrets: { password: "pw" },
+    });
+    const profileB = await ipc.saveProfile({
+      profile: { ...fixtureProfileFields(), name: "B", host: "b.db" },
+      secrets: { password: "pw" },
+    });
+    vi.spyOn(ipc, "listTabStates").mockResolvedValue([
+      {
+        id: "tab-b",
+        connectionId: profileB.id,
+        databaseName: "app",
+        queryText: "",
+        savedQueryId: null,
+        isActive: true,
+        order: 0,
+        createdAt: "1",
+        lastAccessedAt: "1",
+        selectedTableSchema: null,
+        selectedTableName: null,
+        selectedSchemaFilter: null,
+        cachedResultsData: null,
+        cachedColumnNames: null,
+        visualDocumentJson: null,
+      },
+    ]);
+    const connectProfile = vi.spyOn(ipc, "connectProfile");
+    render(<App ipc={ipc} />);
+    await waitFor(() => expect(connectProfile).toHaveBeenCalledWith(profileB.id));
+    expect(connectProfile).not.toHaveBeenCalledWith(profileA.id);
+  });
+
+  it("deleting the selected database clears session, tab title, and table list", async () => {
+    const ipc = createMockDragonIpc("happy");
+    await ipc.createDatabase("shop");
+    const user = userEvent.setup();
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
+    await user.selectOptions(screen.getByTestId(ConnectionAccessibility.databasePicker), "shop");
+    await waitFor(() => expect(document.title).toBe("shop"));
+    expect(screen.getByRole("button", { name: "users" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: ConnectionCopy.deleteDatabase }));
+    await user.click(screen.getByRole("button", { name: ConnectionCopy.confirmDelete }));
+
+    const combobox = screen.getByTestId(ConnectionAccessibility.databasePicker);
+    await waitFor(() => expect(combobox).toHaveValue(""));
+    expect(screen.getByText(ConnectionCopy.selectDbPulse)).toBeInTheDocument();
+    expect(document.title).not.toBe("shop");
+    expect(screen.queryByRole("button", { name: "users" })).toBeNull();
   });
 
   it("relaunch restores the database persisted by the picker", async () => {

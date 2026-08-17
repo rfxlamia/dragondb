@@ -271,8 +271,6 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
             stores.session.setState({ databaseName: null });
             setMissingDatabase(true);
           }
-          setOverlayPhase("Loading tables…");
-          setOverlayPhase(null);
         } catch (error) {
           if (cancelled) return;
           setOverlayPhase(null);
@@ -291,8 +289,11 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
   }, [databaseName]);
 
   useEffect(() => {
-    if (!tablesLoading) return;
-    setOverlayPhase((current) => (current === null ? null : "Loading tables…"));
+    if (tablesLoading) {
+      setOverlayPhase((current) => (current === null ? null : "Loading tables…"));
+    } else {
+      setOverlayPhase((current) => (current === "Loading tables…" ? null : current));
+    }
   }, [tablesLoading]);
 
   const handleFormVisibleChange = useCallback((next: boolean) => {
@@ -538,6 +539,16 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
     stores.tabs.getState().restoreSavedQueryResult(tabId, savedQueryCacheRef.current.read(queryId));
   }
 
+  async function handleClearDatabaseSelection(): Promise<void> {
+    stores.session.setState({ databaseName: null });
+    setMissingDatabase(true);
+    const tabId = stores.tabs.getState().activeTabId;
+    if (tabId !== null) {
+      await stores.tabs.getState().setDatabaseName(tabId, null);
+    }
+    stores.schema.getState().clear();
+  }
+
   async function handleSwitchDatabase(name: string): Promise<void> {
     await stores.session.getState().switchDatabase(name);
     const tabId = stores.tabs.getState().activeTabId;
@@ -711,6 +722,7 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
             connectionId={connectionId}
             databaseName={databaseName}
             onSwitchDatabase={handleSwitchDatabase}
+            onClearDatabase={handleClearDatabaseSelection}
             onCollapse={() => setConnectionCollapsed(true)}
             missingDatabase={missingDatabase}
             connectProfile={(id) => stores.session.getState().connect(id)}

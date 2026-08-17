@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ConnectionAccessibility } from "./connection-accessibility";
 import { ConnectionCopy } from "./connection-copy";
 
@@ -11,6 +11,11 @@ export function CreateDatabaseDialog(props: {
 }): React.JSX.Element | null {
   const { open, busy = false, error = null, onCreate, onCancel } = props;
   const [name, setName] = useState("");
+
+  useEffect(() => {
+    if (!open) setName("");
+  }, [open]);
+
   if (!open) return null;
   return (
     <div
