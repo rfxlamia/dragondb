@@ -1,10 +1,11 @@
 import { createStore, type StoreApi } from "zustand/vanilla";
+import type { ConnectionId, TableRef } from "../ipc/contract";
 
 export type BrowseIdentity = {
   tabId: string;
-  connectionId: string;
+  connectionId: ConnectionId;
   database: string;
-  table: { schema: string; name: string; tableType: "regular" };
+  table: TableRef;
 };
 
 export type BrowseLifecycle = { phase: "idle" } | { phase: "ready" };
