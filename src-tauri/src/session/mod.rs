@@ -575,18 +575,18 @@ impl AppSession {
         Ok(())
     }
 
-    /// Create a database through a temporary maintenance connection, then select it.
+    /// Create a database through a temporary maintenance connection without selecting it.
     pub async fn create_database(&mut self, name: &str) -> Result<(), MappedIpcError> {
         let connection_id = self
             .active
             .as_ref()
             .map(|active| active.connection_id.clone())
             .ok_or_else(not_connected)?;
+        self.require_live(&connection_id)?;
         if matches!(self.backend, Backend::Fake(_)) {
-            return self.switch_database(&connection_id, name).await;
+            return Ok(());
         }
-        self.run_database_admin(name, true).await?;
-        self.switch_database(&connection_id, name).await
+        self.run_database_admin(name, true).await
     }
 
     /// Drop a database through a temporary maintenance connection.
@@ -2488,5 +2488,21 @@ mod tests {
         assert_eq!(session.fake_keyring().secret_count_for(&profile_id), 0);
         let err = session.list_tables("any").await.expect_err("cleared");
         assert_eq!(err.kind, IpcErrorKind::Connection);
+    }
+
+    #[tokio::test]
+    async fn create_database_does_not_select_until_explicit_switch() {
+        let mut session = AppSession::with_fakes(FakeDeps::connected_direct());
+        let connection_id = session.active_connection_id().unwrap().to_string();
+        let original = session.active.as_ref().unwrap().profile.database.clone();
+
+        session.create_database("shop").await.expect("create database");
+        assert_eq!(session.active.as_ref().unwrap().profile.database, original);
+
+        session
+            .switch_database(&connection_id, "shop")
+            .await
+            .expect("explicit switch");
+        assert_eq!(session.active.as_ref().unwrap().profile.database, "shop");
     }
 }

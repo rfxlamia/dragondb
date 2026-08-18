@@ -10,4 +10,6 @@ export const ConnectionAccessibility = {
   showPassword: "connection.showPassword",
   collapseConnection: "connection.collapseConnection",
   createDatabaseName: "connection.createDatabaseName",
+  createDatabaseCreated: "connection.createDatabaseCreated",
+  createDatabaseError: "connection.createDatabaseError",
 } as const;

@@ -45,7 +45,11 @@ export function ConnectionTablesList(props: {
   if (tablesLoading) {
     body = <p className="connection-panel__hint">{ConnectionCopy.tablesLoading}</p>;
   } else if (tablesErrorMessage === TABLES_LOAD_FAILED) {
-    body = <p className="connection-panel__status">{ConnectionCopy.tablesLoadError}</p>;
+    body = (
+      <p className="connection-panel__status" role="alert">
+        {ConnectionCopy.tablesLoadError}
+      </p>
+    );
   } else if (tables.length === 0) {
     body = <p className="connection-panel__hint">{ConnectionCopy.noTablesFound}</p>;
   } else {

@@ -29,6 +29,7 @@ import { ConnectionTablesList } from "./connection-tables-list";
 import { useConnectionConfirmations } from "./use-connection-confirmations";
 import { useConnectionStringMode } from "./use-connection-string-mode";
 import "./connection.css";
+import "./connection-panel.css";
 
 const TEST_BANNER_MIN_MS = 150;
 /** A passing Test is transient feedback; after this it falls back to session state. */
@@ -345,15 +346,20 @@ export function ConnectionPanel(props: ConnectionPanelProps): React.JSX.Element 
   }
 
   async function handleSelectDatabase(name: string): Promise<void> {
+    if (name === pickerSelected) return;
     if (onSwitchDatabase) await onSwitchDatabase(name);
     setPickerSelected(name);
   }
 
   async function handleCreateDatabase(name: string): Promise<void> {
     await ipc.createDatabase(name);
+    if (liveConnectionId) await refreshDatabases(liveConnectionId);
+  }
+
+  async function handleConnectCreatedDatabase(name: string): Promise<void> {
+    if (name === pickerSelected) return;
     if (onSwitchDatabase) await onSwitchDatabase(name);
     setPickerSelected(name);
-    if (liveConnectionId) await refreshDatabases(liveConnectionId);
   }
 
   async function handleDeleteDatabase(name: string): Promise<void> {
@@ -499,6 +505,7 @@ export function ConnectionPanel(props: ConnectionPanelProps): React.JSX.Element 
             missingDatabase || (pickerSelected !== null && !databases.includes(pickerSelected))
           }
           onCreateDatabase={handleCreateDatabase}
+          onConnectDatabase={handleConnectCreatedDatabase}
           onDeleteDatabase={handleDeleteDatabase}
         />
       ) : null}

@@ -13,6 +13,7 @@ export function ConnectionDatabasePicker(props: {
   profileDatabase: string;
   missingFromList?: boolean;
   onCreateDatabase?: (name: string) => void | Promise<void>;
+  onConnectDatabase?: (name: string) => void | Promise<void>;
   onDeleteDatabase?: (name: string) => void | Promise<void>;
 }): React.JSX.Element {
   const {
@@ -23,6 +24,7 @@ export function ConnectionDatabasePicker(props: {
     profileDatabase,
     missingFromList = false,
     onCreateDatabase,
+    onConnectDatabase,
     onDeleteDatabase,
   } = props;
   const [createOpen, setCreateOpen] = useState(false);
@@ -40,10 +42,22 @@ export function ConnectionDatabasePicker(props: {
     try {
       await onCreateDatabase(name);
       setCreateError(null);
-      setCreateOpen(false);
-    } catch {
+    } catch (error) {
       // Keep the sheet open and selected/session unchanged; surface the failure.
       setCreateError(ConnectionCopy.createDatabaseError);
+      throw error;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleConnect(name: string): Promise<void> {
+    if (!onConnectDatabase) return;
+    setBusy(true);
+    try {
+      await onConnectDatabase(name);
+      setCreateError(null);
+      setCreateOpen(false);
     } finally {
       setBusy(false);
     }
@@ -137,7 +151,8 @@ export function ConnectionDatabasePicker(props: {
         open={createOpen}
         busy={busy}
         error={createError}
-        onCreate={(name) => void handleCreate(name)}
+        onCreate={handleCreate}
+        onConnect={handleConnect}
         onCancel={() => {
           setCreateError(null);
           setCreateOpen(false);
