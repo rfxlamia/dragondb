@@ -868,4 +868,73 @@ describe("ConnectionPanel Save-then-Connect", () => {
     expect(String(writeText.mock.calls[0]?.[0])).toContain("YOUR_PASSWORD");
     expect(String(writeText.mock.calls[0]?.[0])).not.toContain("s3cret");
   });
+
+  it("submits Create with Enter, then switches only from Connect", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    const createDatabase = vi.spyOn(ipc, "createDatabase");
+    const switchDatabase = vi.fn().mockResolvedValue(undefined);
+    const panel = render(
+      <ConnectionPanel
+        ipc={ipc}
+        {...formGateProps({ formVisible: false })}
+        isConnected
+        activeProfileId="P"
+        connectionId="c1"
+        databaseName="app"
+        connectProfile={vi.fn()}
+        disconnectSession={vi.fn()}
+        onConnected={vi.fn()}
+        onDisconnected={vi.fn()}
+        onSwitchSuccess={vi.fn()}
+        onSwitchFailure={vi.fn()}
+        onSwitchDatabase={switchDatabase}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: ConnectionCopy.createDatabase }));
+    const name = screen.getByTestId(ConnectionAccessibility.createDatabaseName);
+    await user.type(name, "   {Enter}");
+    expect(createDatabase).not.toHaveBeenCalled();
+    await user.clear(name);
+    await user.type(name, "shop{Enter}");
+    await waitFor(() => expect(createDatabase).toHaveBeenCalledTimes(1));
+    expect(switchDatabase).not.toHaveBeenCalled();
+    expect(screen.getByText(ConnectionCopy.databaseCreated)).toBeInTheDocument();
+
+    await user.keyboard("{Enter}");
+    expect(createDatabase).toHaveBeenCalledTimes(1);
+    await user.click(screen.getByRole("button", { name: ConnectionCopy.connect }));
+    await waitFor(() => expect(switchDatabase).toHaveBeenCalledTimes(1));
+    expect(switchDatabase).toHaveBeenCalledWith("shop");
+    expect(panel.queryByRole("dialog", { name: ConnectionCopy.createDatabase })).toBeNull();
+  });
+
+  it("keeps Connect available when the post-create catalog refresh fails", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    vi.spyOn(ipc, "listDatabases").mockRejectedValue(new Error("catalog offline"));
+    const switchDatabase = vi.fn().mockResolvedValue(undefined);
+    render(
+      <ConnectionPanel
+        ipc={ipc}
+        {...formGateProps({ formVisible: false })}
+        isConnected
+        activeProfileId="P"
+        connectionId="c1"
+        databaseName="app"
+        connectProfile={vi.fn()}
+        disconnectSession={vi.fn()}
+        onConnected={vi.fn()}
+        onDisconnected={vi.fn()}
+        onSwitchSuccess={vi.fn()}
+        onSwitchFailure={vi.fn()}
+        onSwitchDatabase={switchDatabase}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: ConnectionCopy.createDatabase }));
+    await user.type(screen.getByTestId(ConnectionAccessibility.createDatabaseName), "shop{Enter}");
+    expect(await screen.findByText(ConnectionCopy.databaseCreated)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: ConnectionCopy.connect })).toBeEnabled();
+  });
 });

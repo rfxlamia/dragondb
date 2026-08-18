@@ -296,7 +296,7 @@ export interface DragonIpc {
   /** Picker list; switch does NOT rewrite profile.database. */
   listDatabases(connectionId: ConnectionId): Promise<string[]>;
   switchDatabase(connectionId: ConnectionId, name: string): Promise<void>;
-  /** CREATE/DROP DATABASE via maintenance connection; create selects the new db. */
+  /** CREATE DATABASE via maintenance connection; create-only — explicit `switchDatabase` owns selection. */
   createDatabase(name: string): Promise<void>;
   deleteDatabase(name: string): Promise<void>;
   /** Quoted-identifier mutations + DDL sheet source (Rust-side quoting). */

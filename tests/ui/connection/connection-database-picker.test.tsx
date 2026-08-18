@@ -1,5 +1,5 @@
 /** @vitest-environment jsdom */
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ConnectionCopy } from "../../../src/ui/connection/connection-copy";
@@ -114,5 +114,29 @@ describe("ConnectionDatabasePicker", () => {
     await user.click(screen.getByRole("button", { name: ConnectionCopy.confirmDelete }));
     expect(screen.getByRole("combobox")).toHaveValue("shop");
     expect(screen.getByText(ConnectionCopy.deleteDatabaseError)).toBeInTheDocument();
+  });
+
+  it("keeps the create sheet open with Connect after create succeeds", async () => {
+    const user = userEvent.setup();
+    const onCreate = vi.fn(async () => undefined);
+    const onConnect = vi.fn(async () => undefined);
+    render(
+      <ConnectionDatabasePicker
+        isConnected={true}
+        databases={["postgres"]}
+        selected="postgres"
+        onSelect={vi.fn()}
+        onCreateDatabase={onCreate}
+        onConnectDatabase={onConnect}
+        profileDatabase="postgres"
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: ConnectionCopy.createDatabase }));
+    await user.type(screen.getByLabelText(ConnectionCopy.databaseName), "shop{Enter}");
+    await waitFor(() => expect(onCreate).toHaveBeenCalledWith("shop"));
+    expect(onConnect).not.toHaveBeenCalled();
+    expect(screen.getByRole("dialog", { name: ConnectionCopy.createDatabase })).toBeInTheDocument();
+    expect(screen.getByText(ConnectionCopy.databaseCreated)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: ConnectionCopy.connect })).toBeEnabled();
   });
 });

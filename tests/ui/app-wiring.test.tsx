@@ -110,7 +110,11 @@ async function connectFirst(
   }
   await user.type(screen.getByLabelText(/host/i), "127.0.0.1");
   await user.type(screen.getByLabelText(/username/i), "postgres");
-  await user.type(screen.getByLabelText(ConnectionCopy.database), "app");
+  const databaseField = screen.getByLabelText(ConnectionCopy.database);
+  await user.type(databaseField, "app");
+  if (options.selectDatabase ?? true) {
+    fireEvent.change(databaseField, { target: { value: "app" } });
+  }
   await user.type(screen.getByLabelText(/^password$/i), "pw");
   await user.click(screen.getByRole("button", { name: /save/i }));
   await user.click(await screen.findByRole("button", { name: ConnectionCopy.connectNow }));
@@ -2763,5 +2767,48 @@ describe("App table browser host wiring", () => {
     );
     expect(screen.getByRole("menuitem", { name: TablesCopy.truncate })).toBeDisabled();
     release();
+  });
+
+  it("routes created database Connect through switchDatabase without raw SQL", async () => {
+    const ipc = createMockDragonIpc("happy");
+    const user = userEvent.setup();
+    const createDatabase = vi.spyOn(ipc, "createDatabase");
+    const switchDatabase = vi.spyOn(ipc, "switchDatabase");
+    const runQuery = vi.spyOn(ipc, "runQuery");
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
+
+    await user.click(screen.getByRole("button", { name: ConnectionCopy.createDatabase }));
+    await user.type(screen.getByTestId(ConnectionAccessibility.createDatabaseName), "shop{Enter}");
+    await screen.findByText(ConnectionCopy.databaseCreated);
+    expect(createDatabase).toHaveBeenCalledTimes(1);
+    expect(switchDatabase).not.toHaveBeenCalledWith(expect.any(String), "shop");
+
+    await user.click(screen.getByRole("button", { name: ConnectionCopy.connect }));
+    await waitFor(() =>
+      expect(switchDatabase).toHaveBeenCalledWith(expect.any(String), "shop"),
+    );
+    expect(createDatabase).toHaveBeenCalledTimes(1);
+    expect(runQuery).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ text: expect.stringMatching(/CREATE DATABASE/i) }),
+    );
+  });
+
+  it("does not repeat a committed switch when its table reload fails", async () => {
+    const ipc = createMockDragonIpc("happy");
+    const listTables = vi.spyOn(ipc, "listTables");
+    const switchDatabase = vi.spyOn(ipc, "switchDatabase");
+    const user = userEvent.setup();
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
+    listTables.mockRejectedValueOnce(new Error("catalog offline"));
+
+    await user.click(screen.getByRole("button", { name: ConnectionCopy.createDatabase }));
+    await user.type(screen.getByTestId(ConnectionAccessibility.createDatabaseName), "shop{Enter}");
+    await user.click(await screen.findByRole("button", { name: ConnectionCopy.connect }));
+    await screen.findByRole("alert");
+    expect(switchDatabase).toHaveBeenCalledTimes(1);
+    expect(document.title).toBe("shop");
   });
 });
