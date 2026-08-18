@@ -1,0 +1,55 @@
+import { describe, expect, it } from "vitest";
+import {
+  browseSessionSnapshot,
+  createBrowseSessionStore,
+} from "../../src/stores/browse-session-store";
+
+const orders = {
+  tabId: "t1",
+  connectionId: "c1",
+  database: "shop",
+  table: { schema: "public", name: "orders", tableType: "regular" as const },
+};
+
+describe("browse-session-store contract", () => {
+  it("starts idle with a stable serializable generation", () => {
+    const store = createBrowseSessionStore();
+    const before = browseSessionSnapshot(store.getState());
+    const after = browseSessionSnapshot(store.getState());
+    expect(before).toEqual({
+      identity: null,
+      page: 0,
+      hasNext: false,
+      lifecycle: { phase: "idle" },
+      generation: 0,
+    });
+    expect(after).toEqual(before);
+    expect(() => structuredClone(before)).not.toThrow();
+    expect(JSON.stringify(before)).not.toMatch(/timeout|promise|react/i);
+  });
+
+  it("establishes exact identity and rejects an old-generation transition", () => {
+    const store = createBrowseSessionStore();
+    store.getState().startBrowse(orders);
+    const oldGeneration = store.getState().generation;
+    expect(store.getState()).toMatchObject({ identity: orders, page: 0 });
+
+    store.getState().selectPage(2);
+    store.getState().invalidate();
+    expect(store.getState()).toMatchObject({
+      identity: null,
+      page: 0,
+      hasNext: false,
+      lifecycle: { phase: "idle" },
+      generation: oldGeneration + 1,
+    });
+    expect(
+      store.getState().publish(oldGeneration, {
+        lifecycle: { phase: "ready" },
+        page: 2,
+        hasNext: true,
+      }),
+    ).toBe(false);
+    expect(store.getState().page).toBe(0);
+  });
+});

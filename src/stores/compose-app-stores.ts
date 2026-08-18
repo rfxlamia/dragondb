@@ -1,9 +1,13 @@
 /**
- * Thin orchestrator — constructs session + schema + tabs + library + history
+ * Thin orchestrator — constructs session + schema + tabs + library + history + browse
  * and wires disconnect clear / connect loadTables. No React / UI imports.
  */
 import type { StoreApi } from "zustand/vanilla";
 import type { DragonIpc, ProfileId } from "../ipc/contract";
+import {
+  createBrowseSessionStore,
+  type BrowseSessionState,
+} from "./browse-session-store";
 import { createHistoryStore, type HistoryState } from "./history-store";
 import { createLibraryStore, type LibraryState } from "./library-store";
 import { createSchemaStore, type SchemaState } from "./schema-store";
@@ -16,6 +20,7 @@ export type AppStores = {
   tabs: StoreApi<TabsState>;
   library: StoreApi<LibraryState>;
   history: StoreApi<HistoryState>;
+  browse: StoreApi<BrowseSessionState>;
   noteCanvasDisconnect: (profileId: ProfileId | null) => void;
   /** Returns true if canvas should remount empty for this connect (different profile after disconnect). */
   shouldRemountCanvasOnConnect: (profileId: ProfileId) => boolean;
@@ -31,6 +36,7 @@ export function composeAppStores(ipc: DragonIpc): AppStores {
   const schema = createSchemaStore(ipc);
   const library = createLibraryStore(ipc);
   const history = createHistoryStore(ipc);
+  const browse = createBrowseSessionStore();
 
   let tabs!: StoreApi<TabsState>;
   let snapshotProfileId: ProfileId | null = null;
@@ -89,6 +95,7 @@ export function composeAppStores(ipc: DragonIpc): AppStores {
     tabs,
     library,
     history,
+    browse,
     noteCanvasDisconnect,
     shouldRemountCanvasOnConnect,
     acknowledgeConnect,
