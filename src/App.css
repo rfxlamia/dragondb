@@ -197,6 +197,13 @@
 .workspace-split__results {
   background: oklch(1 0 0);
   min-height: 0;
+}
+
+.workspace-split__canvas {
+  overflow: hidden;
+}
+
+.workspace-split__results {
   overflow: auto;
 }
 

@@ -782,15 +782,26 @@
   },
   "nodes": [
     {
+      "label": "CLAUDE.md",
+      "file_type": "document",
+      "source_file": "CLAUDE.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "claude",
+      "community": 11,
+      "community_name": "CLAUDE.md",
+      "norm_label": "claude.md"
+    },
+    {
       "label": "sp4b-slice-b.md",
       "file_type": "document",
       "source_file": "docs/pocket/spec/2026-08-18-sp4b-slice-b/sp4b-slice-b.md",
       "source_location": "L1",
       "_origin": "ast",
-      "id": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b",
       "community": 65,
       "community_name": "App.tsx",
-      "norm_label": "sp4b-slice-b.md"
+      "norm_label": "sp4b-slice-b.md",
+      "id": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b"
     },
     {
       "label": "SP-4b Slice B \u2014 Remaining Table and Results Parity",
@@ -798,10 +809,10 @@
       "source_file": "docs/pocket/spec/2026-08-18-sp4b-slice-b/sp4b-slice-b.md",
       "source_location": "L1",
       "_origin": "ast",
-      "id": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_sp_4b_slice_b_remaining_table_and_results_parity",
       "community": 65,
       "community_name": "App.tsx",
-      "norm_label": "sp-4b slice b \u2014 remaining table and results parity"
+      "norm_label": "sp-4b slice b \u2014 remaining table and results parity",
+      "id": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_sp_4b_slice_b_remaining_table_and_results_parity"
     },
     {
       "label": "Summary",
@@ -809,10 +820,10 @@
       "source_file": "docs/pocket/spec/2026-08-18-sp4b-slice-b/sp4b-slice-b.md",
       "source_location": "L10",
       "_origin": "ast",
-      "id": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_summary",
       "community": 65,
       "community_name": "App.tsx",
-      "norm_label": "summary"
+      "norm_label": "summary",
+      "id": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_summary"
     },
     {
       "label": "Context",
@@ -820,10 +831,10 @@
       "source_file": "docs/pocket/spec/2026-08-18-sp4b-slice-b/sp4b-slice-b.md",
       "source_location": "L24",
       "_origin": "ast",
-      "id": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_context",
       "community": 65,
       "community_name": "App.tsx",
-      "norm_label": "context"
+      "norm_label": "context",
+      "id": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_context"
     },
     {
       "label": "Current State",
@@ -831,10 +842,10 @@
       "source_file": "docs/pocket/spec/2026-08-18-sp4b-slice-b/sp4b-slice-b.md",
       "source_location": "L26",
       "_origin": "ast",
-      "id": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_current_state",
       "community": 65,
       "community_name": "App.tsx",
-      "norm_label": "current state"
+      "norm_label": "current state",
+      "id": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_current_state"
     },
     {
       "label": "Problem / Motivation",
@@ -842,10 +853,10 @@
       "source_file": "docs/pocket/spec/2026-08-18-sp4b-slice-b/sp4b-slice-b.md",
       "source_location": "L43",
       "_origin": "ast",
-      "id": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_problem_motivation",
       "community": 65,
       "community_name": "App.tsx",
-      "norm_label": "problem / motivation"
+      "norm_label": "problem / motivation",
+      "id": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_problem_motivation"
     },
     {
       "label": "Related Areas",
@@ -853,10 +864,10 @@
       "source_file": "docs/pocket/spec/2026-08-18-sp4b-slice-b/sp4b-slice-b.md",
       "source_location": "L51",
       "_origin": "ast",
-      "id": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_related_areas",
       "community": 65,
       "community_name": "App.tsx",
-      "norm_label": "related areas"
+      "norm_label": "related areas",
+      "id": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_related_areas"
     },
     {
       "label": "Scope",
@@ -864,10 +875,10 @@
       "source_file": "docs/pocket/spec/2026-08-18-sp4b-slice-b/sp4b-slice-b.md",
       "source_location": "L68",
       "_origin": "ast",
-      "id": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_scope",
       "community": 65,
       "community_name": "App.tsx",
-      "norm_label": "scope"
+      "norm_label": "scope",
+      "id": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_scope"
     },
     {
       "label": "In-Scope",
@@ -875,10 +886,10 @@
       "source_file": "docs/pocket/spec/2026-08-18-sp4b-slice-b/sp4b-slice-b.md",
       "source_location": "L70",
       "_origin": "ast",
-      "id": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_in_scope",
       "community": 65,
       "community_name": "App.tsx",
-      "norm_label": "in-scope"
+      "norm_label": "in-scope",
+      "id": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_in_scope"
     },
     {
       "label": "Out-of-Scope",
@@ -886,10 +897,10 @@
       "source_file": "docs/pocket/spec/2026-08-18-sp4b-slice-b/sp4b-slice-b.md",
       "source_location": "L89",
       "_origin": "ast",
-      "id": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_out_of_scope",
       "community": 65,
       "community_name": "App.tsx",
-      "norm_label": "out-of-scope"
+      "norm_label": "out-of-scope",
+      "id": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_out_of_scope"
     },
     {
       "label": "Architecture Constraints",
@@ -897,10 +908,10 @@
       "source_file": "docs/pocket/spec/2026-08-18-sp4b-slice-b/sp4b-slice-b.md",
       "source_location": "L103",
       "_origin": "ast",
-      "id": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_architecture_constraints",
       "community": 65,
       "community_name": "App.tsx",
-      "norm_label": "architecture constraints"
+      "norm_label": "architecture constraints",
+      "id": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_architecture_constraints"
     },
     {
       "label": "Architecture Validation Result",
@@ -908,10 +919,10 @@
       "source_file": "docs/pocket/spec/2026-08-18-sp4b-slice-b/sp4b-slice-b.md",
       "source_location": "L127",
       "_origin": "ast",
-      "id": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_architecture_validation_result",
       "community": 65,
       "community_name": "App.tsx",
-      "norm_label": "architecture validation result"
+      "norm_label": "architecture validation result",
+      "id": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_architecture_validation_result"
     },
     {
       "label": "Dependencies",
@@ -919,10 +930,10 @@
       "source_file": "docs/pocket/spec/2026-08-18-sp4b-slice-b/sp4b-slice-b.md",
       "source_location": "L155",
       "_origin": "ast",
-      "id": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_dependencies",
       "community": 65,
       "community_name": "App.tsx",
-      "norm_label": "dependencies"
+      "norm_label": "dependencies",
+      "id": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_dependencies"
     },
     {
       "label": "Existing (to leverage)",
@@ -930,10 +941,10 @@
       "source_file": "docs/pocket/spec/2026-08-18-sp4b-slice-b/sp4b-slice-b.md",
       "source_location": "L157",
       "_origin": "ast",
-      "id": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_existing_to_leverage",
       "community": 65,
       "community_name": "App.tsx",
-      "norm_label": "existing (to leverage)"
+      "norm_label": "existing (to leverage)",
+      "id": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_existing_to_leverage"
     },
     {
       "label": "New (proposed)",
@@ -941,10 +952,10 @@
       "source_file": "docs/pocket/spec/2026-08-18-sp4b-slice-b/sp4b-slice-b.md",
       "source_location": "L165",
       "_origin": "ast",
-      "id": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_new_proposed",
       "community": 65,
       "community_name": "App.tsx",
-      "norm_label": "new (proposed)"
+      "norm_label": "new (proposed)",
+      "id": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_new_proposed"
     },
     {
       "label": "Stories and Scenarios",
@@ -952,10 +963,10 @@
       "source_file": "docs/pocket/spec/2026-08-18-sp4b-slice-b/sp4b-slice-b.md",
       "source_location": "L176",
       "_origin": "ast",
-      "id": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_stories_and_scenarios",
       "community": 65,
       "community_name": "App.tsx",
-      "norm_label": "stories and scenarios"
+      "norm_label": "stories and scenarios",
+      "id": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_stories_and_scenarios"
     },
     {
       "label": "Story 1: Metadata-Aware Row Editing",
@@ -963,10 +974,10 @@
       "source_file": "docs/pocket/spec/2026-08-18-sp4b-slice-b/sp4b-slice-b.md",
       "source_location": "L178",
       "_origin": "ast",
-      "id": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_story_1_metadata_aware_row_editing",
       "community": 65,
       "community_name": "App.tsx",
-      "norm_label": "story 1: metadata-aware row editing"
+      "norm_label": "story 1: metadata-aware row editing",
+      "id": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_story_1_metadata_aware_row_editing"
     },
     {
       "label": "Story 2: Safe Browse Reset on Context Change",
@@ -974,10 +985,10 @@
       "source_file": "docs/pocket/spec/2026-08-18-sp4b-slice-b/sp4b-slice-b.md",
       "source_location": "L248",
       "_origin": "ast",
-      "id": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_story_2_safe_browse_reset_on_context_change",
       "community": 65,
       "community_name": "App.tsx",
-      "norm_label": "story 2: safe browse reset on context change"
+      "norm_label": "story 2: safe browse reset on context change",
+      "id": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_story_2_safe_browse_reset_on_context_change"
     },
     {
       "label": "Story 3: Table-Browse Timeout and Recovery",
@@ -985,10 +996,10 @@
       "source_file": "docs/pocket/spec/2026-08-18-sp4b-slice-b/sp4b-slice-b.md",
       "source_location": "L286",
       "_origin": "ast",
-      "id": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_story_3_table_browse_timeout_and_recovery",
       "community": 65,
       "community_name": "App.tsx",
-      "norm_label": "story 3: table-browse timeout and recovery"
+      "norm_label": "story 3: table-browse timeout and recovery",
+      "id": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_story_3_table_browse_timeout_and_recovery"
     },
     {
       "label": "Story 4: Create Database Enter and Connect",
@@ -996,10 +1007,10 @@
       "source_file": "docs/pocket/spec/2026-08-18-sp4b-slice-b/sp4b-slice-b.md",
       "source_location": "L348",
       "_origin": "ast",
-      "id": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_story_4_create_database_enter_and_connect",
       "community": 65,
       "community_name": "App.tsx",
-      "norm_label": "story 4: create database enter and connect"
+      "norm_label": "story 4: create database enter and connect",
+      "id": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_story_4_create_database_enter_and_connect"
     },
     {
       "label": "Story 5: Table-Browse Page Cache",
@@ -1007,10 +1018,10 @@
       "source_file": "docs/pocket/spec/2026-08-18-sp4b-slice-b/sp4b-slice-b.md",
       "source_location": "L414",
       "_origin": "ast",
-      "id": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_story_5_table_browse_page_cache",
       "community": 65,
       "community_name": "App.tsx",
-      "norm_label": "story 5: table-browse page cache"
+      "norm_label": "story 5: table-browse page cache",
+      "id": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_story_5_table_browse_page_cache"
     },
     {
       "label": "Acceptance Criteria",
@@ -1018,10 +1029,10 @@
       "source_file": "docs/pocket/spec/2026-08-18-sp4b-slice-b/sp4b-slice-b.md",
       "source_location": "L486",
       "_origin": "ast",
-      "id": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_acceptance_criteria",
       "community": 65,
       "community_name": "App.tsx",
-      "norm_label": "acceptance criteria"
+      "norm_label": "acceptance criteria",
+      "id": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_acceptance_criteria"
     },
     {
       "label": "Design Decision",
@@ -1029,10 +1040,10 @@
       "source_file": "docs/pocket/spec/2026-08-18-sp4b-slice-b/sp4b-slice-b.md",
       "source_location": "L532",
       "_origin": "ast",
-      "id": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_design_decision",
       "community": 65,
       "community_name": "App.tsx",
-      "norm_label": "design decision"
+      "norm_label": "design decision",
+      "id": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_design_decision"
     },
     {
       "label": "Open Questions / Assumptions",
@@ -1040,10 +1051,10 @@
       "source_file": "docs/pocket/spec/2026-08-18-sp4b-slice-b/sp4b-slice-b.md",
       "source_location": "L561",
       "_origin": "ast",
-      "id": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_open_questions_assumptions",
       "community": 65,
       "community_name": "App.tsx",
-      "norm_label": "open questions / assumptions"
+      "norm_label": "open questions / assumptions",
+      "id": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_open_questions_assumptions"
     },
     {
       "label": "Implementation Notes",
@@ -1051,10 +1062,10 @@
       "source_file": "docs/pocket/spec/2026-08-18-sp4b-slice-b/sp4b-slice-b.md",
       "source_location": "L576",
       "_origin": "ast",
-      "id": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_implementation_notes",
       "community": 65,
       "community_name": "App.tsx",
-      "norm_label": "implementation notes"
+      "norm_label": "implementation notes",
+      "id": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_implementation_notes"
     },
     {
       "label": "Rollback Plan",
@@ -1062,10 +1073,10 @@
       "source_file": "docs/pocket/spec/2026-08-18-sp4b-slice-b/sp4b-slice-b.md",
       "source_location": "L591",
       "_origin": "ast",
-      "id": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_rollback_plan",
       "community": 65,
       "community_name": "App.tsx",
-      "norm_label": "rollback plan"
+      "norm_label": "rollback plan",
+      "id": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_rollback_plan"
     },
     {
       "label": "App.tsx",
@@ -1073,10 +1084,10 @@
       "source_file": "src/App.tsx",
       "source_location": "L1",
       "_origin": "ast",
-      "id": "src_app",
       "community": 57,
       "community_name": "Row Operation Errors",
-      "norm_label": "app.tsx"
+      "norm_label": "app.tsx",
+      "id": "src_app"
     },
     {
       "label": "AppProps",
@@ -1084,10 +1095,10 @@
       "source_file": "src/App.tsx",
       "source_location": "L47",
       "_origin": "ast",
-      "id": "src_app_appprops",
       "community": 57,
       "community_name": "Row Operation Errors",
-      "norm_label": "appprops"
+      "norm_label": "appprops",
+      "id": "src_app_appprops"
     },
     {
       "label": "IDLE_STATUS",
@@ -1095,10 +1106,10 @@
       "source_file": "src/App.tsx",
       "source_location": "L49",
       "_origin": "ast",
-      "id": "src_app_idle_status",
       "community": 57,
       "community_name": "Row Operation Errors",
-      "norm_label": "idle_status"
+      "norm_label": "idle_status",
+      "id": "src_app_idle_status"
     },
     {
       "label": "ensureDefaultIpc()",
@@ -1106,10 +1117,10 @@
       "source_file": "src/App.tsx",
       "source_location": "L51",
       "_origin": "ast",
-      "id": "src_app_ensuredefaultipc",
       "community": 57,
       "community_name": "Row Operation Errors",
-      "norm_label": "ensuredefaultipc()"
+      "norm_label": "ensuredefaultipc()",
+      "id": "src_app_ensuredefaultipc"
     },
     {
       "label": "mapSchemaError()",
@@ -1117,10 +1128,10 @@
       "source_file": "src/App.tsx",
       "source_location": "L59",
       "_origin": "ast",
-      "id": "src_app_mapschemaerror",
       "community": 57,
       "community_name": "Row Operation Errors",
-      "norm_label": "mapschemaerror()"
+      "norm_label": "mapschemaerror()",
+      "id": "src_app_mapschemaerror"
     },
     {
       "label": "App()",
@@ -1128,10 +1139,10 @@
       "source_file": "src/App.tsx",
       "source_location": "L66",
       "_origin": "ast",
-      "id": "src_app_app",
       "community": 57,
       "community_name": "Row Operation Errors",
-      "norm_label": "app()"
+      "norm_label": "app()",
+      "id": "src_app_app"
     },
     {
       "label": "connection-panel.tsx",
@@ -1139,10 +1150,10 @@
       "source_file": "src/ui/connection/connection-panel.tsx",
       "source_location": "L1",
       "_origin": "ast",
-      "id": "src_ui_connection_connection_panel",
       "community": 57,
       "community_name": "Row Operation Errors",
-      "norm_label": "connection-panel.tsx"
+      "norm_label": "connection-panel.tsx",
+      "id": "src_ui_connection_connection_panel"
     },
     {
       "label": "waitRemaining()",
@@ -1150,10 +1161,10 @@
       "source_file": "src/ui/connection/connection-panel.tsx",
       "source_location": "L37",
       "_origin": "ast",
-      "id": "src_ui_connection_connection_panel_waitremaining",
       "community": 57,
       "community_name": "Row Operation Errors",
-      "norm_label": "waitremaining()"
+      "norm_label": "waitremaining()",
+      "id": "src_ui_connection_connection_panel_waitremaining"
     },
     {
       "label": "ConnectionPanelHandle",
@@ -1161,10 +1172,10 @@
       "source_file": "src/ui/connection/connection-panel.tsx",
       "source_location": "L44",
       "_origin": "ast",
-      "id": "src_ui_connection_connection_panel_connectionpanelhandle",
       "community": 57,
       "community_name": "Row Operation Errors",
-      "norm_label": "connectionpanelhandle"
+      "norm_label": "connectionpanelhandle",
+      "id": "src_ui_connection_connection_panel_connectionpanelhandle"
     },
     {
       "label": "ConnectionPanelProps",
@@ -1172,10 +1183,10 @@
       "source_file": "src/ui/connection/connection-panel.tsx",
       "source_location": "L48",
       "_origin": "ast",
-      "id": "src_ui_connection_connection_panel_connectionpanelprops",
       "community": 57,
       "community_name": "Row Operation Errors",
-      "norm_label": "connectionpanelprops"
+      "norm_label": "connectionpanelprops",
+      "id": "src_ui_connection_connection_panel_connectionpanelprops"
     },
     {
       "label": "ConnectionPanel()",
@@ -1183,10 +1194,10 @@
       "source_file": "src/ui/connection/connection-panel.tsx",
       "source_location": "L88",
       "_origin": "ast",
-      "id": "src_ui_connection_connection_panel_connectionpanel",
       "community": 57,
       "community_name": "Row Operation Errors",
-      "norm_label": "connectionpanel()"
+      "norm_label": "connectionpanel()",
+      "id": "src_ui_connection_connection_panel_connectionpanel"
     },
     {
       "label": "app-wiring.test.tsx",
@@ -1194,10 +1205,10 @@
       "source_file": "tests/ui/app-wiring.test.tsx",
       "source_location": "L1",
       "_origin": "ast",
-      "id": "tests_ui_app_wiring_test",
       "community": 57,
       "community_name": "Row Operation Errors",
-      "norm_label": "app-wiring.test.tsx"
+      "norm_label": "app-wiring.test.tsx",
+      "id": "tests_ui_app_wiring_test"
     },
     {
       "label": "menuListen",
@@ -1205,10 +1216,10 @@
       "source_file": "tests/ui/app-wiring.test.tsx",
       "source_location": "L14",
       "_origin": "ast",
-      "id": "tests_ui_app_wiring_test_menulisten",
       "community": 57,
       "community_name": "Row Operation Errors",
-      "norm_label": "menulisten"
+      "norm_label": "menulisten",
+      "id": "tests_ui_app_wiring_test_menulisten"
     },
     {
       "label": "emitTauriMenuForTest()",
@@ -1216,10 +1227,10 @@
       "source_file": "tests/ui/app-wiring.test.tsx",
       "source_location": "L66",
       "_origin": "ast",
-      "id": "tests_ui_app_wiring_test_emittaurimenufortest",
       "community": 57,
       "community_name": "Row Operation Errors",
-      "norm_label": "emittaurimenufortest()"
+      "norm_label": "emittaurimenufortest()",
+      "id": "tests_ui_app_wiring_test_emittaurimenufortest"
     },
     {
       "label": "connectFirst()",
@@ -1227,10 +1238,10 @@
       "source_file": "tests/ui/app-wiring.test.tsx",
       "source_location": "L87",
       "_origin": "ast",
-      "id": "tests_ui_app_wiring_test_connectfirst",
       "community": 57,
       "community_name": "Row Operation Errors",
-      "norm_label": "connectfirst()"
+      "norm_label": "connectfirst()",
+      "id": "tests_ui_app_wiring_test_connectfirst"
     },
     {
       "label": "addSelectFromUsers()",
@@ -1238,10 +1249,10 @@
       "source_file": "tests/ui/app-wiring.test.tsx",
       "source_location": "L1018",
       "_origin": "ast",
-      "id": "tests_ui_app_wiring_test_addselectfromusers",
       "community": 57,
       "community_name": "Row Operation Errors",
-      "norm_label": "addselectfromusers()"
+      "norm_label": "addselectfromusers()",
+      "id": "tests_ui_app_wiring_test_addselectfromusers"
     },
     {
       "label": "savedQuery()",
@@ -1249,10 +1260,10 @@
       "source_file": "tests/ui/app-wiring.test.tsx",
       "source_location": "L1693",
       "_origin": "ast",
-      "id": "tests_ui_app_wiring_test_savedquery",
       "community": 57,
       "community_name": "Row Operation Errors",
-      "norm_label": "savedquery()"
+      "norm_label": "savedquery()",
+      "id": "tests_ui_app_wiring_test_savedquery"
     },
     {
       "label": "persistedTab()",
@@ -1260,10 +1271,10 @@
       "source_file": "tests/ui/app-wiring.test.tsx",
       "source_location": "L2444",
       "_origin": "ast",
-      "id": "tests_ui_app_wiring_test_persistedtab",
       "community": 57,
       "community_name": "Row Operation Errors",
-      "norm_label": "persistedtab()"
+      "norm_label": "persistedtab()",
+      "id": "tests_ui_app_wiring_test_persistedtab"
     },
     {
       "label": "lib.rs",
@@ -25566,9 +25577,9 @@
       "source_location": "L1",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b",
-      "target": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_sp_4b_slice_b_remaining_table_and_results_parity",
-      "confidence_score": 1.0
+      "target": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_sp_4b_slice_b_remaining_table_and_results_parity"
     },
     {
       "relation": "contains",
@@ -25577,9 +25588,9 @@
       "source_location": "L486",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_sp_4b_slice_b_remaining_table_and_results_parity",
-      "target": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_acceptance_criteria",
-      "confidence_score": 1.0
+      "target": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_acceptance_criteria"
     },
     {
       "relation": "contains",
@@ -25588,9 +25599,9 @@
       "source_location": "L103",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_sp_4b_slice_b_remaining_table_and_results_parity",
-      "target": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_architecture_constraints",
-      "confidence_score": 1.0
+      "target": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_architecture_constraints"
     },
     {
       "relation": "contains",
@@ -25599,9 +25610,9 @@
       "source_location": "L24",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_sp_4b_slice_b_remaining_table_and_results_parity",
-      "target": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_context",
-      "confidence_score": 1.0
+      "target": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_context"
     },
     {
       "relation": "contains",
@@ -25610,9 +25621,9 @@
       "source_location": "L155",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_sp_4b_slice_b_remaining_table_and_results_parity",
-      "target": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_dependencies",
-      "confidence_score": 1.0
+      "target": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_dependencies"
     },
     {
       "relation": "contains",
@@ -25621,9 +25632,9 @@
       "source_location": "L532",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_sp_4b_slice_b_remaining_table_and_results_parity",
-      "target": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_design_decision",
-      "confidence_score": 1.0
+      "target": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_design_decision"
     },
     {
       "relation": "contains",
@@ -25632,9 +25643,9 @@
       "source_location": "L576",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_sp_4b_slice_b_remaining_table_and_results_parity",
-      "target": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_implementation_notes",
-      "confidence_score": 1.0
+      "target": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_implementation_notes"
     },
     {
       "relation": "contains",
@@ -25643,9 +25654,9 @@
       "source_location": "L561",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_sp_4b_slice_b_remaining_table_and_results_parity",
-      "target": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_open_questions_assumptions",
-      "confidence_score": 1.0
+      "target": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_open_questions_assumptions"
     },
     {
       "relation": "contains",
@@ -25654,9 +25665,9 @@
       "source_location": "L591",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_sp_4b_slice_b_remaining_table_and_results_parity",
-      "target": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_rollback_plan",
-      "confidence_score": 1.0
+      "target": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_rollback_plan"
     },
     {
       "relation": "contains",
@@ -25665,9 +25676,9 @@
       "source_location": "L68",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_sp_4b_slice_b_remaining_table_and_results_parity",
-      "target": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_scope",
-      "confidence_score": 1.0
+      "target": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_scope"
     },
     {
       "relation": "contains",
@@ -25676,9 +25687,9 @@
       "source_location": "L176",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_sp_4b_slice_b_remaining_table_and_results_parity",
-      "target": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_stories_and_scenarios",
-      "confidence_score": 1.0
+      "target": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_stories_and_scenarios"
     },
     {
       "relation": "contains",
@@ -25687,9 +25698,9 @@
       "source_location": "L10",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_sp_4b_slice_b_remaining_table_and_results_parity",
-      "target": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_summary",
-      "confidence_score": 1.0
+      "target": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_summary"
     },
     {
       "relation": "contains",
@@ -25698,9 +25709,9 @@
       "source_location": "L26",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_context",
-      "target": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_current_state",
-      "confidence_score": 1.0
+      "target": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_current_state"
     },
     {
       "relation": "contains",
@@ -25709,9 +25720,9 @@
       "source_location": "L43",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_context",
-      "target": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_problem_motivation",
-      "confidence_score": 1.0
+      "target": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_problem_motivation"
     },
     {
       "relation": "contains",
@@ -25720,9 +25731,9 @@
       "source_location": "L51",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_context",
-      "target": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_related_areas",
-      "confidence_score": 1.0
+      "target": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_related_areas"
     },
     {
       "relation": "contains",
@@ -25731,9 +25742,9 @@
       "source_location": "L70",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_scope",
-      "target": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_in_scope",
-      "confidence_score": 1.0
+      "target": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_in_scope"
     },
     {
       "relation": "contains",
@@ -25742,9 +25753,9 @@
       "source_location": "L89",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_scope",
-      "target": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_out_of_scope",
-      "confidence_score": 1.0
+      "target": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_out_of_scope"
     },
     {
       "relation": "contains",
@@ -25753,9 +25764,9 @@
       "source_location": "L127",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_architecture_constraints",
-      "target": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_architecture_validation_result",
-      "confidence_score": 1.0
+      "target": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_architecture_validation_result"
     },
     {
       "relation": "contains",
@@ -25764,9 +25775,9 @@
       "source_location": "L157",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_dependencies",
-      "target": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_existing_to_leverage",
-      "confidence_score": 1.0
+      "target": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_existing_to_leverage"
     },
     {
       "relation": "contains",
@@ -25775,9 +25786,9 @@
       "source_location": "L165",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_dependencies",
-      "target": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_new_proposed",
-      "confidence_score": 1.0
+      "target": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_new_proposed"
     },
     {
       "relation": "contains",
@@ -25786,9 +25797,9 @@
       "source_location": "L178",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_stories_and_scenarios",
-      "target": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_story_1_metadata_aware_row_editing",
-      "confidence_score": 1.0
+      "target": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_story_1_metadata_aware_row_editing"
     },
     {
       "relation": "contains",
@@ -25797,9 +25808,9 @@
       "source_location": "L248",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_stories_and_scenarios",
-      "target": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_story_2_safe_browse_reset_on_context_change",
-      "confidence_score": 1.0
+      "target": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_story_2_safe_browse_reset_on_context_change"
     },
     {
       "relation": "contains",
@@ -25808,9 +25819,9 @@
       "source_location": "L286",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_stories_and_scenarios",
-      "target": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_story_3_table_browse_timeout_and_recovery",
-      "confidence_score": 1.0
+      "target": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_story_3_table_browse_timeout_and_recovery"
     },
     {
       "relation": "contains",
@@ -25819,9 +25830,9 @@
       "source_location": "L348",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_stories_and_scenarios",
-      "target": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_story_4_create_database_enter_and_connect",
-      "confidence_score": 1.0
+      "target": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_story_4_create_database_enter_and_connect"
     },
     {
       "relation": "contains",
@@ -25830,9 +25841,9 @@
       "source_location": "L414",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_stories_and_scenarios",
-      "target": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_story_5_table_browse_page_cache",
-      "confidence_score": 1.0
+      "target": "docs_pocket_spec_2026_08_18_sp4b_slice_b_sp4b_slice_b_story_5_table_browse_page_cache"
     },
     {
       "relation": "contains",
@@ -25841,9 +25852,9 @@
       "source_location": "L66",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_app",
-      "target": "src_app_app",
-      "confidence_score": 1.0
+      "target": "src_app_app"
     },
     {
       "relation": "contains",
@@ -25852,9 +25863,9 @@
       "source_location": "L47",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_app",
-      "target": "src_app_appprops",
-      "confidence_score": 1.0
+      "target": "src_app_appprops"
     },
     {
       "relation": "contains",
@@ -25863,9 +25874,9 @@
       "source_location": "L51",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_app",
-      "target": "src_app_ensuredefaultipc",
-      "confidence_score": 1.0
+      "target": "src_app_ensuredefaultipc"
     },
     {
       "relation": "contains",
@@ -25874,9 +25885,9 @@
       "source_location": "L49",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_app",
-      "target": "src_app_idle_status",
-      "confidence_score": 1.0
+      "target": "src_app_idle_status"
     },
     {
       "relation": "contains",
@@ -25885,9 +25896,9 @@
       "source_location": "L59",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_app",
-      "target": "src_app_mapschemaerror",
-      "confidence_score": 1.0
+      "target": "src_app_mapschemaerror"
     },
     {
       "relation": "imports_from",
@@ -25897,9 +25908,9 @@
       "source_location": "L22",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_app",
-      "target": "src_ui_connection_connection_panel",
-      "confidence_score": 1.0
+      "target": "src_ui_connection_connection_panel"
     },
     {
       "relation": "imports",
@@ -25909,9 +25920,9 @@
       "source_location": "L22",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_app",
-      "target": "src_ui_connection_connection_panel_connectionpanel",
-      "confidence_score": 1.0
+      "target": "src_ui_connection_connection_panel_connectionpanel"
     },
     {
       "relation": "imports",
@@ -25921,9 +25932,9 @@
       "source_location": "L22",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_app",
-      "target": "src_ui_connection_connection_panel_connectionpanelhandle",
-      "confidence_score": 1.0
+      "target": "src_ui_connection_connection_panel_connectionpanelhandle"
     },
     {
       "relation": "imports_from",
@@ -25945,9 +25956,9 @@
       "source_location": "L40",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "tests_ui_app_wiring_test",
-      "target": "src_app",
-      "confidence_score": 1.0
+      "target": "src_app"
     },
     {
       "relation": "calls",
@@ -25957,9 +25968,9 @@
       "source_location": "L69",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_app_app",
-      "target": "src_app_ensuredefaultipc",
-      "confidence_score": 1.0
+      "target": "src_app_ensuredefaultipc"
     },
     {
       "relation": "calls",
@@ -25969,9 +25980,9 @@
       "source_location": "L486",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_app_app",
-      "target": "src_app_mapschemaerror",
-      "confidence_score": 1.0
+      "target": "src_app_mapschemaerror"
     },
     {
       "relation": "contains",
@@ -25980,9 +25991,9 @@
       "source_location": "L88",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_ui_connection_connection_panel",
-      "target": "src_ui_connection_connection_panel_connectionpanel",
-      "confidence_score": 1.0
+      "target": "src_ui_connection_connection_panel_connectionpanel"
     },
     {
       "relation": "contains",
@@ -25991,9 +26002,9 @@
       "source_location": "L44",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_ui_connection_connection_panel",
-      "target": "src_ui_connection_connection_panel_connectionpanelhandle",
-      "confidence_score": 1.0
+      "target": "src_ui_connection_connection_panel_connectionpanelhandle"
     },
     {
       "relation": "contains",
@@ -26002,9 +26013,9 @@
       "source_location": "L48",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_ui_connection_connection_panel",
-      "target": "src_ui_connection_connection_panel_connectionpanelprops",
-      "confidence_score": 1.0
+      "target": "src_ui_connection_connection_panel_connectionpanelprops"
     },
     {
       "relation": "contains",
@@ -26013,9 +26024,9 @@
       "source_location": "L37",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_ui_connection_connection_panel",
-      "target": "src_ui_connection_connection_panel_waitremaining",
-      "confidence_score": 1.0
+      "target": "src_ui_connection_connection_panel_waitremaining"
     },
     {
       "relation": "imports_from",
@@ -26048,9 +26059,9 @@
       "source_location": "L1018",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "tests_ui_app_wiring_test",
-      "target": "tests_ui_app_wiring_test_addselectfromusers",
-      "confidence_score": 1.0
+      "target": "tests_ui_app_wiring_test_addselectfromusers"
     },
     {
       "relation": "contains",
@@ -26059,9 +26070,9 @@
       "source_location": "L87",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "tests_ui_app_wiring_test",
-      "target": "tests_ui_app_wiring_test_connectfirst",
-      "confidence_score": 1.0
+      "target": "tests_ui_app_wiring_test_connectfirst"
     },
     {
       "relation": "contains",
@@ -26070,9 +26081,9 @@
       "source_location": "L66",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "tests_ui_app_wiring_test",
-      "target": "tests_ui_app_wiring_test_emittaurimenufortest",
-      "confidence_score": 1.0
+      "target": "tests_ui_app_wiring_test_emittaurimenufortest"
     },
     {
       "relation": "contains",
@@ -26081,9 +26092,9 @@
       "source_location": "L14",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "tests_ui_app_wiring_test",
-      "target": "tests_ui_app_wiring_test_menulisten",
-      "confidence_score": 1.0
+      "target": "tests_ui_app_wiring_test_menulisten"
     },
     {
       "relation": "contains",
@@ -26092,9 +26103,9 @@
       "source_location": "L2444",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "tests_ui_app_wiring_test",
-      "target": "tests_ui_app_wiring_test_persistedtab",
-      "confidence_score": 1.0
+      "target": "tests_ui_app_wiring_test_persistedtab"
     },
     {
       "relation": "contains",
@@ -26103,9 +26114,9 @@
       "source_location": "L1693",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "tests_ui_app_wiring_test",
-      "target": "tests_ui_app_wiring_test_savedquery",
-      "confidence_score": 1.0
+      "target": "tests_ui_app_wiring_test_savedquery"
     },
     {
       "relation": "contains",
@@ -76924,5 +76935,5 @@
       "source_file": "README.md"
     }
   ],
-  "built_at_commit": "e650ca6f66889735ea39b11d632ddcc70e6106a1"
+  "built_at_commit": "8b69c0c2aa310d449b28c71eace4bad25cbe4f5a"
 }

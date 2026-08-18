@@ -1,10 +1,12 @@
 /**
- * Connected-workspace shell: Queries column + tab strip + canvas/results
- * split. Extracted from `App.tsx` (T12) to keep that file a thin composer of
- * stores/hooks. `App.tsx` still owns the `app-main-column` wrapper div, the
- * `VisualQueryCanvas` construction (`canvas` prop passed in here), and every
- * handler — this component is presentational/wiring only.
+ * Connected-workspace shell: Queries sits beside the tab strip + canvas, and
+ * results span the full main-column width below that row (flush to the
+ * Connection sidebar). Extracted from `App.tsx` (T12) to keep that file a thin
+ * composer of stores/hooks. `App.tsx` still owns the `app-main-column` wrapper
+ * div, the `VisualQueryCanvas` construction (`canvas` prop passed in here), and
+ * every handler — this component is presentational/wiring only.
  */
+import type { ReactNode } from "react";
 import { Group, Panel, Separator } from "react-resizable-panels";
 import type {
   ConnectionProfileDto,
@@ -132,104 +134,112 @@ export function AppWorkspace(props: AppWorkspaceProps): React.JSX.Element {
     onViewMutationTable,
   } = props;
 
-  return (
+  const queriesPanel = (
+    <Panel className="app-workspace-split__queries" defaultSize={220} minSize={160}>
+      <QueriesColumn
+        queries={libraryQueries}
+        folders={libraryFolders}
+        selectedQueryId={savedQueryId}
+        onSelectQuery={onSelectQuery}
+        onNewQuery={onNewQuery}
+        onRenameQuery={onRenameQuery}
+        onDeleteQuery={onDeleteQuery}
+        onMoveQuery={onMoveQuery}
+        onDeleteFolder={onDeleteFolder}
+        onRefresh={onLibraryRefresh}
+        onDuplicateQuery={onDuplicateQuery}
+        onRenameFolder={onRenameFolder}
+        onCreateFolder={onCreateFolder}
+        hasCachedResult={hasCachedResult}
+        executingQueryId={executingQueryId}
+        schemas={schemaNames}
+        selectedSchema={selectedSchema}
+        onSelectSchema={onSelectSchema}
+        schemaError={schemaError}
+        onDismissSchemaError={onDismissSchemaError}
+      />
+    </Panel>
+  );
+
+  const queriesRow = (main: ReactNode) => (
     <Group orientation="horizontal" className="app-workspace-split">
-      <Panel className="app-workspace-split__queries" defaultSize={220} minSize={160}>
-        <QueriesColumn
-          queries={libraryQueries}
-          folders={libraryFolders}
-          selectedQueryId={savedQueryId}
-          onSelectQuery={onSelectQuery}
-          onNewQuery={onNewQuery}
-          onRenameQuery={onRenameQuery}
-          onDeleteQuery={onDeleteQuery}
-          onMoveQuery={onMoveQuery}
-          onDeleteFolder={onDeleteFolder}
-          onRefresh={onLibraryRefresh}
-          onDuplicateQuery={onDuplicateQuery}
-          onRenameFolder={onRenameFolder}
-          onCreateFolder={onCreateFolder}
-          hasCachedResult={hasCachedResult}
-          executingQueryId={executingQueryId}
-          schemas={schemaNames}
-          selectedSchema={selectedSchema}
-          onSelectSchema={onSelectSchema}
-          schemaError={schemaError}
-          onDismissSchemaError={onDismissSchemaError}
-        />
-      </Panel>
+      {queriesPanel}
       <Separator className="app-workspace-split__separator" />
       <Panel className="app-workspace-split__main" minSize={400}>
-        <div className="app-workspace-main">
-          {workspaceReady ? (
-            <>
-              <TabBar
-                tabs={tabs.map((tab, index) => {
-                  const savedQueryName = libraryQueries.find(
-                    (query) => query.id === tab.savedQueryId,
-                  )?.name;
-                  const profile =
-                    profiles.find((candidate) => candidate.id === tab.connectionId) ??
-                    profiles.find((candidate) => candidate.id === profileId);
-                  const connectionDisplayName = profile
-                    ? profile.name?.trim() || profile.host
-                    : null;
-                  return {
-                    id: tab.id,
-                    title: formatTabTitle({
-                      databaseName: tab.databaseName,
-                      savedQueryName,
-                      connectionDisplayName,
-                      index: index + 1,
-                    }),
-                    isActive: tab.id === activeTabId,
-                    pendingClose: pendingDeletedIds.has(tab.id),
-                  };
-                })}
-                onNewTab={onNewTab}
-                onSwitchTab={onSwitchTab}
-                onCloseTab={onCloseTab}
-              />
-              <WorkspaceSplit
-                canvas={canvas}
-                results={
-                  <div className="app-results-wrapper">
-                    {mutationToast && mutationToast.tableName ? (
-                      <MutationToast
-                        sql={mutationToast.sql}
-                        title={mutationToast.title}
-                        table={{
-                          schema: mutationToast.tableSchema ?? undefined,
-                          name: mutationToast.tableName,
-                        }}
-                        onViewTable={onViewMutationTable}
-                        onDismiss={onDismissMutationToast}
-                      />
-                    ) : null}
-                    <QueryResultsPane
-                      status={status}
-                      compact={compact}
-                      raw={raw}
-                      dateFormat={dateFormat}
-                      query={query}
-                      sourceTable={sourceTable}
-                      primaryKeyColumns={primaryKeyColumns}
-                      browse={browse}
-                      hasNextPage={hasNextPage}
-                      hasPrevPage={hasPrevPage}
-                      onNextPage={onNextPage}
-                      onPrevPage={onPrevPage}
-                      onUpdateRow={onUpdateRow}
-                      onDeleteRows={onDeleteRows}
-                      onSaveCsv={onSaveCsv}
-                    />
-                  </div>
-                }
-              />
-            </>
-          ) : null}
-        </div>
+        {main}
       </Panel>
     </Group>
+  );
+
+  if (!workspaceReady) {
+    return queriesRow(null);
+  }
+
+  return (
+    <WorkspaceSplit
+      canvas={queriesRow(
+        <div className="app-workspace-main">
+          <TabBar
+            tabs={tabs.map((tab, index) => {
+              const savedQueryName = libraryQueries.find(
+                (query) => query.id === tab.savedQueryId,
+              )?.name;
+              const profile =
+                profiles.find((candidate) => candidate.id === tab.connectionId) ??
+                profiles.find((candidate) => candidate.id === profileId);
+              const connectionDisplayName = profile ? profile.name?.trim() || profile.host : null;
+              return {
+                id: tab.id,
+                title: formatTabTitle({
+                  databaseName: tab.databaseName,
+                  savedQueryName,
+                  connectionDisplayName,
+                  index: index + 1,
+                }),
+                isActive: tab.id === activeTabId,
+                pendingClose: pendingDeletedIds.has(tab.id),
+              };
+            })}
+            onNewTab={onNewTab}
+            onSwitchTab={onSwitchTab}
+            onCloseTab={onCloseTab}
+          />
+          {canvas}
+        </div>,
+      )}
+      results={
+        <div className="app-results-wrapper">
+          {mutationToast && mutationToast.tableName ? (
+            <MutationToast
+              sql={mutationToast.sql}
+              title={mutationToast.title}
+              table={{
+                schema: mutationToast.tableSchema ?? undefined,
+                name: mutationToast.tableName,
+              }}
+              onViewTable={onViewMutationTable}
+              onDismiss={onDismissMutationToast}
+            />
+          ) : null}
+          <QueryResultsPane
+            status={status}
+            compact={compact}
+            raw={raw}
+            dateFormat={dateFormat}
+            query={query}
+            sourceTable={sourceTable}
+            primaryKeyColumns={primaryKeyColumns}
+            browse={browse}
+            hasNextPage={hasNextPage}
+            hasPrevPage={hasPrevPage}
+            onNextPage={onNextPage}
+            onPrevPage={onPrevPage}
+            onUpdateRow={onUpdateRow}
+            onDeleteRows={onDeleteRows}
+            onSaveCsv={onSaveCsv}
+          />
+        </div>
+      }
+    />
   );
 }
