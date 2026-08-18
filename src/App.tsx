@@ -117,6 +117,10 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
     stores.tabs,
     (s) => s.tabs.find((t) => t.id === s.activeTabId)?.selectedTableName ?? null,
   );
+  const browsePage = useStore(
+    stores.tabs,
+    (s) => s.tabs.find((t) => t.id === s.activeTabId)?.browsePage ?? 0,
+  );
   const mutationToast = useStore(
     stores.tabs,
     (s) => s.tabs.find((t) => t.id === s.activeTabId)?.mutationToast ?? null,
@@ -150,9 +154,6 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
   const [schemaError, setSchemaError] = useState<string | null>(null);
   const [dateFormat, setDateFormat] = useState<QueryResultsDateFormat>(loadDateFormat);
   const [primaryKeyColumns, setPrimaryKeyColumns] = useState<string[]>([]);
-  const browsePage = useStore(stores.browse, (s) =>
-    s.identity?.tabId === activeTabId ? s.page : 0,
-  );
   const canvasHandleRef = useRef<VisualQueryCanvasHandle | null>(null);
   const connectionPanelRef = useRef<ConnectionPanelHandle | null>(null);
   /**
@@ -617,6 +618,7 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
       database: session.databaseName,
       table,
     });
+    stores.tabs.getState().setBrowsePage(tabId, 0);
   }
 
   function handleViewMutationTable(table: MutationToastTable): void {
@@ -678,6 +680,8 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
 
   function handleNextPage(): void {
     if (sourceTable === undefined) return;
+    const tabId = stores.tabs.getState().activeTabId;
+    if (tabId === null) return;
     const nextPage = browsePage + 1;
     void runBrowseOnActiveTab(
       stores,
@@ -685,12 +689,14 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
       { schema: sourceTable.schema, name: sourceTable.name, tableType: "regular" },
       nextPage,
     )
-      .then(() => stores.browse.getState().selectPage(nextPage))
+      .then(() => stores.tabs.getState().setBrowsePage(tabId, nextPage))
       .catch(() => undefined);
   }
 
   function handlePrevPage(): void {
     if (sourceTable === undefined || browsePage === 0) return;
+    const tabId = stores.tabs.getState().activeTabId;
+    if (tabId === null) return;
     const prevPage = browsePage - 1;
     void runBrowseOnActiveTab(
       stores,
@@ -698,7 +704,7 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
       { schema: sourceTable.schema, name: sourceTable.name, tableType: "regular" },
       prevPage,
     )
-      .then(() => stores.browse.getState().selectPage(prevPage))
+      .then(() => stores.tabs.getState().setBrowsePage(tabId, prevPage))
       .catch(() => undefined);
   }
 

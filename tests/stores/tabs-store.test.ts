@@ -867,6 +867,35 @@ describe("tabs-store", () => {
     expect(saveTabState.mock.calls[0]?.[0]?.queryText).not.toBe(ir);
   });
 
+  it("setBrowsePage updates only the requested tab and stays off the persist DTO", async () => {
+    const saveTabState = vi.fn(
+      async (_dto: TabStateDto, _opts?: { includeCachedResults?: boolean }) => undefined,
+    );
+    const store = createTabsStore(
+      {
+        saveTabState,
+        deleteTabState: vi.fn(async () => undefined),
+        listTabStates: vi.fn(async () => []),
+      } as unknown as DragonIpc,
+      {
+        getConnectionId: () => "c1",
+        getDatabaseName: () => "app",
+      },
+    );
+    store.setState({
+      tabs: [baseTab({ id: "a" }), baseTab({ id: "b", isActive: false })],
+      activeTabId: "a",
+    });
+
+    store.getState().setBrowsePage("b", 2);
+
+    expect(store.getState().tabs.find((tab) => tab.id === "a")?.browsePage ?? 0).toBe(0);
+    expect(store.getState().tabs.find((tab) => tab.id === "b")?.browsePage).toBe(2);
+
+    await store.getState().setVisualDocumentJson("b", "{}");
+    expect(saveTabState.mock.calls[0]?.[0]).not.toHaveProperty("browsePage");
+  });
+
   it("clearBrowseResults clears browse payloads but preserves SQL/canvas payloads", () => {
     const store = createTabsStore({} as DragonIpc, {
       getConnectionId: () => "P",
@@ -884,6 +913,7 @@ describe("tabs-store", () => {
           raw: { columns: ["id"], rows: [[1]] },
           compact: { columns: ["id"], rows: [[1]] },
           status: { kind: "ok", rowCount: 1, durationMs: 1 },
+          browsePage: 2,
         },
         {
           ...baseTab({
@@ -905,6 +935,7 @@ describe("tabs-store", () => {
       selectedTableName: null,
       raw: null,
       compact: null,
+      browsePage: 0,
     });
     expect(store.getState().tabs.find((tab) => tab.id === "sql")).toMatchObject({
       queryText: "SELECT 1",

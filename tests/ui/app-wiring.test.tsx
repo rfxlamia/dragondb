@@ -2897,5 +2897,26 @@ describe("App table browser host wiring", () => {
         /FROM "public"\."users"[\s\S]*OFFSET 100/.test(String(call[1]?.text)),
       ),
     ).toHaveLength(0);
+
+    await user.click(nextPage());
+    await waitFor(() =>
+      expect(
+        runQuery.mock.calls.filter((call) =>
+          /FROM "public"\."users"[\s\S]*OFFSET 100/.test(String(call[1]?.text)),
+        ),
+      ).toHaveLength(1),
+    );
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: ResultsCopy.prevPage })).toBeEnabled(),
+    );
+
+    await user.click(nextPage());
+    await waitFor(() =>
+      expect(
+        runQuery.mock.calls.filter((call) =>
+          /FROM "public"\."users"[\s\S]*OFFSET 200/.test(String(call[1]?.text)),
+        ),
+      ).toHaveLength(1),
+    );
   });
 });

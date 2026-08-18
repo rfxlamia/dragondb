@@ -38,6 +38,8 @@ export type TabState = TabStateDto & {
   compact?: TabResultGrid | null;
   status?: TabRunStatus;
   mutationToast?: MutationToast | null;
+  /** Ephemeral browse page (0-based). Never persisted. */
+  browsePage?: number;
 };
 
 export type TabsSessionGetters = {
@@ -82,6 +84,7 @@ export type TabsState = {
   clearInMemoryResults: () => void;
   /** Clears in-memory browse payloads only (tabs with selected-table metadata). */
   clearBrowseResults: () => void;
+  setBrowsePage: (tabId: string, page: number) => void;
   setDatabaseName: (tabId: string, databaseName: string | null) => Promise<void>;
   setQueryText: (tabId: string, text: string) => void;
   setVisualDocumentJson: (tabId: string, json: string) => Promise<void>;
@@ -112,6 +115,7 @@ function toTabState(
     raw,
     compact,
     status: { kind: "idle" },
+    browsePage: 0,
   };
 }
 
@@ -200,7 +204,14 @@ function mruId(tabs: TabState[]): string | null {
 }
 
 function toTabStateDto(tab: TabState): TabStateDto {
-  const { raw: _raw, compact: _compact, status: _status, mutationToast: _toast, ...dto } = tab;
+  const {
+    raw: _raw,
+    compact: _compact,
+    status: _status,
+    mutationToast: _toast,
+    browsePage: _browsePage,
+    ...dto
+  } = tab;
   return dto;
 }
 
@@ -365,6 +376,7 @@ export function createTabsStore(ipc: DragonIpc, getters: TabsSessionGetters): St
                 raw: existing.raw,
                 compact: existing.compact,
                 status: existing.status,
+                browsePage: existing.browsePage,
               };
             } else {
               tabs[idx] = { ...hydrated, status: existing?.status };
@@ -527,9 +539,15 @@ export function createTabsStore(ipc: DragonIpc, getters: TabsSessionGetters): St
               status: { kind: "idle" as const },
               cachedResultsData: null,
               cachedColumnNames: null,
+              browsePage: 0,
             };
           }),
         }));
+      },
+
+      setBrowsePage(tabId, page) {
+        if (!get().tabs.some((t) => t.id === tabId)) return;
+        patchTab(tabId, { browsePage: Math.max(0, Math.trunc(page)) });
       },
 
       async setDatabaseName(tabId, databaseName) {
