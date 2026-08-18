@@ -933,11 +933,17 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
             <p>{launchError}</p>
           </div>
         ) : null}
-        {/* The collapsed panel leaves a rail rather than nothing: the toggle
-            keeps a real grid column, so hiding the sidebar widens the
-            workspace instead of stretching an empty row down the window. */}
-        {connectionCollapsed ? (
-          <div className="app-connection-rail">
+        {/* Rail and panel share one column and both stay mounted: the column
+            animates its width while the panel fades under the rail, so hiding
+            the sidebar reads as a drawer closing rather than a jump cut.
+            Whichever layer is not showing is inert, so tab order and the
+            accessibility tree only ever contain the visible one. */}
+        <div className="app-sidebar">
+          <div
+            className="app-sidebar__rail"
+            inert={connectionCollapsed ? undefined : true}
+            aria-hidden={connectionCollapsed ? undefined : true}
+          >
             <button
               type="button"
               className="ui-icon-btn"
@@ -948,45 +954,50 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
               <SidebarIcon />
             </button>
           </div>
-        ) : (
-          <ConnectionPanel
-            ref={connectionPanelRef}
-            ipc={ipc}
-            isConnected={isConnected}
-            activeProfileId={profileId ?? undefined}
-            formVisible={formVisible}
-            onFormVisibleChange={handleFormVisibleChange}
-            onProfilesLoaded={handleProfilesLoaded}
-            tables={visibleTables}
-            tablesLoading={tablesLoading}
-            tablesErrorMessage={tablesErrorMessage}
-            onBrowse={handleBrowseTable}
-            columnsByTable={columnsByTable}
-            executing={status.kind === "running"}
-            onDrop={handleDropTable}
-            onTruncate={handleTruncateTable}
-            onGenerateDdl={handleGenerateTableDdl}
-            onRefresh={handleRefreshTables}
-            onFetchAll={handleFetchAllTable}
-            onExpand={handleExpandTable}
-            saveCsvFile={(csv, defaultPath) => ipc.saveCsvFile(csv, defaultPath)}
-            saveTextFile={(text, defaultPath, filter) =>
-              ipc.saveTextFile(text, defaultPath, filter)
-            }
-            connectionId={connectionId}
-            databaseName={databaseName}
-            onSwitchDatabase={handleSwitchDatabase}
-            onClearDatabase={handleClearDatabaseSelection}
-            onCollapse={() => setConnectionCollapsed(true)}
-            missingDatabase={missingDatabase}
-            connectProfile={(id) => stores.session.getState().connect(id)}
-            disconnectSession={() => stores.session.getState().disconnect()}
-            onConnected={handleConnected}
-            onDisconnected={handleDisconnected}
-            onSwitchSuccess={handleSwitchSuccess}
-            onSwitchFailure={handleSwitchFailure}
-          />
-        )}
+          <div
+            className="app-sidebar__panel"
+            inert={connectionCollapsed ? true : undefined}
+            aria-hidden={connectionCollapsed ? true : undefined}
+          >
+            <ConnectionPanel
+              ref={connectionPanelRef}
+              ipc={ipc}
+              isConnected={isConnected}
+              activeProfileId={profileId ?? undefined}
+              formVisible={formVisible}
+              onFormVisibleChange={handleFormVisibleChange}
+              onProfilesLoaded={handleProfilesLoaded}
+              tables={visibleTables}
+              tablesLoading={tablesLoading}
+              tablesErrorMessage={tablesErrorMessage}
+              onBrowse={handleBrowseTable}
+              columnsByTable={columnsByTable}
+              executing={status.kind === "running"}
+              onDrop={handleDropTable}
+              onTruncate={handleTruncateTable}
+              onGenerateDdl={handleGenerateTableDdl}
+              onRefresh={handleRefreshTables}
+              onFetchAll={handleFetchAllTable}
+              onExpand={handleExpandTable}
+              saveCsvFile={(csv, defaultPath) => ipc.saveCsvFile(csv, defaultPath)}
+              saveTextFile={(text, defaultPath, filter) =>
+                ipc.saveTextFile(text, defaultPath, filter)
+              }
+              connectionId={connectionId}
+              databaseName={databaseName}
+              onSwitchDatabase={handleSwitchDatabase}
+              onClearDatabase={handleClearDatabaseSelection}
+              onCollapse={() => setConnectionCollapsed(true)}
+              missingDatabase={missingDatabase}
+              connectProfile={(id) => stores.session.getState().connect(id)}
+              disconnectSession={() => stores.session.getState().disconnect()}
+              onConnected={handleConnected}
+              onDisconnected={handleDisconnected}
+              onSwitchSuccess={handleSwitchSuccess}
+              onSwitchFailure={handleSwitchFailure}
+            />
+          </div>
+        </div>
         <div className="app-main-column" aria-busy={workspaceReady ? undefined : true}>
           <AppWorkspace
             workspaceReady={workspaceReady}

@@ -2211,9 +2211,12 @@ describe("App overlay, collapse, and title (SP-4b last slice T6)", () => {
     const user = userEvent.setup();
     render(<App ipc={ipc} />);
     await connectFirst(user, ipc);
-    expect(screen.getByText(ConnectionCopy.panelTitle)).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: ConnectionCopy.panelTitle })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: ConnectionCopy.collapseConnection }));
-    expect(screen.queryByText(ConnectionCopy.panelTitle)).toBeNull();
+    // The panel stays mounted so the column can animate closed; collapsed means
+    // hidden from the accessibility tree, with the rail toggle in its place.
+    expect(screen.queryByRole("region", { name: ConnectionCopy.panelTitle })).toBeNull();
+    expect(screen.getByRole("button", { name: ConnectionCopy.showConnection })).toBeInTheDocument();
     expect(screen.getByTestId(QueriesAccessibility.column)).toBeInTheDocument();
     expect(screen.getByTestId(VisualQueryAccessibility.initialAddBlock)).toBeInTheDocument();
   });

@@ -55,6 +55,11 @@
   /* Stronger ease-out for anything entering/pressing — the built-in CSS easings are too weak
      to read as intentional (emil-design-eng). Reserve --ease-standard for hover/color-only. */
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  /* Panel collapse: an iOS-drawer curve (emil-design-eng) — near-instant departure, long
+     settle — so a whole column changing width reads as sliding away, not as a jump cut.
+     240ms is the top of the drawer band; anything shorter still flickers at this size. */
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  --duration-panel: 240ms;
 
   /* Surfaces: sidebars recede, content is the raised white plane. */
   --surface-page: var(--neutral-100);

@@ -33,8 +33,10 @@ connection/database changes instead of being retained behind mismatch help.
 - `QueryResultsPane` derives editability from `sourceTable` and primary-key names.
   It does not track the connection/database that produced a browse result.
 - SQL hatch timeout handling exists at 300 seconds. Table browse has no timer.
-- Create Database validates and reports create errors, but Enter does not submit
-  and successful creation immediately switches the session.
+- Create Database validates and reports create errors, but Enter does not submit.
+  The current Rust `create_database` session method also switches immediately, so
+  the approved explicit Connect boundary requires a narrow create-only semantic
+  correction in that existing method.
 - Table-browse Prev/Next works with 100 visible rows and a `LIMIT 101` probe, but
   every navigation refetches.
 
@@ -58,6 +60,7 @@ one explicit lifecycle boundary rather than unrelated component-local flags.
 - `src/ui/connection/create-database-dialog.tsx`
 - `src/ui/connection/connection-panel.tsx`
 - `src/ipc/contract.ts`
+- `src-tauri/src/session/mod.rs`
 - Existing store, result, connection, and app-wiring tests
 
 ---
@@ -76,6 +79,8 @@ one explicit lifecycle boundary rather than unrelated component-local flags.
 - Apply a 300,000 ms timeout to table browse, cancel before retry, and expose an
   explicit reconnect recovery after cancellation is stuck for 12,000 ms.
 - Add Enter submit plus created/Connect states to Create Database.
+- Make the existing `createDatabase` command create-only; the explicit Connect
+  action is the sole operation that switches the live session.
 - Cache visited table-browse pages in memory and invalidate them on every approved
   stale-data boundary.
 - Add or update tests and tick only ledger rows whose acceptance criteria pass.
@@ -98,9 +103,11 @@ one explicit lifecycle boundary rather than unrelated component-local flags.
 ## Architecture Constraints
 
 - Layers this work may touch: `src/stores/**`, `src/ui/**`, `src/App.tsx`, existing
-  TypeScript IPC types/clients, tests, and the SP-4b ledger.
-- Layers this work must not touch for new behavior: `src/core/**`; Rust database
-  I/O unless an existing cancellation/reconnect contract is proven insufficient.
+  TypeScript IPC types/clients, tests, the SP-4b ledger, and the narrow
+  `AppSession::create_database` implementation/test in `src-tauri/src/session/mod.rs`.
+- Layers this work must not touch for new behavior: `src/core/**` and all other Rust
+  database I/O. No command/signature is added; only the existing create side effect
+  is separated from the existing explicit switch command.
 - `tabs-store` remains the sole owner of the current rendered tab result and run
   status. The new browse store must not become a second rendered-result source.
 - The browse store owns only ephemeral browse identity, generation, page cache,
@@ -134,8 +141,10 @@ Findings:
   for visible results; this condition is mandatory.
 - Concurrency passes conditionally on one generation token covering table/context,
   refresh, timeout, and reconnect invalidation; this condition is mandatory.
-- Contract safety passes: no database schema, persisted DTO, or public IPC change
-  is required for the chosen design.
+- Contract safety passes: no database schema, persisted DTO, command, or IPC
+  signature change is required. The documented side-effect contract changes from
+  create-and-switch to create-only so the existing `switchDatabase` command owns
+  the explicit Connect transition.
 - Performance passes with a bounded current-browse cache. Use a small LRU bound
   rather than retaining every visited page indefinitely.
 - Rollback is code-only: remove the ephemeral store/orchestrator wiring and return
@@ -528,7 +537,8 @@ Zustand infrastructure.
 **Summary:** Keep tab results authoritative in `tabs-store`, and add a composed,
 ephemeral browse boundary for cache identity, lifecycle generations, page state,
 timeout/cancellation, and reconnect recovery. Dialog-specific workflows remain
-small local state machines.
+small local state machines. The existing `createDatabase` command becomes
+create-only; Connect performs the sole session switch through `switchDatabase`.
 
 **Rejected options:**
 
@@ -584,5 +594,6 @@ All blocking questions were resolved during grinding.
 - Remove the browse store from `AppStores` composition and restore direct
   `runBrowseOnActiveTab` calls if the shared lifecycle boundary must be rolled back.
 - Restore the existing Create Database auto-switch dialog behavior if its new
-  state machine must be rolled back.
+  state machine must be rolled back, including the former Rust create-and-switch
+  behavior as one atomic rollback.
 - No migration, persisted-cache deletion, or Rust data repair is required.

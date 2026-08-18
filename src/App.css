@@ -6,19 +6,20 @@
 }
 
 .app-shell {
+  --sidebar-width: 20rem;
+  --sidebar-rail-width: 2.25rem;
   background: var(--surface-page);
   color: var(--neutral-900);
   display: grid;
   font-family: var(--font-sans);
-  grid-template-columns: minmax(15rem, 20rem) minmax(0, 1fr);
+  /* The sidebar track follows the sidebar's own width rather than being sized
+     here: a width transition on the element animates everywhere, whereas
+     interpolating grid-template-columns does not. */
+  grid-template-columns: auto minmax(0, 1fr);
   height: 100vh;
   min-height: 100vh;
   overflow: auto;
   position: relative;
-}
-
-.app-shell--collapsed {
-  grid-template-columns: 2.25rem minmax(0, 1fr);
 }
 
 .app-connection-error {
@@ -35,18 +36,64 @@
   margin: 0;
 }
 
-/* Collapsed rail: a sidebar-coloured strip holding only the expand toggle, so
-   the panel's slot never becomes an empty stretched grid row and the toggle
-   stays level with the Connection / Queries headers beside it. */
-.app-connection-rail {
+/* Collapse is one column changing width, not a panel swapped for a button. The
+   sidebar clips its contents at a fixed inner width, so the panel keeps its
+   layout while the column narrows — text never reflows mid-animation, which is
+   what made the old swap read as a jump cut. */
+.app-sidebar {
+  overflow: hidden;
+  position: relative;
+  transition: width var(--duration-panel) var(--ease-drawer);
+  width: var(--sidebar-width);
+}
+
+.app-shell--collapsed .app-sidebar {
+  width: var(--sidebar-rail-width);
+}
+
+.app-sidebar__panel {
+  height: 100%;
+  min-height: 0;
+  /* Expanding: hold until the column has opened far enough that the panel is
+     not caught mid-clip, then fade in. */
+  transition: opacity var(--duration-fast) var(--ease-out) 90ms;
+  width: var(--sidebar-width);
+}
+
+/* Collapsing: leave immediately, and faster than the column closes, so the rail
+   and the panel are never fighting for the same pixels. */
+.app-shell--collapsed .app-sidebar__panel {
+  opacity: 0;
+  transition-delay: 0ms;
+  transition-duration: 100ms;
+}
+
+/* The rail is the same column seen once the panel has gone: full height,
+   sidebar surface, expand toggle level with the Connection / Queries headers. */
+.app-sidebar__rail {
   align-items: center;
   background: var(--surface-sidebar);
   border-right: 1px solid var(--border-subtle);
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  max-height: 100vh;
+  inset: 0;
+  opacity: 0;
   padding: 0.5rem 5px;
+  /* The rail overlays the panel's left edge, so while the sidebar is open it
+     must be click-through — otherwise it eats presses on the table-tree
+     chevrons sitting under it. */
+  pointer-events: none;
+  position: absolute;
+  transition: opacity var(--duration-fast) var(--ease-out);
+  width: var(--sidebar-rail-width);
+  z-index: 1;
+}
+
+.app-shell--collapsed .app-sidebar__rail {
+  opacity: 1;
+  pointer-events: auto;
+  transition-delay: 100ms;
 }
 
 .loading-overlay {
@@ -73,6 +120,8 @@
 .app-shell .connection-panel {
   background: var(--surface-sidebar);
   border-right: 1px solid var(--border-subtle);
+  box-sizing: border-box;
+  height: 100%;
   max-height: 100vh;
   overflow: auto;
   padding: 0.5rem 0.5rem 1rem;
@@ -253,22 +302,40 @@ body,
   min-height: 100%;
 }
 
+/* Restores the shrink the old minmax(15rem, 20rem) track gave the sidebar. It
+   is a step rather than a range because the column now animates its own width,
+   and a width transition needs two definite endpoints. */
+@media (max-width: 64rem) {
+  .app-shell {
+    --sidebar-width: 15rem;
+  }
+}
+
 @media (max-width: 48rem) {
+  /* Stacked layout: the sidebar is a full-width band above the workspace, and
+     collapsing drops back to a rail beside the workspace rather than leaving a
+     full-width strip of empty chrome. */
   .app-shell {
     grid-template-columns: 1fr;
   }
 
-  .app-shell--collapsed {
-    grid-template-columns: 2.25rem minmax(0, 1fr);
+  .app-sidebar,
+  .app-sidebar__panel {
+    width: 100%;
   }
 
-  .app-connection-rail {
-    max-height: none;
+  .app-shell--collapsed {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .app-shell--collapsed .app-sidebar {
+    width: var(--sidebar-rail-width);
   }
 
   .app-shell .connection-panel {
     border-bottom: 1px solid var(--border-subtle);
     border-right: none;
+    height: auto;
     max-height: none;
   }
 }

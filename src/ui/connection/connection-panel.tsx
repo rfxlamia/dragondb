@@ -452,10 +452,10 @@ export function ConnectionPanel(props: ConnectionPanelProps): React.JSX.Element 
               <ConnectIcon />
             </button>
           ) : null}
-          {/* Collapsing unmounts this panel, and the form sheet — with whatever
-              host/port/password is half-typed into it — lives inside. The scrim
-              already reads as "not now"; disabling makes that true instead of
-              silently discarding the draft. */}
+          {/* The form sheet is fixed-position and lives inside this panel, so it
+              would keep floating over a collapsed shell with no column left to
+              return to. The scrim already reads as "not now"; disabling makes
+              that true instead of stranding the draft. */}
           {onCollapse ? (
             <button
               type="button"
