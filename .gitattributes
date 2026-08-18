@@ -1,1 +1,2 @@
-graphify-out/graph.json merge=graphify
+graphify-out/graph.json -diff merge=graphify
+graphify-out/manifest.json -diff

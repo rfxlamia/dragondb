@@ -69,4 +69,6 @@ Thumbs.db
 .agents/
 docs/pocket/plans/
 .worktree/
-graphify-out/
+graphify-out/*
+!graphify-out/graph.json
+!graphify-out/manifest.json
