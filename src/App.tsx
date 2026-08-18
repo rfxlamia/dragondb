@@ -150,7 +150,9 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
   const [schemaError, setSchemaError] = useState<string | null>(null);
   const [dateFormat, setDateFormat] = useState<QueryResultsDateFormat>(loadDateFormat);
   const [primaryKeyColumns, setPrimaryKeyColumns] = useState<string[]>([]);
-  const browsePage = useStore(stores.browse, (s) => s.page);
+  const browsePage = useStore(stores.browse, (s) =>
+    s.identity?.tabId === activeTabId ? s.page : 0,
+  );
   const canvasHandleRef = useRef<VisualQueryCanvasHandle | null>(null);
   const connectionPanelRef = useRef<ConnectionPanelHandle | null>(null);
   /**
@@ -516,7 +518,6 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
     stores.noteCanvasDisconnect(lastProfileIdRef.current);
     setSelectedSchema(null);
     setSchemaError(null);
-    setLaunchError(null);
   }
 
   function handleSwitchSuccess(result: ConnectResult): void {
@@ -527,7 +528,6 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
   function handleSwitchFailure(_error: IpcError): void {
     // Snapshot already set by onDisconnected after A teardown — keep it for remount-on-B.
     // See tests/stores/sp3-spec-audit.test.ts "App.handleSwitchFailure must not wipe the disconnect snapshot".
-    setLaunchError(null);
   }
 
   function handleCommittedFromChange(table: TableReference | null): void {
@@ -1000,16 +1000,7 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
               onClearDatabase={handleClearDatabaseSelection}
               onCollapse={() => setConnectionCollapsed(true)}
               missingDatabase={missingDatabase}
-              connectProfile={async (id) => {
-                try {
-                  const result = await stores.session.getState().connect(id);
-                  setLaunchError(null);
-                  return result;
-                } catch (error) {
-                  setLaunchError(humanIpcErrorMessage(error));
-                  throw error;
-                }
-              }}
+              connectProfile={(id) => stores.session.getState().connect(id)}
               disconnectSession={() => stores.session.getState().disconnect()}
               onConnected={handleConnected}
               onDisconnected={handleDisconnected}

@@ -2850,7 +2850,52 @@ describe("App table browser host wiring", () => {
     expect(screen.queryByTestId(ResultsAccessibility.grid)).toBeNull();
     vi.spyOn(ipc, "connectProfile").mockRejectedValueOnce(new Error("offline"));
     await user.click(screen.getByRole("button", { name: ConnectionCopy.connect }));
-    await screen.findByRole("alert");
+    await screen.findByText(/offline/i);
     expect(screen.queryByTestId(ResultsAccessibility.grid)).toBeNull();
+  });
+
+  it("does not leak browse page onto the first tab after paging a second tab", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    const pageRows = Array.from({ length: 101 }, (_, i) => [i]);
+    const runQuery = vi.spyOn(ipc, "runQuery").mockResolvedValue({
+      columns: ["id"],
+      rows: pageRows,
+      rowsAffected: null,
+      durationMs: 1,
+    });
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
+
+    await user.click(await screen.findByRole("button", { name: "users" }));
+    await screen.findByTestId(ResultsAccessibility.grid);
+
+    await user.click(screen.getByTestId(TabBarAccessibility.newTab));
+    await user.click(await screen.findByRole("button", { name: "analytics.events" }));
+    await screen.findByTestId(ResultsAccessibility.grid);
+
+    const nextPage = () => screen.getByRole("button", { name: ResultsCopy.nextPage });
+    await user.click(nextPage());
+    await waitFor(() =>
+      expect(
+        runQuery.mock.calls.some((call) => String(call[1]?.text).includes("OFFSET 100")),
+      ).toBe(true),
+    );
+    await user.click(nextPage());
+    await waitFor(() =>
+      expect(
+        runQuery.mock.calls.some((call) => String(call[1]?.text).includes("OFFSET 200")),
+      ).toBe(true),
+    );
+
+    await user.click(screen.getAllByRole("tab")[0]!);
+    await screen.findByTestId(ResultsAccessibility.grid);
+
+    expect(screen.getByRole("button", { name: ResultsCopy.prevPage })).toBeDisabled();
+    expect(
+      runQuery.mock.calls.filter((call) =>
+        /FROM "public"\."users"[\s\S]*OFFSET 100/.test(String(call[1]?.text)),
+      ),
+    ).toHaveLength(0);
   });
 });
