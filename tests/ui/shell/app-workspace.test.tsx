@@ -51,7 +51,7 @@ function stubProps(overrides: Partial<AppWorkspaceProps> = {}): AppWorkspaceProp
     raw: null,
     dateFormat: "iso8601",
     query: "",
-    primaryKeyColumns: [],
+    columnMetadata: [],
     browse: false,
     hasNextPage: false,
     hasPrevPage: false,

@@ -9,6 +9,7 @@
 import type { ReactNode } from "react";
 import { Group, Panel, Separator } from "react-resizable-panels";
 import type {
+  ColumnInfo,
   ConnectionProfileDto,
   ProfileId,
   QueryFolderDto,
@@ -48,7 +49,7 @@ export type AppWorkspaceProps = {
   dateFormat: QueryResultsDateFormat;
   query: string;
   sourceTable?: { schema?: string; name: string };
-  primaryKeyColumns: string[];
+  columnMetadata: ColumnInfo[];
   browse: boolean;
   hasNextPage: boolean;
   hasPrevPage: boolean;
@@ -103,7 +104,7 @@ export function AppWorkspace(props: AppWorkspaceProps): React.JSX.Element {
     dateFormat,
     query,
     sourceTable,
-    primaryKeyColumns,
+    columnMetadata,
     browse,
     hasNextPage,
     hasPrevPage,
@@ -228,7 +229,7 @@ export function AppWorkspace(props: AppWorkspaceProps): React.JSX.Element {
             dateFormat={dateFormat}
             query={query}
             sourceTable={sourceTable}
-            primaryKeyColumns={primaryKeyColumns}
+            columnMetadata={columnMetadata}
             browse={browse}
             hasNextPage={hasNextPage}
             hasPrevPage={hasPrevPage}

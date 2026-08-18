@@ -3,6 +3,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { useStore } from "zustand";
 import type { ExecutableSQL, QueryDocument, TableReference } from "./core";
 import type {
+  ColumnInfo,
   ConnectionProfileDto,
   ConnectResult,
   DragonIpc,
@@ -166,7 +167,7 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
   const [selectedSchema, setSelectedSchema] = useState<string | null>(null);
   const [schemaError, setSchemaError] = useState<string | null>(null);
   const [dateFormat, setDateFormat] = useState<QueryResultsDateFormat>(loadDateFormat);
-  const [primaryKeyColumns, setPrimaryKeyColumns] = useState<string[]>([]);
+  const [columnMetadata, setColumnMetadata] = useState<ColumnInfo[]>([]);
   const canvasHandleRef = useRef<VisualQueryCanvasHandle | null>(null);
   const connectionPanelRef = useRef<ConnectionPanelHandle | null>(null);
   /**
@@ -215,7 +216,7 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
 
   useEffect(() => {
     if (connectionId === null || sourceTable === undefined) {
-      setPrimaryKeyColumns([]);
+      setColumnMetadata([]);
       return;
     }
     let cancelled = false;
@@ -227,11 +228,11 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
       })
       .then((columns) => {
         if (cancelled) return;
-        setPrimaryKeyColumns(columns.filter((c) => c.isPrimaryKey).map((c) => c.name));
+        setColumnMetadata(columns);
       })
       .catch(() => {
         if (cancelled) return;
-        setPrimaryKeyColumns([]);
+        setColumnMetadata([]);
       });
     return () => {
       cancelled = true;
@@ -1093,7 +1094,7 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
               dateFormat={dateFormat}
               query={sourceTable !== undefined ? queryText : ""}
               sourceTable={sourceTable}
-              primaryKeyColumns={primaryKeyColumns}
+              columnMetadata={columnMetadata}
               browse={sourceTable !== undefined}
               hasNextPage={hasNextPage}
               hasPrevPage={hasPrevPage}

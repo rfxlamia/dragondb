@@ -3026,6 +3026,44 @@ describe("App table browser host wiring", () => {
     expect(screen.getByText(ResultsCopy.noRowsFound)).toBeInTheDocument();
   });
 
+  it("keeps listColumns metadata intact through App and QueryResultsPane", async () => {
+    const ipc = createMockDragonIpc("happy");
+    vi.spyOn(ipc, "runQuery").mockResolvedValue({
+      columns: ["id", "occurred_on"],
+      rows: [[42, "2026-08-18"]],
+      rowsAffected: null,
+      durationMs: 1,
+    });
+    vi.spyOn(ipc, "listColumns").mockResolvedValue([
+      {
+        name: "id",
+        dataType: "bigint",
+        isNullable: false,
+        defaultValue: null,
+        isPrimaryKey: true,
+        isUnique: true,
+        isForeignKey: false,
+      },
+      {
+        name: "occurred_on",
+        dataType: "date",
+        isNullable: true,
+        defaultValue: null,
+        isPrimaryKey: false,
+        isUnique: false,
+        isForeignKey: false,
+      },
+    ]);
+    const user = userEvent.setup();
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
+    await user.click(screen.getByRole("button", { name: "users" }));
+    await user.click((await screen.findAllByRole("row"))[1]!);
+    await user.click(screen.getByRole("button", { name: ResultsCopy.edit }));
+    expect(screen.getByLabelText("id")).toBeDisabled();
+    expect(screen.getByLabelText("occurred_on")).toHaveAttribute("type", "date");
+  });
+
   it("does not start a second browse until explicit reconnect completes", async () => {
     const ipc = createMockDragonIpc("happy");
     vi.spyOn(ipc, "runQuery").mockImplementation(() => new Promise(() => {}));

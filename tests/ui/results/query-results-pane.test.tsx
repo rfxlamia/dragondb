@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { ColumnInfo } from "../../../src/ipc/contract";
 import { compactCell } from "../../../src/lib/result-compactor";
 import type { TabResultGrid, TabRunStatus } from "../../../src/stores/tabs-store";
 import { QueryResultsPane } from "../../../src/ui/results/query-results-pane";
@@ -16,6 +17,17 @@ afterEach(() => {
 });
 
 const cachedCompact: TabResultGrid = { columns: ["id"], rows: [["cached"]] };
+
+const column = (overrides: Partial<ColumnInfo>): ColumnInfo => ({
+  name: "value",
+  dataType: "text",
+  isNullable: false,
+  defaultValue: null,
+  isPrimaryKey: false,
+  isUnique: false,
+  isForeignKey: false,
+  ...overrides,
+});
 
 function renderPane(status: TabRunStatus, compact: TabResultGrid | null) {
   return render(<QueryResultsPane status={status} compact={compact} />);
@@ -201,7 +213,7 @@ describe("QueryResultsPane", () => {
         raw={{ columns: ["id"], rows: [["1"]] }}
         query="SELECT * FROM users"
         sourceTable={{ schema: "public", name: "users" }}
-        primaryKeyColumns={[]}
+        columnMetadata={[]}
       />,
     );
     const editBtn = screen.getByRole("button", { name: ResultsCopy.edit });
@@ -235,7 +247,7 @@ describe("QueryResultsPane", () => {
         raw={{ columns: ["id"], rows: [["1"]] }}
         query="SELECT * FROM a JOIN b ON a.id = b.id"
         sourceTable={{ schema: "public", name: "orders" }}
-        primaryKeyColumns={["id"]}
+        columnMetadata={[column({ name: "id", isPrimaryKey: true })]}
       />,
     );
     await user.click(screen.getAllByRole("row")[1]!);
@@ -243,6 +255,27 @@ describe("QueryResultsPane", () => {
     expect(editBtn).not.toBeDisabled();
     const deleteBtn = screen.getByRole("button", { name: ResultsCopy.delete });
     expect(deleteBtn).not.toBeDisabled();
+  });
+
+  it("passes complete ColumnInfo metadata into the editor", async () => {
+    const user = userEvent.setup();
+    const columns = [
+      column({ name: "id", dataType: "bigint", isPrimaryKey: true }),
+      column({ name: "occurred_on", dataType: "date", isNullable: true }),
+    ];
+    render(
+      <QueryResultsPane
+        status={{ kind: "ok", rowCount: 1, durationMs: 1 }}
+        compact={{ columns: ["id", "occurred_on"], rows: [[42, "2026-08-18"]] }}
+        raw={{ columns: ["id", "occurred_on"], rows: [[42, "2026-08-18"]] }}
+        sourceTable={{ schema: "public", name: "events" }}
+        columnMetadata={columns}
+      />,
+    );
+    await user.click(screen.getAllByRole("row")[1]!);
+    await user.click(screen.getByRole("button", { name: ResultsCopy.edit }));
+    expect(screen.getByLabelText("id")).toBeDisabled();
+    expect(screen.getByLabelText("occurred_on")).toHaveAttribute("type", "date");
   });
 
   it("Space opens JSON viewer when a row is selected", async () => {

@@ -17,6 +17,10 @@ export const ResultsCopy = {
   save: "Save",
   cancel: "Cancel",
   setNull: "NULL",
+  primaryKey: "Primary key",
+  setNullFor(columnName: string): string {
+    return `Set ${columnName} to NULL`;
+  },
   nextPage: "Next",
   prevPage: "Previous",
   tryAgain: "Try Again",

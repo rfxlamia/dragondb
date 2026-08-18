@@ -299,7 +299,10 @@
   gap: 4px;
 }
 
-.query-results__editor-field input[type="text"] {
+.query-results__editor-field input[type="text"],
+.query-results__editor-field input[type="date"],
+.query-results__editor-field input[type="time"],
+.query-results__editor-field input[type="datetime-local"] {
   background: oklch(1 0 0);
   border: 1px solid var(--neutral-300);
   border-radius: var(--radius);
@@ -309,9 +312,15 @@
   padding: 6px 8px;
 }
 
-.query-results__editor-field input[type="text"]:disabled {
+.query-results__editor-field input:disabled {
   background: var(--neutral-100);
   color: var(--neutral-600);
+}
+
+.query-results__editor-pk {
+  color: var(--neutral-600);
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .query-results__editor-null {

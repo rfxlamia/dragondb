@@ -1,5 +1,6 @@
 import { useContext, useMemo, useState } from "react";
 import { toCsv } from "../../lib/csv-exporter";
+import type { ColumnInfo } from "../../ipc/contract";
 import type { QueryResultsDateFormat } from "../../lib/date-format-setting";
 import { determineEditability } from "../../lib/query-editability";
 import type { BrowseLifecycle } from "../../stores/browse-session-store";
@@ -29,7 +30,7 @@ export function QueryResultsPane(props: {
   dateFormat?: QueryResultsDateFormat;
   query?: string;
   sourceTable?: { schema?: string; name: string };
-  primaryKeyColumns?: string[];
+  columnMetadata?: ColumnInfo[];
   browse?: boolean;
   hasNextPage?: boolean;
   hasPrevPage?: boolean;
@@ -113,7 +114,8 @@ function ResultGrid(
   const rows = compact?.rows ?? [];
   const rawGrid = props.raw;
   const dateFormat = props.dateFormat;
-  const pkColumns = props.primaryKeyColumns ?? [];
+  const columnMetadata = props.columnMetadata ?? [];
+  const pkColumns = columnMetadata.filter((column) => column.isPrimaryKey).map((column) => column.name);
 
   const [filter, setFilter] = useState("");
   const [sort, setSort] = useState<{ column: number; dir: "asc" | "desc" } | null>(null);
@@ -223,6 +225,7 @@ function ResultGrid(
 
   const editorValues =
     selected[0] !== undefined ? (rawGrid?.rows[selected[0]] ?? rows[selected[0]]) : undefined;
+  const editorColumns = metadataForResultColumns(rawGrid?.columns ?? columns, columnMetadata);
 
   return (
     <div className="query-results__grid-wrap" data-testid={ResultsAccessibility.grid}>
@@ -329,9 +332,8 @@ function ResultGrid(
       {editorOpen ? (
         <RowEditor
           selectedCount={selected.length}
-          columns={rawGrid?.columns ?? columns}
+          columns={editorColumns}
           values={Array.isArray(editorValues) ? editorValues : []}
-          pkColumns={pkColumns}
           onSubmit={(patch) => void submitEdit(patch)}
           onCancel={() => setEditorOpen(false)}
         />
@@ -475,6 +477,22 @@ function bodyRows(
     );
   }
   return elements;
+}
+
+function metadataForResultColumns(resultColumns: string[], metadata: ColumnInfo[]): ColumnInfo[] {
+  const byName = new Map(metadata.map((column) => [column.name, column]));
+  return resultColumns.map(
+    (name) =>
+      byName.get(name) ?? {
+        name,
+        dataType: "text",
+        isNullable: false,
+        defaultValue: null,
+        isPrimaryKey: false,
+        isUnique: false,
+        isForeignKey: false,
+      },
+  );
 }
 
 function primaryKeyOf(

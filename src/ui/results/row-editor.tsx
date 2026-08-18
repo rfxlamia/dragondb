@@ -1,21 +1,20 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
+import type { ColumnInfo } from "../../ipc/contract";
 import { ResultsAccessibility } from "./results-accessibility";
 import { ResultsCopy } from "./results-copy";
+import { RowEditorField } from "./row-editor-field";
 import "./query-results.css";
 
 export function RowEditor(props: {
   selectedCount: number;
   onSubmit: (patch: Record<string, unknown | null>) => void;
-  columns?: string[];
+  columns?: ColumnInfo[];
   values?: unknown[];
-  pkColumns?: string[];
   onCancel?: () => void;
 }): React.JSX.Element {
   const { selectedCount, onSubmit, onCancel } = props;
   const columns = props.columns ?? [];
   const values = props.values ?? [];
-  const pkColumns = props.pkColumns ?? [];
-  const pkSet = useMemo(() => new Set(pkColumns), [pkColumns]);
 
   const [fields, setFields] = useState<Array<string | null>>(() => values.map(valueToField));
   const [nullFlags, setNullFlags] = useState<boolean[]>(() => values.map((v) => v === null));
@@ -53,8 +52,8 @@ export function RowEditor(props: {
   function submit(): void {
     const patch: Record<string, unknown | null> = {};
     for (const [index, column] of columns.entries()) {
-      if (pkSet.has(column)) continue;
-      patch[column] = nullFlags[index] ? null : (fields[index] ?? "");
+      if (column.isPrimaryKey) continue;
+      patch[column.name] = nullFlags[index] ? null : (fields[index] ?? "");
     }
     onSubmit(patch);
   }
@@ -73,32 +72,16 @@ export function RowEditor(props: {
     >
       <h2 className="query-results__dialog-title">{ResultsCopy.edit}</h2>
       <div className="query-results__editor-fields">
-        {columns.map((column, index) => {
-          const isPk = pkSet.has(column);
-          const isNull = nullFlags[index] === true;
-          return (
-            <div key={column} className="query-results__editor-field">
-              <span>{column}</span>
-              <input
-                type="text"
-                value={isNull ? "" : (fields[index] ?? "")}
-                disabled={isPk || isNull}
-                readOnly={isPk}
-                onChange={(event) => setFieldAt(index, event.target.value)}
-              />
-              {isPk ? null : (
-                <label className="query-results__editor-null">
-                  <input
-                    type="checkbox"
-                    checked={isNull}
-                    onChange={(event) => setNullAt(index, event.target.checked)}
-                  />
-                  {ResultsCopy.setNull}
-                </label>
-              )}
-            </div>
-          );
-        })}
+        {columns.map((column, index) => (
+          <RowEditorField
+            key={column.name}
+            column={column}
+            value={fields[index] ?? ""}
+            isNull={nullFlags[index] === true}
+            onValueChange={(text) => setFieldAt(index, text)}
+            onNullChange={(isNull) => setNullAt(index, isNull)}
+          />
+        ))}
       </div>
       <div className="query-results__dialog-actions">
         <button type="submit" className="query-results__btn query-results__btn--primary">
