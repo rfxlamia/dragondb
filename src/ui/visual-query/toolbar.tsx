@@ -32,32 +32,32 @@ export function VisualQueryToolbar(props: {
 
   return (
     <div className="vq-toolbar">
+      {/* Segmented control, not stacked radio inputs: this is a two-state view
+          switch on a desktop toolbar, and OS radio dots read as a settings
+          form. Roles stay radiogroup/radio, so semantics (and the tests that
+          query them) are unchanged; arrow keys move the selection the way a
+          native radio group would. */}
       <div
-        className="vq-toolbar__modes"
+        className="ui-segment"
         role="radiogroup"
         aria-label="Editor mode"
         data-testid={VisualQueryAccessibility.modeToggle}
       >
-        <label className="vq-toolbar__mode">
-          <input
-            type="radio"
-            name="visual-query-editor-mode"
-            value="visual"
-            checked={editorMode === "visual"}
-            onChange={() => onEditorModeChange?.("visual")}
-          />
-          {VisualQueryCopy.editorModeVisual}
-        </label>
-        <label className="vq-toolbar__mode">
-          <input
-            type="radio"
-            name="visual-query-editor-mode"
-            value="sql"
-            checked={editorMode === "sql"}
-            onChange={() => onEditorModeChange?.("sql")}
-          />
-          {VisualQueryCopy.editorModeSql}
-        </label>
+        {(["visual", "sql"] as const).map((mode) => (
+          <label key={mode} className="ui-segment__item">
+            {/* The input stays a real radio (native roving focus and arrow keys);
+                it is only visually hidden, and the label itself is the segment. */}
+            <input
+              type="radio"
+              className="ui-visually-hidden"
+              name="visual-query-editor-mode"
+              value={mode}
+              checked={editorMode === mode}
+              onChange={() => onEditorModeChange?.(mode)}
+            />
+            {mode === "visual" ? VisualQueryCopy.editorModeVisual : VisualQueryCopy.editorModeSql}
+          </label>
+        ))}
       </div>
       {canStartOver ? (
         <button

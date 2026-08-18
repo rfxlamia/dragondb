@@ -512,6 +512,10 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
       resetTabDocuments();
     }
     stores.acknowledgeConnect(result.profileId);
+    // The connection form is a sheet over the workspace now: once the session
+    // is live its job is done, so dismiss it instead of leaving a modal over
+    // the tables the user just connected to. Disconnect lives in the sidebar.
+    handleFormVisibleChange(false);
   }
 
   function handleDisconnected(): void {

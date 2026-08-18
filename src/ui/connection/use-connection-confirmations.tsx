@@ -50,6 +50,8 @@ export function useConnectionConfirmations(args: ConnectionConfirmationsArgs): {
   requestSwitch: (id: ProfileId) => void;
   requestDelete: (id: ProfileId | null) => void;
   clearPending: () => void;
+  /** A confirm is on screen above the sheet — the sheet must not take Escape. */
+  hasPending: boolean;
   dialogs: React.JSX.Element;
 } {
   const [pendingSwitchId, setPendingSwitchId] = useState<ProfileId | null>(null);
@@ -80,8 +82,18 @@ export function useConnectionConfirmations(args: ConnectionConfirmationsArgs): {
     setProfiles,
   } = args;
 
+  // Clear only the confirm this call opened: a settle that lands after the
+  // user has already asked for the next one must not wipe that one's dialog.
+  function clearPendingDelete(id: ProfileId): void {
+    setPendingDeleteId((current) => (current === id ? null : current));
+  }
+
   async function confirmSwitch(): Promise<void> {
     if (pendingSwitchId === null) return;
+    // Unlike confirmDelete, this clears before the await: a switch confirm
+    // strands nothing by unmounting, and holding it open across
+    // disconnect-then-connect would freeze a dead question on screen for the
+    // length of two round trips.
     const targetId = pendingSwitchId;
     setPendingSwitchId(null);
     setBusy(true);
@@ -124,7 +136,10 @@ export function useConnectionConfirmations(args: ConnectionConfirmationsArgs): {
   async function confirmDelete(): Promise<void> {
     if (pendingDeleteId === null) return;
     const id = pendingDeleteId;
-    setPendingDeleteId(null);
+    // The confirm stays mounted (disabled, via its `busy` prop) until the
+    // request settles. Clearing it here instead would unmount the topmost
+    // surface mid-flight and hand Escape back to the sheet underneath, which
+    // would then close over a delete already sent.
     setBusy(true);
     setErrorMessage(null);
     try {
@@ -153,11 +168,13 @@ export function useConnectionConfirmations(args: ConnectionConfirmationsArgs): {
     } catch (error) {
       setErrorMessage(humanIpcErrorMessage(error));
     } finally {
+      clearPendingDelete(id);
       setBusy(false);
     }
   }
 
   return {
+    hasPending: pendingSwitchId !== null || pendingDeleteId !== null,
     requestSwitch(id) {
       setPendingSwitchId(id);
       setPendingDeleteId(null);

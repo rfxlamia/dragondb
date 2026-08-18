@@ -1,3 +1,4 @@
+import { CloseIcon, PlusIcon } from "../icons";
 import { TabBarAccessibility } from "./tab-bar-accessibility";
 import { TabBarCopy } from "./tab-bar-copy";
 import "./tab-bar.css";
@@ -45,7 +46,7 @@ export function TabBar(props: TabBarProps): React.JSX.Element {
                 aria-label={TabBarCopy.closeTab}
                 onClick={() => onCloseTab(tab.id)}
               >
-                ×
+                <CloseIcon size={12} />
               </button>
             </div>
           ))}
@@ -63,7 +64,7 @@ export function TabBar(props: TabBarProps): React.JSX.Element {
             aria-label={TabBarCopy.closeTab}
             onClick={() => onCloseTab(soloTab.id)}
           >
-            ×
+            <CloseIcon size={12} />
           </button>
         </div>
       ) : null}
@@ -72,9 +73,10 @@ export function TabBar(props: TabBarProps): React.JSX.Element {
         className="tab-bar__new"
         data-testid={TabBarAccessibility.newTab}
         aria-label={TabBarCopy.newTab}
+        title={TabBarCopy.newTab}
         onClick={onNewTab}
       >
-        +
+        <PlusIcon size={15} />
       </button>
     </div>
   );

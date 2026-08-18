@@ -36,6 +36,173 @@ function formGateProps(
   };
 }
 
+describe("ConnectionPanel sheet dismissal", () => {
+  it("Escape closes the connection sheet", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    const onFormVisibleChange = vi.fn();
+    render(
+      <ConnectionPanel
+        ipc={ipc}
+        {...formGateProps({ onFormVisibleChange })}
+        isConnected={false}
+        {...sessionPropsFromIpc(ipc)}
+        onConnected={vi.fn()}
+        onDisconnected={vi.fn()}
+        onSwitchSuccess={vi.fn()}
+        onSwitchFailure={vi.fn()}
+      />,
+    );
+    await screen.findByRole("dialog", { name: ConnectionCopy.formTitleNew });
+    await user.keyboard("{Escape}");
+    expect(onFormVisibleChange).toHaveBeenCalledWith(false);
+  });
+
+  it("Escape belongs to the confirm stacked on the sheet, not to the sheet", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    const saved = await ipc.saveProfile({
+      profile: baseProfileFields(),
+      secrets: { password: "pw" },
+    });
+    const onFormVisibleChange = vi.fn();
+    render(
+      <ConnectionPanel
+        ipc={ipc}
+        {...formGateProps({ onFormVisibleChange })}
+        isConnected={false}
+        activeProfileId={saved.id}
+        {...sessionPropsFromIpc(ipc)}
+        onConnected={vi.fn()}
+        onDisconnected={vi.fn()}
+        onSwitchSuccess={vi.fn()}
+        onSwitchFailure={vi.fn()}
+      />,
+    );
+    await user.click(await screen.findByRole("button", { name: ConnectionCopy.delete }));
+    expect(screen.getByRole("button", { name: ConnectionCopy.confirmDelete })).toBeInTheDocument();
+    await user.keyboard("{Escape}");
+    // The confirm is the topmost surface, so it takes the key and closes.
+    // The sheet stays: closing it under a live confirm would leave the confirm
+    // floating with its pending delete still armed.
+    expect(onFormVisibleChange).not.toHaveBeenCalledWith(false);
+    expect(
+      screen.queryByRole("button", { name: ConnectionCopy.confirmDelete }),
+    ).not.toBeInTheDocument();
+
+    // Second Escape reaches the sheet, proving it re-arms once nothing is
+    // stacked on it.
+    await user.keyboard("{Escape}");
+    expect(onFormVisibleChange).toHaveBeenCalledWith(false);
+  });
+
+  it("keeps Escape off the sheet while the confirmed delete is in flight", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    const saved = await ipc.saveProfile({
+      profile: baseProfileFields(),
+      secrets: { password: "pw" },
+    });
+    // The mock resolves in a microtask, so the in-flight window only exists if
+    // the request is held open deliberately.
+    const heldIpc = { ...ipc, deleteProfile: () => new Promise<void>(() => {}) };
+    const onFormVisibleChange = vi.fn();
+    render(
+      <ConnectionPanel
+        ipc={heldIpc}
+        {...formGateProps({ onFormVisibleChange })}
+        isConnected={false}
+        activeProfileId={saved.id}
+        {...sessionPropsFromIpc(ipc)}
+        onConnected={vi.fn()}
+        onDisconnected={vi.fn()}
+        onSwitchSuccess={vi.fn()}
+        onSwitchFailure={vi.fn()}
+      />,
+    );
+    await user.click(await screen.findByRole("button", { name: ConnectionCopy.delete }));
+    await user.click(screen.getByRole("button", { name: ConnectionCopy.confirmDelete }));
+
+    // Busy must not hand the key back to the sheet: the delete is already sent,
+    // so closing the sheet would strand the confirm over a live request.
+    await user.keyboard("{Escape}");
+    expect(onFormVisibleChange).not.toHaveBeenCalledWith(false);
+  });
+});
+
+/**
+ * The brief's rule is that a session action never exists twice at once: the
+ * sheet footer owns Connect and Delete while it is open, the sidebar owns them
+ * while it is closed. That guarantee is spread across three separate
+ * conditionals in three files (the sheet footer's `sessionClaimed`, the header
+ * Connect's `!formVisible`, the profile row's `!formVisible`) with nothing but
+ * prose holding them in sync — so it is asserted here as one fact.
+ */
+describe("ConnectionPanel session-action ownership", () => {
+  it("offers exactly one Connect and one Delete, whichever surface owns them", async () => {
+    const ipc = createMockDragonIpc("happy");
+    const saved = await ipc.saveProfile({
+      profile: baseProfileFields(),
+      secrets: { password: "pw" },
+    });
+
+    const panelProps = {
+      ipc,
+      isConnected: false,
+      activeProfileId: saved.id,
+      ...sessionPropsFromIpc(ipc),
+      onConnected: vi.fn(),
+      onDisconnected: vi.fn(),
+      onSwitchSuccess: vi.fn(),
+      onSwitchFailure: vi.fn(),
+    };
+
+    const { rerender } = render(
+      <ConnectionPanel {...panelProps} {...formGateProps({ formVisible: true })} />,
+    );
+
+    // Sheet open: its footer owns both.
+    await screen.findByRole("dialog", { name: ConnectionCopy.formTitleEdit });
+    await waitFor(() => {
+      expect(screen.getAllByRole("button", { name: ConnectionCopy.connect })).toHaveLength(1);
+    });
+    expect(screen.getAllByRole("button", { name: ConnectionCopy.delete })).toHaveLength(1);
+
+    // Sheet closed: the sidebar picks both up, and still only once each.
+    rerender(<ConnectionPanel {...panelProps} {...formGateProps({ formVisible: false })} />);
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("dialog", { name: ConnectionCopy.formTitleEdit }),
+      ).not.toBeInTheDocument();
+    });
+    expect(screen.getAllByRole("button", { name: ConnectionCopy.connect })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: ConnectionCopy.delete })).toHaveLength(1);
+  });
+
+  // Collapsing unmounts the panel, and the sheet lives inside it — so an
+  // enabled collapse button behind the scrim silently discards a half-typed
+  // profile.
+  it("cannot be collapsed while the sheet holds an unsaved draft", async () => {
+    const ipc = createMockDragonIpc("happy");
+    const onCollapse = vi.fn();
+    render(
+      <ConnectionPanel
+        ipc={ipc}
+        {...formGateProps({ formVisible: true })}
+        isConnected={false}
+        onCollapse={onCollapse}
+        {...sessionPropsFromIpc(ipc)}
+        onConnected={vi.fn()}
+        onDisconnected={vi.fn()}
+        onSwitchSuccess={vi.fn()}
+        onSwitchFailure={vi.fn()}
+      />,
+    );
+    await screen.findByRole("dialog", { name: ConnectionCopy.formTitleNew });
+    expect(screen.getByTestId(ConnectionAccessibility.collapseConnection)).toBeDisabled();
+  });
+});
+
 describe("ConnectionPanel Save-then-Connect", () => {
   it("keeps Connect unavailable until the profile is saved", async () => {
     const user = userEvent.setup();

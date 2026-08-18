@@ -33,6 +33,8 @@ export const ConnectionCopy = {
   sshAuthPrivateKey: "Private key",
   profilesHeading: "Saved profiles",
   newProfile: "New profile",
+  formTitleNew: "New connection",
+  formTitleEdit: "Edit connection",
   switchPrompt: "Switch connection? The current session will disconnect first.",
   deletePrompt: "Delete this profile? This cannot be undone.",
   unnamedProfile: "Unnamed",

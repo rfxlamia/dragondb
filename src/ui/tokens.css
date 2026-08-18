@@ -55,6 +55,24 @@
   /* Stronger ease-out for anything entering/pressing — the built-in CSS easings are too weak
      to read as intentional (emil-design-eng). Reserve --ease-standard for hover/color-only. */
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+
+  /* Surfaces: sidebars recede, content is the raised white plane. */
+  --surface-page: var(--neutral-100);
+  --surface-sidebar: var(--neutral-100);
+  --surface-raised: oklch(1 0 0);
+
+  /* Separators: hairlines between panels, stronger only around inputs. */
+  --border-subtle: var(--neutral-200);
+  --border-field: var(--neutral-300);
+
+  /* List-row states — one vocabulary for tables, queries, profiles. */
+  --row-hover: var(--neutral-200);
+  --row-selected: var(--primary-100);
+  --row-selected-text: var(--primary-800);
+
+  /* Desktop row metrics: tight enough to scan a 200-table schema. */
+  --row-height: 28px;
+  --control-height: 26px;
 }
 
 :focus-visible {

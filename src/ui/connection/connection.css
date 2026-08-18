@@ -3,51 +3,50 @@
 .connection-panel {
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
+  gap: 0.875rem;
 }
 
+/* Sidebar titles are labels, not page headings — same 13px as the rows they
+   sit above, so the panel reads as one list instead of three documents. */
 .connection-panel h2 {
   color: var(--neutral-900);
   font-family: var(--font-sans);
-  font-size: 17px;
+  font-size: 13px;
   font-weight: 600;
-  letter-spacing: -0.01em;
   margin: 0;
 }
 
 .connection-panel__header {
   align-items: center;
   display: flex;
-  gap: 0.75rem;
+  gap: 0.5rem;
   justify-content: space-between;
+  min-height: 28px;
+  padding-left: 6px;
 }
 
-.connection-panel__header button {
-  background: transparent;
-  border: 1px solid var(--neutral-300);
-  border-radius: var(--radius);
-  color: var(--primary-700);
-  cursor: pointer;
-  font-family: var(--font-sans);
-  font-size: 12px;
-  font-weight: 500;
-  padding: 4px 8px;
+.connection-panel__header-actions {
+  align-items: center;
+  display: flex;
+  gap: 2px;
 }
 
+/* Sentence case: shouted ALL-CAPS micro-headers on every group were a large
+   part of what read as dated, and the brief's tone is neutral-friendly. */
 .connection-panel h3 {
-  color: var(--neutral-700);
+  color: var(--neutral-600);
   font-family: var(--font-sans);
-  font-size: 0.75rem;
+  font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.01em;
   margin: 0;
-  text-transform: uppercase;
+  text-transform: none;
 }
 
 .connection-panel__profiles {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.125rem;
 }
 
 .connection-panel__profiles-header {
@@ -55,67 +54,119 @@
   display: flex;
   gap: 0.5rem;
   justify-content: space-between;
+  min-height: 24px;
+  padding-left: 6px;
 }
 
 .connection-panel__profiles ul {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
   list-style: none;
   margin: 0;
   padding: 0;
 }
 
-.connection-panel__profiles li button {
-  background: oklch(1 0 0);
-  border: 1px solid var(--neutral-300);
-  border-radius: var(--radius);
-  color: var(--neutral-900);
+/* Profile rows inherit .ui-row; only the pointer differs from a static row. */
+.connection-panel__profiles li button.ui-row {
   cursor: pointer;
-  font-family: var(--font-sans);
-  font-size: 13px;
-  padding: 9px 10px;
-  text-align: left;
-  transition:
-    border-color var(--duration-fast) var(--ease-standard),
-    background-color var(--duration-fast) var(--ease-standard);
-  width: 100%;
 }
 
-.connection-panel__profiles li button:hover {
-  background: var(--primary-100);
-  border-color: var(--neutral-400);
+.connection-panel__profile {
+  align-items: center;
+  border-radius: var(--radius);
+  display: flex;
+  gap: 2px;
+  padding-right: 4px;
 }
 
-.connection-panel__profiles li button:active {
-  background: var(--primary-200);
+.connection-panel__profile:hover {
+  background: var(--row-hover);
 }
 
-.connection-panel__new {
+.connection-panel__profile:hover button.ui-row:not(.ui-row--selected) {
   background: transparent;
-  border: 1px solid var(--neutral-300);
-  border-radius: var(--radius);
-  color: var(--primary-700);
-  cursor: pointer;
-  flex-shrink: 0;
-  font-family: var(--font-sans);
-  font-size: 12px;
-  font-weight: 500;
-  padding: 4px 8px;
+}
+
+/* ── Connection sheet ─────────────────────────────────────────────────────
+   The form floats over the workspace instead of living at the bottom of the
+   sidebar. Fields scroll; the title and the Save / Connect footer stay put. */
+
+.connection-sheet {
+  background: oklch(1 0 0);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow:
+    var(--shadow-lg),
+    0 0 0 100vmax var(--scrim);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  left: 50%;
+  max-height: min(82vh, 660px);
+  max-width: 440px;
+  padding: 0;
+  position: fixed;
+  top: 50%;
+  transform: translate(-50%, -50%) scale(1);
   transition:
-    background-color var(--duration-fast) var(--ease-standard),
-    border-color var(--duration-fast) var(--ease-standard),
-    transform var(--duration-fast) var(--ease-out);
-  white-space: nowrap;
+    opacity 200ms var(--ease-out),
+    transform 200ms var(--ease-out),
+    box-shadow 200ms var(--ease-out);
+  width: min(calc(100% - 32px), 440px);
+  z-index: 50;
+
+  @starting-style {
+    box-shadow:
+      var(--shadow-lg),
+      0 0 0 100vmax transparent;
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.96);
+  }
 }
 
-.connection-panel__new:hover {
-  background: var(--primary-100);
-  border-color: var(--primary-300);
+/* Wins over the sidebar's 11px micro-label rule for h3 on specificity
+   (0,2,0 beats 0,1,1) — this is a dialog title, not a section caption. */
+.connection-sheet > .connection-sheet__title {
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--neutral-900);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.4;
+  margin: 0;
+  padding: 14px 16px;
+  text-transform: none;
 }
 
-.connection-panel__new:active {
-  transform: scale(0.97);
+.connection-sheet__body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 14px 16px;
+}
+
+.connection-sheet__notice {
+  border-top: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  gap: 6px;
+  padding: 10px 16px 0;
+}
+
+.connection-sheet__notice:empty {
+  display: none;
+}
+
+.connection-sheet__footer {
+  border-top: 1px solid var(--border-subtle);
+  display: flex;
+  flex-shrink: 0;
+  padding: 12px 16px;
 }
 
 .connection-form {
@@ -151,9 +202,9 @@
   font-family: var(--font-sans);
   font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.01em;
   margin: 0;
-  text-transform: uppercase;
+  text-transform: none;
 }
 
 .connection-form__field {
@@ -222,8 +273,8 @@
 
 .connection-form__ssh {
   background: var(--neutral-100);
-  border: 1px solid var(--neutral-200);
-  border-radius: var(--radius);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
@@ -233,29 +284,30 @@
 .connection-form__ssh-title {
   color: var(--neutral-700);
   font-family: var(--font-sans);
-  font-size: 0.75rem;
+  font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.01em;
   margin: 0;
-  text-transform: uppercase;
+  text-transform: none;
 }
 
 .connection-panel__actions {
+  align-items: center;
   display: flex;
-  flex-wrap: wrap;
   gap: 0.5rem;
+  width: 100%;
 }
 
 .connection-panel__actions button {
-  background: oklch(1 0 0);
-  border: 1px solid var(--neutral-300);
+  background: var(--neutral-100);
+  border: 1px solid var(--border-field);
   border-radius: var(--radius);
   color: var(--neutral-900);
   cursor: pointer;
   font-family: var(--font-sans);
   font-size: 13px;
   font-weight: 500;
-  padding: 9px 14px;
+  padding: 7px 14px;
   transition:
     background-color var(--duration-fast) var(--ease-standard),
     border-color var(--duration-fast) var(--ease-standard),
@@ -263,7 +315,25 @@
 }
 
 .connection-panel__actions button:hover:not(:disabled) {
+  background: var(--neutral-200);
   border-color: var(--neutral-400);
+}
+
+/* Cancel opens the right-hand cluster: Delete stays alone on the left so a
+   destructive action never sits next to Save. */
+.connection-panel__actions button.connection-panel__spacer-end {
+  margin-left: auto;
+}
+
+.connection-panel__actions button.connection-panel__danger {
+  background: transparent;
+  border-color: transparent;
+  color: var(--error-text);
+}
+
+.connection-panel__actions button.connection-panel__danger:hover:not(:disabled) {
+  background: var(--error-tint);
+  border-color: transparent;
 }
 
 .connection-panel__actions button:active:not(:disabled) {
@@ -289,27 +359,51 @@
 }
 
 .connection-panel__confirm {
-  background: var(--warning-tint);
-  border: 1px solid var(--neutral-300);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-sm);
+  background: oklch(1 0 0);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow:
+    var(--shadow-lg),
+    0 0 0 100vmax var(--scrim);
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  padding: 0.75rem;
+  gap: 0.75rem;
+  left: 50%;
+  max-width: 380px;
+  padding: 16px;
+  position: fixed;
+  top: 50%;
+  transform: translate(-50%, -50%) scale(1);
+  transition:
+    opacity 200ms var(--ease-out),
+    transform 200ms var(--ease-out),
+    box-shadow 200ms var(--ease-out);
+  width: min(calc(100% - 32px), 380px);
+  /* Above .connection-sheet (50): a confirm always answers the sheet. */
+  z-index: 60;
+
+  @starting-style {
+    box-shadow:
+      var(--shadow-lg),
+      0 0 0 100vmax transparent;
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.96);
+  }
 }
 
 .connection-panel__confirm p {
-  color: var(--warning-text);
+  color: var(--neutral-800);
   font-family: var(--font-sans);
   font-size: 13px;
+  line-height: 1.5;
   margin: 0;
 }
 
 .connection-panel__confirm-actions {
   display: flex;
-  flex-wrap: wrap;
   gap: 0.5rem;
+  justify-content: flex-end;
 }
 
 .connection-panel__confirm-actions button {
@@ -353,21 +447,22 @@
 }
 
 .connection-tables-list li button {
-  background: oklch(1 0 0);
-  border: 1px solid var(--neutral-300);
+  background: transparent;
+  border: none;
   border-radius: var(--radius);
   color: var(--neutral-900);
   cursor: default;
   font-family: var(--font-mono);
   font-size: 13px;
-  padding: 9px 10px;
+  min-height: var(--row-height);
+  padding: 0 6px;
   text-align: left;
-  transition: border-color var(--duration-fast) var(--ease-standard);
+  transition: background-color var(--duration-fast) var(--ease-standard);
   width: 100%;
 }
 
 .connection-tables-list li button:hover {
-  border-color: var(--neutral-400);
+  background: var(--row-hover);
 }
 
 .connection-string-fields {
@@ -410,6 +505,8 @@
   transition: border-color var(--duration-fast) var(--ease-standard);
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: scoped to its own block; the earlier
+   higher-specificity match is .connection-tables-list li button:hover, a different subtree. */
 .connection-string-fields button:hover {
   border-color: var(--neutral-400);
 }
@@ -422,8 +519,7 @@
 }
 
 .connection-form__password-row button,
-.connection-form__test button,
-.connection-database-picker__actions button {
+.connection-form__test button {
   background: oklch(1 0 0);
   border: 1px solid var(--neutral-300);
   border-radius: var(--radius);
@@ -439,12 +535,38 @@
   display: flex;
 }
 
+/* Status line: a compact pill under the panel header, not a full-width bar at
+   the bottom of the table list (you had to scroll a 200-table schema to see
+   it). "Connected" is session state and stays; a Test result is an event and
+   clears itself (see TEST_SUCCESS_LINGER_MS). */
 .connection-status-banner {
+  align-items: center;
   border-radius: var(--radius);
+  display: flex;
   font-family: var(--font-sans);
-  font-size: 13px;
-  margin: 0;
-  padding: 8px 10px;
+  font-size: 12px;
+  gap: 6px;
+  margin: 0 0 0 6px;
+  min-height: 22px;
+  padding: 3px 8px 3px 6px;
+  width: fit-content;
+}
+
+/* Connected: quiet, dot-led — state, not an announcement. */
+.connection-status-banner--idle {
+  background: transparent;
+  color: var(--neutral-700);
+  font-weight: 500;
+  padding-left: 0;
+}
+
+.connection-status-banner--idle::before {
+  background: var(--success-solid);
+  border-radius: 50%;
+  content: "";
+  flex-shrink: 0;
+  height: 7px;
+  width: 7px;
 }
 
 .connection-status-banner--testing,
@@ -466,7 +588,34 @@
 .connection-database-picker {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.25rem;
+}
+
+.connection-database-picker__row {
+  align-items: center;
+  display: flex;
+  gap: 2px;
+  min-height: var(--row-height);
+  padding-left: 6px;
+}
+
+.connection-database-picker__glyph {
+  align-items: center;
+  color: var(--neutral-500);
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.connection-database-picker__label {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+}
+
+.connection-database-picker__select {
+  flex: 1;
+  font-weight: 500;
+  min-width: 0;
 }
 
 .connection-database-picker__profile {
@@ -486,9 +635,10 @@
 }
 
 .connection-database-picker__actions {
+  align-items: center;
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
+  flex-shrink: 0;
+  gap: 2px;
 }
 
 @keyframes connection-select-db-pulse {

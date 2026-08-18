@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useEscapeDismiss } from "../use-escape-dismiss";
 import { ConnectionAccessibility } from "./connection-accessibility";
 import { ConnectionCopy } from "./connection-copy";
 
@@ -15,6 +16,12 @@ export function CreateDatabaseDialog(props: {
   useEffect(() => {
     if (!open) setName("");
   }, [open]);
+
+  // `busy` guards inside the callback so an in-flight create keeps its place
+  // on the dismissal stack (see ConnectionConfirmDialog).
+  useEscapeDismiss(() => {
+    if (!busy) onCancel();
+  }, open);
 
   if (!open) return null;
   return (

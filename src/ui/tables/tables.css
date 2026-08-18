@@ -1,31 +1,32 @@
-/* Table browser — light-only creative-brief tokens. */
+/* Table browser — light-only creative-brief tokens.
+   Rows are rows: no per-row border, no per-row white plane, and destructive
+   actions live only in the row's overflow menu (they used to be one visible
+   Drop button per table, which turned a 200-table schema into 400 buttons). */
 
 .table-list {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 0.5rem;
 }
 
 .table-list__schema {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: 0.125rem;
 }
 
 .table-list__schema-title {
-  color: var(--neutral-700);
+  color: var(--neutral-600);
   font-family: var(--font-sans);
-  font-size: 0.75rem;
+  font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.02em;
-  margin: 0;
-  text-transform: uppercase;
+  letter-spacing: 0.01em;
+  margin: 0 0 2px 6px;
 }
 
 .table-list__rows {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
   list-style: none;
   margin: 0;
   padding: 0;
@@ -34,77 +35,82 @@
 .table-list__row {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
 }
 
 .table-list__row-main {
   align-items: center;
-  display: flex;
-  gap: 0.35rem;
-}
-
-.table-list__expand,
-.table-list__icon-btn,
-.table-list__danger {
-  background: oklch(1 0 0);
-  border: 1px solid var(--neutral-300);
   border-radius: var(--radius);
-  color: var(--neutral-800);
-  cursor: pointer;
-  flex-shrink: 0;
-  font-family: var(--font-sans);
-  font-size: 12px;
-  font-weight: 500;
-  line-height: 1.2;
-  padding: 4px 8px;
+  display: flex;
+  gap: 2px;
+  min-height: var(--row-height);
+  padding: 0 4px 0 0;
+  transition: background-color var(--duration-fast) var(--ease-standard);
 }
 
-.table-list__expand:hover,
-.table-list__icon-btn:hover {
-  background: var(--neutral-100);
-  border-color: var(--neutral-400);
+.table-list__row-main:hover {
+  background: var(--row-hover);
+}
+
+.table-list__expand {
+  align-items: center;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius);
+  color: var(--neutral-500);
+  cursor: pointer;
+  display: inline-flex;
+  flex-shrink: 0;
+  height: 20px;
+  justify-content: center;
+  padding: 0;
+  transition: color var(--duration-fast) var(--ease-standard);
+  width: 18px;
+}
+
+.table-list__expand:hover:not(:disabled) {
+  color: var(--neutral-900);
+}
+
+.table-list__expand:disabled {
+  color: var(--neutral-400);
+  cursor: not-allowed;
 }
 
 .table-list__name {
-  background: oklch(1 0 0);
-  border: 1px solid var(--neutral-300);
-  border-radius: var(--radius);
+  align-items: center;
+  background: transparent;
+  border: none;
   color: var(--neutral-900);
   cursor: pointer;
+  display: flex;
   flex: 1;
   font-family: var(--font-mono);
   font-size: 13px;
   min-width: 0;
-  padding: 7px 10px;
+  overflow: hidden;
+  padding: 4px 2px;
   text-align: left;
-  transition: border-color var(--duration-fast) var(--ease-standard);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.table-list__name:hover {
-  border-color: var(--neutral-400);
+.table-list__glyph,
+.table-list__foreign {
+  align-items: center;
+  display: inline-flex;
+  flex-shrink: 0;
 }
 
-.table-list__danger {
-  color: var(--error-text);
-}
-
-.table-list__danger:hover:not(:disabled) {
-  background: var(--error-tint);
-  border-color: var(--error-solid);
-}
-
-.table-list__danger:disabled,
-.table-list__icon-btn:disabled,
-.table-list__expand:disabled {
-  color: var(--neutral-600);
-  cursor: not-allowed;
+.table-list__glyph {
+  color: var(--neutral-500);
 }
 
 .table-list__foreign {
-  align-items: center;
-  color: var(--primary-700);
-  display: inline-flex;
-  flex-shrink: 0;
+  color: var(--primary-600);
+}
+
+.table-list__row-main:hover .table-list__glyph {
+  color: var(--primary-600);
 }
 
 .table-list__menu {
@@ -112,50 +118,19 @@
 }
 
 .table-list__menu-panel {
-  background: oklch(1 0 0);
-  border: 1px solid var(--neutral-300);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-md);
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 10rem;
-  padding: 4px;
   position: absolute;
   right: 0;
   top: calc(100% + 4px);
   z-index: 20;
 }
 
-.table-list__menu-panel button {
-  background: transparent;
-  border: none;
-  border-radius: var(--radius);
-  color: var(--neutral-900);
-  cursor: pointer;
-  font-family: var(--font-sans);
-  font-size: 13px;
-  padding: 6px 8px;
-  text-align: left;
-}
-
-.table-list__menu-panel button:hover:not(:disabled) {
-  background: var(--primary-100);
-  color: var(--primary-800);
-}
-
-.table-list__menu-panel button:disabled {
-  color: var(--neutral-600);
-  cursor: not-allowed;
-}
-
 .table-list__columns {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
   list-style: none;
-  margin: 0;
-  padding: 0 0 0 1.75rem;
+  margin: 2px 0 6px;
+  padding: 0 0 0 1.6rem;
 }
 
 .table-list__column {
@@ -165,6 +140,7 @@
   font-family: var(--font-mono);
   font-size: 12px;
   gap: 0.5rem;
+  min-height: 20px;
 }
 
 .table-list__column-type {
@@ -188,30 +164,33 @@
   padding: 6px 10px;
 }
 
+/* "Load more" is navigation inside a list, not a call to action — a filled
+   primary button here competed with Run query for the eye. */
 .table-list__load-more,
 .table-list__next {
   align-self: flex-start;
-  background: var(--primary-600);
+  background: transparent;
   border: none;
   border-radius: var(--radius);
-  box-shadow: var(--shadow-sm);
-  color: oklch(1 0 0);
+  color: var(--primary-700);
   cursor: pointer;
   font-family: var(--font-sans);
   font-size: 13px;
   font-weight: 500;
-  padding: 6px 12px;
+  margin: 2px 0 0 4px;
+  padding: 4px 6px;
+  transition: background-color var(--duration-fast) var(--ease-standard);
 }
 
 .table-list__load-more:hover,
 .table-list__next:hover {
-  background: var(--primary-700);
+  background: var(--primary-100);
 }
 
 .table-sheet {
   background: oklch(1 0 0);
-  border: 1px solid var(--neutral-300);
-  border-radius: var(--radius);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
   box-shadow:
     var(--shadow-lg),
     0 0 0 100vmax var(--scrim);

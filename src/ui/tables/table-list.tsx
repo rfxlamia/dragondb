@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { ColumnInfo, DragonIpc, TableRef } from "../../ipc/contract";
 import { tableDisplayName } from "../../lib/table-display-name";
 import { unknownErrorMessage } from "../../lib/unknown-error-message";
+import { ChevronDownIcon, ChevronRightIcon, TableIcon } from "../icons";
 import { TableContextMenu } from "./table-context-menu";
 import { TableDdlSheet } from "./table-ddl-sheet";
 import { TableExportSheet } from "./table-export-sheet";
@@ -131,7 +132,7 @@ export function TableList(props: TableListProps): React.JSX.Element {
                       : `${table.name} columns`;
                 return (
                   <li key={key} className="table-list__row">
-                    <div className="table-list__row-main">
+                    <div className="table-list__row-main ui-row-host">
                       <button
                         type="button"
                         className="table-list__expand"
@@ -139,7 +140,11 @@ export function TableList(props: TableListProps): React.JSX.Element {
                         aria-label={expandLabel}
                         onClick={() => toggleExpanded(table)}
                       >
-                        {isExpanded ? "▾" : "▸"}
+                        {isExpanded ? (
+                          <ChevronDownIcon size={13} />
+                        ) : (
+                          <ChevronRightIcon size={13} />
+                        )}
                       </button>
                       {table.tableType === "foreign" ? (
                         <span
@@ -149,21 +154,17 @@ export function TableList(props: TableListProps): React.JSX.Element {
                         >
                           <ForeignTableIcon />
                         </span>
-                      ) : null}
+                      ) : (
+                        <span className="table-list__glyph">
+                          <TableIcon size={14} />
+                        </span>
+                      )}
                       <button
                         type="button"
                         className="table-list__name"
                         onClick={() => onBrowse(table)}
                       >
                         {tableDisplayName(table)}
-                      </button>
-                      <button
-                        type="button"
-                        className="table-list__danger"
-                        disabled={executing}
-                        onClick={() => setPending({ table, kind: "drop" })}
-                      >
-                        {TablesCopy.drop}
                       </button>
                       <TableContextMenu
                         executing={executing}

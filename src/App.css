@@ -1,16 +1,16 @@
 .app-startup,
 .app-welcome {
-  background: var(--neutral-100);
+  background: var(--surface-page);
   height: 100vh;
   min-height: 100vh;
 }
 
 .app-shell {
-  background: var(--neutral-100);
+  background: var(--surface-page);
   color: var(--neutral-900);
   display: grid;
   font-family: var(--font-sans);
-  grid-template-columns: minmax(16rem, 22rem) minmax(0, 1fr);
+  grid-template-columns: minmax(15rem, 20rem) minmax(0, 1fr);
   height: 100vh;
   min-height: 100vh;
   overflow: auto;
@@ -36,8 +36,8 @@
 }
 
 .app-show-connection {
-  background: oklch(1 0 0);
-  border: 1px solid var(--neutral-300);
+  background: transparent;
+  border: none;
   border-radius: var(--radius);
   color: var(--primary-700);
   cursor: pointer;
@@ -45,8 +45,13 @@
   font-size: 13px;
   font-weight: 500;
   justify-self: start;
-  margin: 0.75rem;
-  padding: 8px 12px;
+  margin: 0.5rem;
+  padding: 6px 10px;
+  transition: background-color var(--duration-fast) var(--ease-standard);
+}
+
+.app-show-connection:hover {
+  background: var(--primary-100);
 }
 
 .loading-overlay {
@@ -67,12 +72,15 @@
   margin: 0;
 }
 
+/* Sidebars recede and content is the raised white plane. It used to be the
+   other way round — white rails around a grey workspace — which put the
+   chrome in front of the data. */
 .app-shell .connection-panel {
-  background: oklch(1 0 0);
-  border-right: 1px solid var(--neutral-200);
+  background: var(--surface-sidebar);
+  border-right: 1px solid var(--border-subtle);
   max-height: 100vh;
   overflow: auto;
-  padding: 1.25rem;
+  padding: 0.5rem 0.5rem 1rem;
 }
 
 .app-main-column {
@@ -97,12 +105,21 @@
 }
 
 .app-workspace-split__queries {
-  background: oklch(1 0 0);
-  border-right: 1px solid var(--neutral-200);
+  background: var(--surface-sidebar);
+  border-right: 1px solid var(--border-subtle);
 }
 
-.app-workspace-split__separator {
-  background: var(--neutral-300);
+.app-workspace-split__separator,
+.workspace-split__separator {
+  background: var(--border-subtle);
+  transition: background-color var(--duration-fast) var(--ease-standard);
+}
+
+.app-workspace-split__separator:hover,
+.workspace-split__separator:hover,
+.app-workspace-split__separator[data-resize-handle-state="drag"],
+.workspace-split__separator[data-resize-handle-state="drag"] {
+  background: var(--primary-400);
 }
 
 .app-workspace-main {
@@ -115,8 +132,8 @@
 
 .app-workspace-main .tab-bar,
 .app-main-column .tab-bar {
-  background: var(--neutral-100);
-  border-bottom: 1px solid var(--neutral-300);
+  background: var(--surface-page);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .app-main-column .vq-canvas {
@@ -134,18 +151,15 @@
 
 .workspace-split__canvas,
 .workspace-split__results {
+  background: oklch(1 0 0);
   min-height: 0;
   overflow: auto;
-}
-
-.workspace-split__separator {
-  background: var(--neutral-300);
 }
 
 .app-main-column .query-results {
   box-sizing: border-box;
   height: 100%;
-  overflow: auto;
+  overflow: hidden;
 }
 
 .app-results-wrapper {
@@ -160,7 +174,7 @@
   align-items: flex-start;
   background: var(--success-tint);
   border: 1px solid var(--success-solid);
-  border-radius: var(--radius);
+  border-radius: var(--radius-lg);
   bottom: 16px;
   box-shadow: var(--shadow-md);
   display: flex;
@@ -237,7 +251,7 @@
 html,
 body,
 #root {
-  background: var(--neutral-100);
+  background: var(--surface-page);
   color: var(--neutral-900);
   font-family: var(--font-sans);
   margin: 0;
@@ -250,7 +264,7 @@ body,
   }
 
   .app-shell .connection-panel {
-    border-bottom: 1px solid var(--neutral-300);
+    border-bottom: 1px solid var(--border-subtle);
     border-right: none;
     max-height: none;
   }

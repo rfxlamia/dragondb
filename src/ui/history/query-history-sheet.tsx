@@ -8,6 +8,7 @@ import {
   exportHistorySql,
 } from "../../lib/query-history-exporter";
 import type { HistoryState } from "../../stores/history-store";
+import { useEscapeDismiss } from "../use-escape-dismiss";
 import { VisualQueryCopy } from "../visual-query/copy";
 import { HistoryAccessibility } from "./history-accessibility";
 import { formatRelativeDate, HistoryCopy } from "./history-copy";
@@ -50,17 +51,10 @@ export function QueryHistorySheet(props: QueryHistorySheetProps): React.JSX.Elem
     };
   }, [open, historyStore]);
 
-  useEffect(() => {
-    if (!open) return;
-    function onKeyDown(event: KeyboardEvent): void {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        onOpenChange(false);
-      }
-    }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [open, onOpenChange]);
+  // On the shared dismissal stack rather than its own window listener: this
+  // sheet can coexist with the connection sheet (nothing behind either is
+  // inert), and two independent listeners would both fire on one Escape.
+  useEscapeDismiss(() => onOpenChange(false), open);
 
   if (!open) return null;
 

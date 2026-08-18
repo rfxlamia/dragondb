@@ -3,6 +3,15 @@ import { toCsv } from "../../lib/csv-exporter";
 import type { QueryResultsDateFormat } from "../../lib/date-format-setting";
 import { determineEditability } from "../../lib/query-editability";
 import type { TabResultGrid, TabRunStatus } from "../../stores/tabs-store";
+import {
+  BracesIcon,
+  DownloadIcon,
+  PencilIcon,
+  SearchIcon,
+  SortAscIcon,
+  SortDescIcon,
+  TrashIcon,
+} from "../icons";
 import { SqlHatchCopy } from "../sql-editor/sql-hatch-copy";
 import { formatResultCell } from "./format-result-cell";
 import { JsonViewer } from "./json-viewer";
@@ -196,49 +205,63 @@ function ResultGrid(
   return (
     <div className="query-results__grid-wrap" data-testid={ResultsAccessibility.grid}>
       <div className="query-results__chrome">
-        <input
-          type="search"
-          className="query-results__filter"
-          placeholder={ResultsCopy.filterPlaceholder}
-          aria-label={ResultsCopy.filterPlaceholder}
-          data-testid={ResultsAccessibility.filter}
-          value={filter}
-          onChange={(event) => setFilter(event.target.value)}
-        />
+        <div className="ui-search query-results__search">
+          <span className="ui-search__icon">
+            <SearchIcon />
+          </span>
+          <input
+            type="search"
+            className="ui-search__input query-results__filter"
+            placeholder={ResultsCopy.filterPlaceholder}
+            aria-label={ResultsCopy.filterPlaceholder}
+            data-testid={ResultsAccessibility.filter}
+            value={filter}
+            onChange={(event) => setFilter(event.target.value)}
+          />
+        </div>
+        {/* Row actions are icon-only: their labels only ever apply to a
+            selection, so four text buttons stated four times what the grid
+            already implies. aria-label keeps the copy constants intact. */}
         <div className="query-results__toolbar" data-testid={ResultsAccessibility.toolbar}>
           <button
             type="button"
-            className="query-results__btn"
+            className="ui-icon-btn"
+            aria-label={ResultsCopy.viewJson}
+            title={ResultsCopy.viewJson}
             disabled={selected.length === 0 || !rawGrid}
             onClick={openJson}
           >
-            {ResultsCopy.viewJson}
+            <BracesIcon />
           </button>
           <button
             type="button"
-            className="query-results__btn"
+            className="ui-icon-btn"
+            aria-label={ResultsCopy.downloadCsv}
+            title={ResultsCopy.downloadCsv}
             disabled={selected.length === 0 || !rawGrid}
             onClick={downloadSelectedCsv}
           >
-            {ResultsCopy.downloadCsv}
+            <DownloadIcon />
           </button>
           <button
             type="button"
-            className="query-results__btn"
+            className="ui-icon-btn"
+            aria-label={ResultsCopy.edit}
             disabled={!canEdit || selected.length === 0}
-            title={canEdit ? undefined : editTitle}
+            title={canEdit ? ResultsCopy.edit : editTitle}
             onClick={() => setEditorOpen(true)}
           >
-            {ResultsCopy.edit}
+            <PencilIcon />
           </button>
           <button
             type="button"
-            className="query-results__btn"
+            className="ui-icon-btn ui-icon-btn--danger"
+            aria-label={ResultsCopy.delete}
             disabled={!canEdit || selected.length === 0}
-            title={canEdit ? undefined : editTitle}
+            title={canEdit ? ResultsCopy.delete : editTitle}
             onClick={() => setDeleteOpen(true)}
           >
-            {ResultsCopy.delete}
+            <TrashIcon />
           </button>
         </div>
       </div>
@@ -386,6 +409,11 @@ function headerCells(
         onClick={() => onSort(columnIndex)}
       >
         {column}
+        {ariaSort === "none" ? null : (
+          <span className="query-results__sort-glyph">
+            {ariaSort === "ascending" ? <SortAscIcon /> : <SortDescIcon />}
+          </span>
+        )}
       </th>,
     );
   }

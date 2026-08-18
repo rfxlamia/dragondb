@@ -91,19 +91,29 @@ describe("QueryResultsPane", () => {
     expect(css).toMatch(/overflow-x:\s*auto/);
   });
 
-  it("draws full cell borders with --neutral-300 in query-results.css", () => {
+  // Grid rhythm is horizontal-only: a boxed cell grid reads as a spreadsheet
+  // export, so separators run along rows and banding carries the eye across
+  // wide ones. These assertions pin that contract (they previously pinned the
+  // full per-cell border this replaced).
+  it("separates rows horizontally instead of boxing every cell in query-results.css", () => {
     const css = readFileSync(join(process.cwd(), "src/ui/results/query-results.css"), "utf8");
     const cellBlock = css.match(/\.query-results__table th[\s\S]*?\{[^}]*\}/);
     expect(cellBlock).not.toBeNull();
-    expect(cellBlock?.[0]).toMatch(/border:\s*1px solid var\(--neutral-300\)/);
-    expect(cellBlock?.[0]).not.toMatch(/border-bottom:\s*1px solid var\(--neutral-200\)/);
+    expect(cellBlock?.[0]).not.toMatch(/border:\s*1px solid/);
+    expect(css).toMatch(/\.query-results__table th\s*\{[^}]*border-bottom:\s*1px solid/);
+    expect(css).toMatch(/\.query-results__table td\s*\{[^}]*border-bottom:\s*1px solid/);
+    expect(css).toMatch(/tbody tr:nth-child\(even\) td\s*\{[^}]*background/);
   });
 
-  it("boxes the pane including empty state with --neutral-300 in query-results.css", () => {
+  it("keeps the pane flush inside its split panel in query-results.css", () => {
     const css = readFileSync(join(process.cwd(), "src/ui/results/query-results.css"), "utf8");
     const paneBlock = css.match(/\.query-results\s*\{[^}]*\}/);
     expect(paneBlock).not.toBeNull();
-    expect(paneBlock?.[0]).toMatch(/border:\s*1px solid var\(--neutral-300\)/);
+    // No card frame: the pane *is* the content plane, and its own chrome bar
+    // supplies the only hairline.
+    expect(paneBlock?.[0]).not.toMatch(/border:\s*1px solid/);
+    expect(paneBlock?.[0]).toMatch(/background:\s*oklch\(1 0 0\)/);
+    expect(css).toMatch(/\.query-results__chrome\s*\{[^}]*border-bottom:\s*1px solid/);
   });
 
   it("ok grid renders one cell per column even when a compact row is short", () => {

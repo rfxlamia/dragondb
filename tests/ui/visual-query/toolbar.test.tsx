@@ -200,4 +200,50 @@ describe("VisualQueryToolbar Visual | SQL (SP-4b T9)", () => {
     await user.click(screen.getByRole("radio", { name: /sql/i }));
     expect(onModeChange).toHaveBeenCalledWith("sql");
   });
+
+  // The segmented control is a styled <label> over a visually hidden native
+  // radio precisely so the browser keeps roving focus and arrow keys. If it
+  // ever regresses to buttons with aria-checked, this is what breaks.
+  it("moves the editor mode with arrow keys, not just clicks", async () => {
+    const user = userEvent.setup();
+    const onModeChange = vi.fn();
+    render(
+      <VisualQueryToolbar
+        canStartOver={false}
+        onStartOver={() => {}}
+        isConnected={true}
+        canRunQuery={true}
+        onRunQuery={() => {}}
+        onViewGeneratedSQL={() => {}}
+        runHelpMessage={null}
+        editorMode="visual"
+        onEditorModeChange={onModeChange}
+      />,
+    );
+
+    const visual = screen.getByRole("radio", { name: /visual/i });
+    expect(visual).toBeChecked();
+
+    visual.focus();
+    await user.keyboard("{ArrowRight}");
+    expect(onModeChange).toHaveBeenCalledWith("sql");
+  });
+
+  it("marks exactly one editor mode checked", () => {
+    render(
+      <VisualQueryToolbar
+        canStartOver={false}
+        onStartOver={() => {}}
+        isConnected={true}
+        canRunQuery={true}
+        onRunQuery={() => {}}
+        onViewGeneratedSQL={() => {}}
+        runHelpMessage={null}
+        editorMode="sql"
+        onEditorModeChange={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole("radio", { name: /sql/i })).toBeChecked();
+    expect(screen.getByRole("radio", { name: /visual/i })).not.toBeChecked();
+  });
 });

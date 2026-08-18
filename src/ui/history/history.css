@@ -1,7 +1,7 @@
 .history-sheet {
   background: oklch(1 0 0);
-  border: 1px solid var(--neutral-300);
-  border-radius: var(--radius);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
   box-shadow:
     var(--shadow-lg),
     0 0 0 100vmax var(--scrim);

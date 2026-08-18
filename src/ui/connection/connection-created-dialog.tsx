@@ -1,3 +1,4 @@
+import { useEscapeDismiss } from "../use-escape-dismiss";
 import { ConnectionCopy } from "./connection-copy";
 
 export function ConnectionCreatedDialog(props: {
@@ -6,6 +7,8 @@ export function ConnectionCreatedDialog(props: {
   onNotNow: () => void;
 }): React.JSX.Element | null {
   const { open, onConnectNow, onNotNow } = props;
+  // Escape declines, matching the dialog's own least-committal button.
+  useEscapeDismiss(onNotNow, open);
   if (!open) return null;
   return (
     <div

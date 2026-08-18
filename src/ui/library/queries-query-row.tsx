@@ -1,4 +1,5 @@
 import type { SavedQueryDto } from "../../ipc/contract";
+import { DocumentIcon } from "../icons";
 import { QueriesAccessibility } from "./queries-accessibility";
 
 export type QueriesQueryRowProps = {
@@ -17,13 +18,16 @@ export function QueriesQueryRow(props: QueriesQueryRowProps): React.JSX.Element 
       type="button"
       className={
         selected || picked
-          ? "queries-column__query queries-column__query--selected"
-          : "queries-column__query"
+          ? "ui-row ui-row--selected queries-column__query"
+          : "ui-row queries-column__query"
       }
       aria-pressed={selected}
       onClick={(event) => onClick(event, query.id)}
     >
-      <span className="queries-column__query-name">{query.name}</span>
+      <span className="ui-row__glyph">
+        <DocumentIcon size={14} />
+      </span>
+      <span className="ui-row__label queries-column__query-name">{query.name}</span>
       {cached ? (
         <span
           className="queries-column__cache-dot"

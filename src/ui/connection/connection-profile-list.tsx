@@ -1,4 +1,5 @@
-import type { ConnectionProfileDto } from "../../ipc/contract";
+import type { ConnectionProfileDto, ProfileId } from "../../ipc/contract";
+import { PlusIcon, ServerIcon, TrashIcon } from "../icons";
 import { ConnectionAccessibility } from "./connection-accessibility";
 import { ConnectionCopy } from "./connection-copy";
 
@@ -7,14 +8,29 @@ export function ConnectionProfileList(props: {
   formVisible: boolean;
   onSelect: (profile: ConnectionProfileDto) => void;
   onNewProfile: () => void;
+  /** Profile backing the live session (or the current edit target). */
+  activeId?: ProfileId | null;
+  /**
+   * Row-level delete is offered only while the connection sheet is closed —
+   * the sheet's footer owns Delete when it is open, so exactly one Delete
+   * control exists at any time.
+   */
+  onRequestDelete?: (profile: ConnectionProfileDto) => void;
 }): React.JSX.Element {
-  const { profiles, formVisible, onSelect, onNewProfile } = props;
+  const { profiles, formVisible, onSelect, onNewProfile, activeId = null, onRequestDelete } = props;
+  const rowActions = onRequestDelete !== undefined && !formVisible;
   return (
     <div className="connection-panel__profiles">
       <div className="connection-panel__profiles-header">
         <h3>{ConnectionCopy.profilesHeading}</h3>
-        <button type="button" className="connection-panel__new" onClick={onNewProfile}>
-          {ConnectionCopy.newProfile}
+        <button
+          type="button"
+          className="ui-icon-btn ui-icon-btn--accent"
+          aria-label={ConnectionCopy.newProfile}
+          title={ConnectionCopy.newProfile}
+          onClick={onNewProfile}
+        >
+          <PlusIcon />
         </button>
       </div>
       {profiles.length === 0 && formVisible ? (
@@ -24,10 +40,30 @@ export function ConnectionProfileList(props: {
       ) : (
         <ul>
           {profiles.map((profile) => (
-            <li key={profile.id}>
-              <button type="button" onClick={() => onSelect(profile)}>
-                {profileLabel(profile)}
+            <li key={profile.id} className="connection-panel__profile ui-row-host">
+              <button
+                type="button"
+                className={profile.id === activeId ? "ui-row ui-row--selected" : "ui-row"}
+                onClick={() => onSelect(profile)}
+              >
+                <span className="ui-row__glyph">
+                  <ServerIcon size={14} />
+                </span>
+                <span className="ui-row__label">{profileLabel(profile)}</span>
               </button>
+              {rowActions ? (
+                <div className="ui-row-actions connection-panel__profile-actions">
+                  <button
+                    type="button"
+                    className="ui-icon-btn ui-icon-btn--danger"
+                    aria-label={ConnectionCopy.delete}
+                    title={ConnectionCopy.delete}
+                    onClick={() => onRequestDelete?.(profile)}
+                  >
+                    <TrashIcon size={14} />
+                  </button>
+                </div>
+              ) : null}
             </li>
           ))}
         </ul>

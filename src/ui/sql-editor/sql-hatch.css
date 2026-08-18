@@ -7,8 +7,11 @@
 
 .sql-hatch__editor {
   background: oklch(1 0 0);
-  border: 1px solid var(--neutral-300);
+  border: 1px solid var(--border-field);
   border-radius: var(--radius);
+  /* Grows with the pane: the toolbar is full-bleed chrome now, so the editor
+     is the pane's content rather than a fixed-height box inside it. */
+  flex: 1;
   min-height: 160px;
   overflow: auto;
 }

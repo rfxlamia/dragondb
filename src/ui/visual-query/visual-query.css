@@ -1,48 +1,16 @@
 /* Visual query canvas — creative brief tokens; desktop card chrome */
 
+/* Toolbar is app chrome, not a card on the canvas: it spans the pane and is
+   separated by a single hairline, so the canvas below reads as the workspace. */
 .vq-toolbar {
   align-items: center;
   background: oklch(1 0 0);
-  border: 1px solid var(--neutral-200);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-sm);
+  border-bottom: 1px solid var(--border-subtle);
   display: flex;
+  flex-shrink: 0;
   gap: 8px;
-  min-height: 36px;
-  padding: 8px 12px;
-}
-
-.vq-toolbar__modes {
-  display: inline-flex;
-  border: 1px solid var(--neutral-300);
-  border-radius: var(--radius);
-  overflow: hidden;
-}
-
-.vq-toolbar__mode {
-  align-items: center;
-  background: oklch(1 0 0);
-  color: var(--neutral-800);
-  cursor: pointer;
-  display: flex;
-  font-family: var(--font-sans);
-  font-size: 13px;
-  font-weight: 500;
-  gap: 6px;
-  line-height: 1.4;
-  padding: 4px 10px;
-}
-
-.vq-toolbar__mode:has(input:checked) {
-  background: var(--primary-100);
-  color: var(--primary-700);
-}
-
-.vq-toolbar__mode input {
-  accent-color: var(--primary-600);
-  height: 0.85rem;
-  margin: 0;
-  width: 0.85rem;
+  min-height: 40px;
+  padding: 6px 10px;
 }
 
 .vq-toolbar__start-over {
@@ -166,8 +134,8 @@
 
 .vq-popover {
   background: oklch(1 0 0);
-  border: 1px solid var(--neutral-300);
-  border-radius: var(--radius);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-md);
   box-sizing: border-box;
   display: flex;
@@ -247,8 +215,8 @@
 
 .vq-sql-dialog {
   background: oklch(1 0 0);
-  border: 1px solid var(--neutral-300);
-  border-radius: var(--radius);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
   box-shadow:
     var(--shadow-lg),
     0 0 0 100vmax var(--scrim);
@@ -348,11 +316,13 @@
   background: var(--primary-700);
 }
 
+/* Blocks lift off the dotted plane with one soft shadow, not a shadow plus a
+   mid-grey outline — the double frame was reading as a 2010-era widget. */
 .vq-clause-card {
   background: oklch(1 0 0);
-  border: 1px solid var(--neutral-300);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-md);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
@@ -360,11 +330,14 @@
   gap: 8px;
   min-width: 220px;
   padding: 12px 14px;
-  transition: box-shadow var(--duration-base) var(--ease-standard);
+  transition:
+    box-shadow var(--duration-base) var(--ease-standard),
+    border-color var(--duration-base) var(--ease-standard);
 }
 
 .vq-clause-card:hover {
-  box-shadow: var(--shadow-lg);
+  border-color: var(--neutral-300);
+  box-shadow: var(--shadow-md);
 }
 
 .vq-clause-card__header {
@@ -549,8 +522,8 @@
 
 .vq-statement-menu {
   background: oklch(1 0 0);
-  border: 1px solid var(--neutral-300);
-  border-radius: var(--radius);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-md);
   display: flex;
   flex-direction: column;
@@ -617,16 +590,20 @@
   padding: 2px 6px;
 }
 
+/* Canvas: white plane with a faint dot grid rather than a flat grey slab.
+   The grid comes from the brief's n8n reference — it says "this area is a
+   workspace you arrange blocks on" without adding a hue or a border. */
 .vq-canvas {
-  background: var(--neutral-200);
+  background-color: oklch(1 0 0);
+  background-image: radial-gradient(var(--neutral-300) 1px, transparent 1px);
+  background-position: 0 0;
+  background-size: 18px 18px;
   box-sizing: border-box;
   color: var(--neutral-900);
   display: flex;
   flex-direction: column;
   font-family: var(--font-sans);
-  gap: 10px;
-  min-height: 100vh;
-  padding: 16px 20px 20px;
+  min-height: 0;
 }
 
 .vq-canvas__metadata-error {
@@ -656,6 +633,21 @@
   flex-direction: column;
   gap: 16px;
   min-height: 0;
+}
+
+/* Toolbar spans the pane, so padding lives on the content below it. */
+.vq-canvas > .vq-canvas__body,
+.vq-canvas > .sql-hatch {
+  padding: 14px 16px 16px;
+}
+
+.vq-canvas > .vq-canvas__metadata-error {
+  margin: 12px 16px 0;
+}
+
+.vq-canvas > .sql-hatch {
+  background: oklch(1 0 0);
+  flex: 1;
 }
 
 .vq-canvas__stage {
@@ -797,8 +789,8 @@
 
 .vq-clause-menu {
   background: oklch(1 0 0);
-  border: 1px solid var(--neutral-300);
-  border-radius: var(--radius);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-md);
   display: flex;
   flex-direction: column;

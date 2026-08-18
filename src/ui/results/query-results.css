@@ -1,9 +1,10 @@
+/* The results pane fills its own split panel, so a card border + shadow only
+   drew a second frame inside a frame. It is the content plane itself now. */
 .query-results {
   background: oklch(1 0 0);
-  border: 1px solid var(--neutral-300);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-sm);
   color: var(--neutral-800);
+  display: flex;
+  flex-direction: column;
   font-family: var(--font-sans);
   min-height: 0;
 }
@@ -45,11 +46,19 @@
 }
 
 .query-results__grid-wrap {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   overflow-x: auto;
 }
 
+/* Grid rhythm: horizontal separators only, zebra banding to carry the eye
+   across wide rows, tabular-nums so digits stay in column (brief mandate).
+   Vertical borders on every cell were what made this read as a spreadsheet
+   export rather than a data grid. */
 .query-results__table {
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   font-family: var(--font-mono);
   font-size: 13px;
   width: 100%;
@@ -57,23 +66,56 @@
 
 .query-results__table th,
 .query-results__table td {
-  border: 1px solid var(--neutral-300);
   color: var(--neutral-800);
   font-variant-numeric: tabular-nums;
-  padding: 6px 10px;
+  padding: 0 12px;
   text-align: left;
 }
 
 .query-results__table th {
   background: var(--neutral-100);
+  border-bottom: 1px solid var(--neutral-300);
   color: var(--neutral-700);
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: 12px;
   font-weight: 600;
+  height: 30px;
   position: sticky;
   top: 0;
+  transition: color var(--duration-fast) var(--ease-standard);
+  user-select: none;
+  white-space: nowrap;
+  z-index: 1;
+}
+
+.query-results__table th:hover {
+  color: var(--neutral-900);
+}
+
+.query-results__table th[aria-sort="ascending"],
+.query-results__table th[aria-sort="descending"] {
+  color: var(--primary-700);
+}
+
+/* Direction is an inline SVG in the header cell, not `::after` content —
+   pseudo-element text cannot be aria-hidden and duplicated the `aria-sort`
+   the cell already exposes. */
+.query-results__sort-glyph {
+  align-items: center;
+  display: inline-flex;
+  margin-left: 4px;
+  vertical-align: middle;
 }
 
 .query-results__table td {
+  border-bottom: 1px solid var(--neutral-200);
+  height: 30px;
   white-space: nowrap;
+}
+
+.query-results__table tbody tr:nth-child(even) td {
+  background: var(--neutral-100);
 }
 
 .query-results__table tbody tr:hover td {
@@ -82,44 +124,43 @@
 
 .query-results__chrome {
   align-items: center;
+  background: oklch(1 0 0);
+  border-bottom: 1px solid var(--border-subtle);
   display: flex;
-  flex-wrap: wrap;
+  flex-shrink: 0;
   gap: 8px;
-  padding: 8px;
+  min-height: 38px;
+  padding: 6px 8px;
 }
 
-.query-results__filter {
-  background: oklch(1 0 0);
-  border: 1px solid var(--neutral-300);
-  border-radius: var(--radius);
-  color: var(--neutral-900);
-  flex: 1 1 160px;
-  font-family: var(--font-sans);
-  font-size: 13px;
-  min-width: 0;
-  padding: 6px 10px;
+.query-results__search {
+  flex: 1 1 180px;
+  max-width: 320px;
 }
 
 .query-results__toolbar {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  gap: 2px;
+  margin-left: auto;
 }
 
 .query-results__btn {
-  background: oklch(1 0 0);
-  border: 1px solid var(--neutral-300);
+  background: var(--neutral-100);
+  border: 1px solid var(--border-field);
   border-radius: var(--radius);
-  color: var(--neutral-800);
+  color: var(--neutral-900);
   cursor: pointer;
   font-family: var(--font-sans);
   font-size: 13px;
   font-weight: 500;
-  padding: 6px 10px;
+  padding: 5px 12px;
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard);
 }
 
 .query-results__btn:hover:not(:disabled) {
-  background: var(--neutral-100);
+  background: var(--neutral-200);
   border-color: var(--neutral-400);
 }
 
@@ -149,24 +190,30 @@
 }
 
 .query-results__table-scroll {
-  overflow-x: auto;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
 }
 
-.query-results__row--selected td {
-  background: var(--primary-100);
+.query-results__row--selected td,
+.query-results__row--selected:hover td {
+  background: var(--primary-200);
+  color: var(--primary-900);
 }
 
 .query-results__pagination {
+  border-top: 1px solid var(--border-subtle);
   display: flex;
+  flex-shrink: 0;
   gap: 6px;
   justify-content: flex-end;
-  padding: 8px;
+  padding: 6px 8px;
 }
 
 .query-results__dialog {
   background: oklch(1 0 0);
-  border: 1px solid var(--neutral-300);
-  border-radius: var(--radius);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
   box-shadow:
     var(--shadow-lg),
     0 0 0 100vmax var(--scrim);
@@ -208,7 +255,7 @@
 
 .query-results__json {
   background: var(--neutral-100);
-  border: 1px solid var(--neutral-300);
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius);
   color: var(--neutral-900);
   font-family: var(--font-mono);

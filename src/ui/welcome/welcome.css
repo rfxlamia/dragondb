@@ -1,6 +1,6 @@
 .welcome-view {
   align-items: center;
-  background: var(--neutral-100);
+  background: var(--surface-page);
   color: var(--neutral-900);
   display: flex;
   flex-direction: column;
@@ -30,7 +30,7 @@
 
 .welcome-view__connect {
   background: var(--primary-600);
-  border: 1px solid var(--primary-700);
+  border: none;
   border-radius: var(--radius);
   box-shadow: var(--shadow-sm);
   color: oklch(1 0 0);

@@ -2703,10 +2703,11 @@ describe("App table browser host wiring", () => {
     render(<App ipc={ipc} />);
     await connectFirst(user, ipc);
     const tablesAfterConnect = listTables.mock.calls.length;
-    const dropButtons = await screen.findAllByRole("button", { name: TablesCopy.drop });
-    const firstDrop = dropButtons[0];
-    if (firstDrop === undefined) throw new Error("expected Drop");
-    await user.click(firstDrop);
+    const tableMenus = await screen.findAllByRole("button", { name: TablesCopy.menu });
+    const firstMenu = tableMenus[0];
+    if (firstMenu === undefined) throw new Error("expected Table actions");
+    await user.click(firstMenu);
+    await user.click(screen.getByRole("menuitem", { name: TablesCopy.drop }));
     await user.click(screen.getByRole("button", { name: TablesCopy.confirmDrop }));
     await waitFor(() => expect(dropTable).toHaveBeenCalled());
     expect(dropTable.mock.calls[0]?.[0]).toMatchObject({ schema: "public", name: "users" });
@@ -2725,10 +2726,11 @@ describe("App table browser host wiring", () => {
     render(<App ipc={ipc} />);
     await connectFirst(user, ipc);
     const tablesAfterConnect = listTables.mock.calls.length;
-    const dropButtons = await screen.findAllByRole("button", { name: TablesCopy.drop });
-    const firstDrop = dropButtons[0];
-    if (firstDrop === undefined) throw new Error("expected Drop");
-    await user.click(firstDrop);
+    const tableMenus = await screen.findAllByRole("button", { name: TablesCopy.menu });
+    const firstMenu = tableMenus[0];
+    if (firstMenu === undefined) throw new Error("expected Table actions");
+    await user.click(firstMenu);
+    await user.click(screen.getByRole("menuitem", { name: TablesCopy.drop }));
     await user.click(screen.getByRole("button", { name: TablesCopy.confirmDrop }));
     expect(await screen.findByText("permission denied for table users")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "users" })).toBeInTheDocument();
@@ -2749,14 +2751,13 @@ describe("App table browser host wiring", () => {
     render(<App ipc={ipc} />);
     await connectFirst(user, ipc);
     await user.click(await screen.findByRole("button", { name: "users" }));
-    await waitFor(() =>
-      expect(screen.getAllByRole("button", { name: TablesCopy.drop })[0]).toBeDisabled(),
-    );
-    const menuButtons = screen.getAllByRole("button", { name: TablesCopy.menu });
+    const menuButtons = await screen.findAllByRole("button", { name: TablesCopy.menu });
     const firstMenu = menuButtons[0];
     if (firstMenu === undefined) throw new Error("expected Table actions");
     await user.click(firstMenu);
-    expect(screen.getByRole("menuitem", { name: TablesCopy.drop })).toBeDisabled();
+    await waitFor(() =>
+      expect(screen.getByRole("menuitem", { name: TablesCopy.drop })).toBeDisabled(),
+    );
     expect(screen.getByRole("menuitem", { name: TablesCopy.truncate })).toBeDisabled();
     release();
   });

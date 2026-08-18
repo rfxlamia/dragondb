@@ -1,3 +1,4 @@
+import { PlusIcon, RefreshIcon, SearchIcon } from "../icons";
 import { QueriesAccessibility } from "./queries-accessibility";
 import { QueriesCopy } from "./queries-copy";
 import type { QuerySortKey } from "./queries-sort";
@@ -37,26 +38,37 @@ export function QueriesColumnToolbar(props: QueriesColumnToolbarProps): React.JS
         <h2>{QueriesCopy.title}</h2>
         <div className="queries-column__header-actions">
           {onRefresh ? (
-            <button type="button" onClick={onRefresh}>
-              {QueriesCopy.refresh}
+            <button
+              type="button"
+              className="ui-icon-btn"
+              aria-label={QueriesCopy.refresh}
+              title={QueriesCopy.refresh}
+              onClick={onRefresh}
+            >
+              <RefreshIcon />
             </button>
           ) : null}
           <button
             type="button"
-            className="queries-column__new"
+            className="ui-icon-btn ui-icon-btn--accent"
             data-testid={QueriesAccessibility.newQuery}
             aria-label={QueriesCopy.newQuery}
+            title={QueriesCopy.newQuery}
             onClick={onNewQuery}
           >
-            +
+            <PlusIcon />
           </button>
         </div>
       </div>
 
+      {/* Pickers carry no visible label: their own value states what they do,
+          and stacked "Schema"/"Sort" captions turned a sidebar into a form.
+          The label element stays for the accessible name. */}
       {schemas !== undefined && schemas.length > 1 && onSelectSchema ? (
         <label className="queries-column__schema">
-          {QueriesCopy.schema}
+          <span className="ui-visually-hidden">{QueriesCopy.schema}</span>
           <select
+            className="ui-quiet-select"
             data-testid={QueriesAccessibility.schemaPicker}
             value={selectedSchema ?? ""}
             onChange={(event) =>
@@ -81,16 +93,27 @@ export function QueriesColumnToolbar(props: QueriesColumnToolbarProps): React.JS
         </div>
       ) : null}
 
-      <input
-        type="search"
-        aria-label={QueriesCopy.filter}
-        data-testid={QueriesAccessibility.filter}
-        value={filter}
-        onChange={(event) => onFilterChange(event.target.value)}
-      />
+      <div className="ui-search">
+        <span className="ui-search__icon">
+          <SearchIcon />
+        </span>
+        <input
+          type="search"
+          className="ui-search__input"
+          aria-label={QueriesCopy.filter}
+          placeholder={QueriesCopy.filter}
+          data-testid={QueriesAccessibility.filter}
+          value={filter}
+          onChange={(event) => onFilterChange(event.target.value)}
+        />
+      </div>
       <label className="queries-column__sort">
-        {QueriesCopy.sort}
-        <select value={sort} onChange={(event) => onSortChange(event.target.value as QuerySortKey)}>
+        <span className="ui-visually-hidden">{QueriesCopy.sort}</span>
+        <select
+          className="ui-quiet-select"
+          value={sort}
+          onChange={(event) => onSortChange(event.target.value as QuerySortKey)}
+        >
           <option value="name-asc">{QueriesCopy.sortNameAsc}</option>
           <option value="name-desc">{QueriesCopy.sortNameDesc}</option>
           <option value="created-desc">{QueriesCopy.sortCreatedNewest}</option>

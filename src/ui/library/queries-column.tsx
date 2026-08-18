@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { QueryFolderDto, SavedQueryDto } from "../../ipc/contract";
+import { DeselectIcon, DuplicateIcon, MoveIcon, PencilIcon, TrashIcon } from "../icons";
 import { QueriesAccessibility } from "./queries-accessibility";
 import { QueriesColumnSheets, type QueriesSheet } from "./queries-column-sheets";
 import { QueriesColumnToolbar } from "./queries-column-toolbar";
@@ -255,32 +256,60 @@ export function QueriesColumn(props: QueriesColumnProps): React.JSX.Element {
           </QueriesFolderRow>
         ))}
 
+        {/* Actions for the current selection: an icon rail pinned under the
+            list instead of five bordered text buttons stacked mid-column.
+            aria-label carries the same copy constants, so the affordance is
+            unchanged for assistive tech and for the tests. */}
         {selected !== null ? (
           <div className="queries-column__actions">
-            <button type="button" onClick={() => onSelectQuery(null)}>
-              {QueriesCopy.deselect}
+            <button
+              type="button"
+              className="ui-icon-btn"
+              aria-label={QueriesCopy.deselect}
+              title={QueriesCopy.deselect}
+              onClick={() => onSelectQuery(null)}
+            >
+              <DeselectIcon />
             </button>
             <button
               type="button"
+              className="ui-icon-btn"
+              aria-label={QueriesCopy.rename}
+              title={QueriesCopy.rename}
               onClick={() =>
                 setSheet({ kind: "rename", queryId: selected.id, name: selected.name })
               }
             >
-              {QueriesCopy.rename}
+              <PencilIcon />
+            </button>
+            {onDuplicateQuery ? (
+              <button
+                type="button"
+                className="ui-icon-btn"
+                aria-label={QueriesCopy.duplicate}
+                title={QueriesCopy.duplicate}
+                onClick={() => onDuplicateQuery(selected.id)}
+              >
+                <DuplicateIcon />
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className="ui-icon-btn"
+              aria-label={QueriesCopy.move}
+              title={QueriesCopy.move}
+              onClick={() => setSheet({ kind: "move", queryId: selected.id })}
+            >
+              <MoveIcon />
             </button>
             <button
               type="button"
+              className="ui-icon-btn ui-icon-btn--danger"
+              aria-label={QueriesCopy.delete}
+              title={QueriesCopy.delete}
               onClick={() => setSheet({ kind: "delete", queryIds: [selected.id] })}
             >
-              {QueriesCopy.delete}
-            </button>
-            {onDuplicateQuery ? (
-              <button type="button" onClick={() => onDuplicateQuery(selected.id)}>
-                {QueriesCopy.duplicate}
-              </button>
-            ) : null}
-            <button type="button" onClick={() => setSheet({ kind: "move", queryId: selected.id })}>
-              {QueriesCopy.move}
+              <TrashIcon />
             </button>
           </div>
         ) : null}

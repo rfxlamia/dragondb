@@ -10,6 +10,7 @@ import type {
   TableRef,
 } from "../../ipc/contract";
 import { ConnectionStringParseError } from "../../lib/connection-string";
+import { ConnectIcon, DisconnectIcon, SidebarIcon } from "../icons";
 import { ConnectionAccessibility } from "./connection-accessibility";
 import { ConnectionCopy, humanIpcErrorMessage } from "./connection-copy";
 import { ConnectionCreatedDialog } from "./connection-created-dialog";
@@ -20,6 +21,7 @@ import {
   emptyConnectionFormValue,
   formValueFromProfile,
 } from "./connection-form";
+import { ConnectionFormSheet } from "./connection-form-sheet";
 import { ConnectionPanelActions } from "./connection-panel-actions";
 import { ConnectionProfileList } from "./connection-profile-list";
 import { ConnectionStatusBanner, type ConnectionStatusPhase } from "./connection-status-banner";
@@ -29,6 +31,8 @@ import { useConnectionStringMode } from "./use-connection-string-mode";
 import "./connection.css";
 
 const TEST_BANNER_MIN_MS = 150;
+/** A passing Test is transient feedback; after this it falls back to session state. */
+const TEST_SUCCESS_LINGER_MS = 4000;
 
 async function waitRemaining(startedAt: number, minimumMs: number): Promise<void> {
   const elapsed = Date.now() - startedAt;
@@ -175,6 +179,12 @@ export function ConnectionPanel(props: ConnectionPanelProps): React.JSX.Element 
   useEffect(() => {
     if (connectionIdProp) setLiveConnectionId(connectionIdProp);
   }, [connectionIdProp]);
+
+  useEffect(() => {
+    if (bannerPhase !== "success") return;
+    const timer = window.setTimeout(() => setBannerPhase("idle"), TEST_SUCCESS_LINGER_MS);
+    return () => window.clearTimeout(timer);
+  }, [bannerPhase]);
 
   useEffect(() => {
     if (databaseNameProp !== undefined) setPickerSelected(databaseNameProp);
@@ -394,26 +404,88 @@ export function ConnectionPanel(props: ConnectionPanelProps): React.JSX.Element 
     }
   }
 
+  const statusBanner = (
+    <ConnectionStatusBanner
+      phase={bannerPhase}
+      isConnected={sessionClaimed}
+      message={bannerMessage ?? undefined}
+    />
+  );
+  const errorText =
+    errorMessage !== null ? (
+      <p className="connection-panel__status" role="status">
+        {errorMessage}
+      </p>
+    ) : null;
+
   return (
     <section className="connection-panel" aria-label={ConnectionCopy.panelTitle}>
       <div className="connection-panel__header">
         <h2>{ConnectionCopy.panelTitle}</h2>
-        {onCollapse ? (
-          <button
-            type="button"
-            data-testid={ConnectionAccessibility.collapseConnection}
-            onClick={onCollapse}
-          >
-            {ConnectionCopy.collapseConnection}
-          </button>
-        ) : null}
+        <div className="connection-panel__header-actions">
+          {/* Ending the session belongs to the live connection in the sidebar,
+              not to the edit sheet — the sheet can be closed while connected. */}
+          {sessionClaimed ? (
+            <button
+              type="button"
+              className="ui-icon-btn ui-icon-btn--danger"
+              aria-label={ConnectionCopy.disconnect}
+              title={ConnectionCopy.disconnect}
+              disabled={busy}
+              onClick={() => void handleDisconnect()}
+            >
+              <DisconnectIcon />
+            </button>
+          ) : null}
+          {/* Reconnecting the selected profile without reopening the sheet.
+              Hidden while the sheet is open — its footer owns Connect there,
+              so exactly one Connect control exists at any time. */}
+          {!sessionClaimed && !formVisible && selectedId !== null ? (
+            <button
+              type="button"
+              className="ui-icon-btn ui-icon-btn--accent"
+              aria-label={ConnectionCopy.connect}
+              title={ConnectionCopy.connect}
+              disabled={!canConnect}
+              onClick={() => void handleConnect()}
+            >
+              <ConnectIcon />
+            </button>
+          ) : null}
+          {/* Collapsing unmounts this panel, and the form sheet — with whatever
+              host/port/password is half-typed into it — lives inside. The scrim
+              already reads as "not now"; disabling makes that true instead of
+              silently discarding the draft. */}
+          {onCollapse ? (
+            <button
+              type="button"
+              className="ui-icon-btn"
+              data-testid={ConnectionAccessibility.collapseConnection}
+              aria-label={ConnectionCopy.collapseConnection}
+              title={ConnectionCopy.collapseConnection}
+              disabled={formVisible}
+              onClick={onCollapse}
+            >
+              <SidebarIcon />
+            </button>
+          ) : null}
+        </div>
       </div>
+
+      {formVisible ? null : (
+        <>
+          {statusBanner}
+          {errorText}
+        </>
+      )}
 
       <ConnectionProfileList
         profiles={profiles}
         formVisible={formVisible}
         onSelect={selectProfile}
         onNewProfile={startNewProfile}
+        activeId={sessionClaimed ? (connectedProfileId ?? selectedId) : selectedId}
+        onRequestDelete={(profile) => confirm.requestDelete(profile.id)}
       />
 
       {sessionClaimed && selectedId !== null ? (
@@ -451,7 +523,30 @@ export function ConnectionPanel(props: ConnectionPanelProps): React.JSX.Element 
       ) : null}
 
       {formVisible ? (
-        <>
+        <ConnectionFormSheet
+          title={selectedId === null ? ConnectionCopy.formTitleNew : ConnectionCopy.formTitleEdit}
+          onCancel={() => onFormVisibleChange(false)}
+          escapeBlocked={createdDialogOpen || confirm.hasPending}
+          notice={
+            <>
+              {statusBanner}
+              {errorText}
+            </>
+          }
+          footer={
+            <ConnectionPanelActions
+              busy={busy}
+              canConnect={canConnect}
+              sessionClaimed={sessionClaimed}
+              selectedId={selectedId}
+              hideConnect={createdDialogOpen}
+              onSave={() => void handleSave()}
+              onConnect={() => void handleConnect()}
+              onRequestDelete={() => confirm.requestDelete(selectedId)}
+              onCancel={() => onFormVisibleChange(false)}
+            />
+          }
+        >
           <ConnectionForm
             value={form}
             onChange={updateForm}
@@ -471,19 +566,10 @@ export function ConnectionPanel(props: ConnectionPanelProps): React.JSX.Element 
             onCopyConnectionString={() => void uri.copy(selectedId, form)}
           />
 
-          <ConnectionPanelActions
-            busy={busy}
-            canConnect={canConnect}
-            sessionClaimed={sessionClaimed}
-            selectedId={selectedId}
-            hideConnect={createdDialogOpen}
-            onSave={() => void handleSave()}
-            onConnect={() => void handleConnect()}
-            onDisconnect={() => void handleDisconnect()}
-            onRequestDelete={() => confirm.requestDelete(selectedId)}
-            onCancel={() => onFormVisibleChange(false)}
-          />
-        </>
+          {!canConnect && !sessionClaimed && selectedId === null ? (
+            <p className="connection-panel__hint">{ConnectionCopy.connectHint}</p>
+          ) : null}
+        </ConnectionFormSheet>
       ) : null}
 
       <ConnectionCreatedDialog
@@ -495,22 +581,7 @@ export function ConnectionPanel(props: ConnectionPanelProps): React.JSX.Element 
         onNotNow={() => setCreatedDialogOpen(false)}
       />
 
-      <ConnectionStatusBanner
-        phase={bannerPhase}
-        isConnected={sessionClaimed}
-        message={bannerMessage ?? undefined}
-      />
-
       {confirm.dialogs}
-
-      {errorMessage ? (
-        <p className="connection-panel__status" role="status">
-          {errorMessage}
-        </p>
-      ) : null}
-      {formVisible && !canConnect && !sessionClaimed && selectedId === null ? (
-        <p className="connection-panel__hint">{ConnectionCopy.connectHint}</p>
-      ) : null}
     </section>
   );
 }

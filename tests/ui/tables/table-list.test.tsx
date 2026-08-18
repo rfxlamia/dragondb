@@ -97,7 +97,8 @@ describe("TableList", () => {
         onRunQuery={onRunQuery}
       />,
     );
-    await user.click(screen.getByRole("button", { name: TablesCopy.drop }));
+    await user.click(screen.getByRole("button", { name: TablesCopy.menu }));
+    await user.click(screen.getByRole("menuitem", { name: TablesCopy.drop }));
     await user.click(screen.getByRole("button", { name: TablesCopy.confirmDrop }));
     expect(onDrop).toHaveBeenCalledOnce();
     expect(onRunQuery).not.toHaveBeenCalled();
@@ -119,7 +120,8 @@ describe("TableList", () => {
         onGenerateDdl={vi.fn()}
       />,
     );
-    await user.click(screen.getByRole("button", { name: TablesCopy.drop }));
+    await user.click(screen.getByRole("button", { name: TablesCopy.menu }));
+    await user.click(screen.getByRole("menuitem", { name: TablesCopy.drop }));
     await user.click(screen.getByRole("button", { name: TablesCopy.confirmDrop }));
     expect(await screen.findByText("cannot drop temp")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "temp" })).toBeInTheDocument();
