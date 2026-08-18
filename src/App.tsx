@@ -23,6 +23,7 @@ import { ConnectionPanel, type ConnectionPanelHandle } from "./ui/connection/con
 import { HelpDialog } from "./ui/help/help-dialog";
 import { SettingsDialog } from "./ui/help/settings-dialog";
 import { ShortcutsDialog } from "./ui/help/shortcuts-dialog";
+import { SidebarIcon } from "./ui/icons";
 import { QueriesCopy } from "./ui/library/queries-copy";
 import { createSavedQueryResultCache } from "./ui/library/saved-query-result-cache";
 import { useSavedQueryAutosave } from "./ui/library/use-saved-query-autosave";
@@ -932,14 +933,21 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
             <p>{launchError}</p>
           </div>
         ) : null}
+        {/* The collapsed panel leaves a rail rather than nothing: the toggle
+            keeps a real grid column, so hiding the sidebar widens the
+            workspace instead of stretching an empty row down the window. */}
         {connectionCollapsed ? (
-          <button
-            type="button"
-            className="app-show-connection"
-            onClick={() => setConnectionCollapsed(false)}
-          >
-            {ConnectionCopy.showConnection}
-          </button>
+          <div className="app-connection-rail">
+            <button
+              type="button"
+              className="ui-icon-btn"
+              aria-label={ConnectionCopy.showConnection}
+              title={ConnectionCopy.showConnection}
+              onClick={() => setConnectionCollapsed(false)}
+            >
+              <SidebarIcon />
+            </button>
+          </div>
         ) : (
           <ConnectionPanel
             ref={connectionPanelRef}

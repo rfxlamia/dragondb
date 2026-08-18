@@ -18,7 +18,7 @@
 }
 
 .app-shell--collapsed {
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: 2.25rem minmax(0, 1fr);
 }
 
 .app-connection-error {
@@ -35,23 +35,18 @@
   margin: 0;
 }
 
-.app-show-connection {
-  background: transparent;
-  border: none;
-  border-radius: var(--radius);
-  color: var(--primary-700);
-  cursor: pointer;
-  font-family: var(--font-sans);
-  font-size: 13px;
-  font-weight: 500;
-  justify-self: start;
-  margin: 0.5rem;
-  padding: 6px 10px;
-  transition: background-color var(--duration-fast) var(--ease-standard);
-}
-
-.app-show-connection:hover {
-  background: var(--primary-100);
+/* Collapsed rail: a sidebar-coloured strip holding only the expand toggle, so
+   the panel's slot never becomes an empty stretched grid row and the toggle
+   stays level with the Connection / Queries headers beside it. */
+.app-connection-rail {
+  align-items: center;
+  background: var(--surface-sidebar);
+  border-right: 1px solid var(--border-subtle);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  max-height: 100vh;
+  padding: 0.5rem 5px;
 }
 
 .loading-overlay {
@@ -261,6 +256,14 @@ body,
 @media (max-width: 48rem) {
   .app-shell {
     grid-template-columns: 1fr;
+  }
+
+  .app-shell--collapsed {
+    grid-template-columns: 2.25rem minmax(0, 1fr);
+  }
+
+  .app-connection-rail {
+    max-height: none;
   }
 
   .app-shell .connection-panel {
