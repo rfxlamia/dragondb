@@ -15,7 +15,11 @@ import { createTauriDragonIpc } from "./ipc/tauri-client";
 import { loadDateFormat, type QueryResultsDateFormat } from "./lib/date-format-setting";
 import { newSavedQueryName } from "./lib/new-saved-query-name";
 import { type AppStores, composeAppStores } from "./stores/compose-app-stores";
-import { PAGE_SIZE, quotedTableSql, runBrowseOnActiveTab } from "./stores/run-browse-on-active-tab";
+import {
+  quotedTableSql,
+  reloadBrowseOnActiveTab,
+  runBrowseOnActiveTab,
+} from "./stores/run-browse-on-active-tab";
 import { runSelectOnActiveTab } from "./stores/run-select-on-active-tab";
 import { runSqlOnActiveTab } from "./stores/run-sql-on-active-tab";
 import { ConnectionCopy, humanIpcErrorMessage } from "./ui/connection/connection-copy";
@@ -61,6 +65,10 @@ function mapSchemaError(code: string | null): string | null {
   if (code === "tables_load_failed") return VisualQueryCopy.tablesLoadError;
   if (code === "columns_load_failed") return VisualQueryCopy.columnsLoadError;
   return code;
+}
+
+function sameTableRef(left: TableRef, right: TableRef): boolean {
+  return left.name === right.name && (left.schema ?? "") === (right.schema ?? "");
 }
 
 export default function App({ ipc: ipcProp }: AppProps = {}) {
@@ -121,6 +129,7 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
     stores.tabs,
     (s) => s.tabs.find((t) => t.id === s.activeTabId)?.browsePage ?? 0,
   );
+  const hasNextPage = useStore(stores.browse, (s) => s.hasNext);
   const mutationToast = useStore(
     stores.tabs,
     (s) => s.tabs.find((t) => t.id === s.activeTabId)?.mutationToast ?? null,
@@ -198,7 +207,6 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
         : undefined,
     [selectedTableSchema, selectedTableName],
   );
-  const hasNextPage = (raw?.rows.length ?? 0) > PAGE_SIZE;
   const hasPrevPage = browsePage > 0;
 
   useEffect(() => {
@@ -644,6 +652,11 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
 
   async function handleDropTable(table: TableRef): Promise<void> {
     await ipc.dropTable(table);
+    const identity = stores.browse.getState().identity;
+    if (identity !== null && sameTableRef(identity.table, table)) {
+      stores.browse.getState().invalidate();
+      stores.tabs.getState().clearBrowseResults();
+    }
     const liveId = stores.session.getState().connectionId;
     if (liveId === null) return;
     await stores.schema.getState().reloadTables(liveId);
@@ -652,18 +665,27 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
   async function handleTruncateTable(table: TableRef): Promise<void> {
     await ipc.truncateTable(table);
     const liveId = stores.session.getState().connectionId;
-    if (liveId === null) return;
-    await stores.schema.getState().reloadTables(liveId);
+    if (liveId !== null) {
+      await stores.schema.getState().reloadTables(liveId);
+    }
+    const identity = stores.browse.getState().identity;
+    if (identity !== null && sameTableRef(identity.table, table)) {
+      await reloadBrowseOnActiveTab(stores, ipc).catch(() => undefined);
+    }
   }
 
   function handleGenerateTableDdl(table: TableRef): Promise<string> {
     return ipc.generateTableDdl(table);
   }
 
-  function handleRefreshTables(_table: TableRef): void {
+  function handleRefreshTables(table: TableRef): void {
     const liveId = stores.session.getState().connectionId;
     if (liveId === null) return;
     void stores.schema.getState().reloadTables(liveId);
+    const identity = stores.browse.getState().identity;
+    if (identity !== null && sameTableRef(identity.table, table)) {
+      void reloadBrowseOnActiveTab(stores, ipc).catch(() => undefined);
+    }
   }
 
   async function handleFetchAllTable(

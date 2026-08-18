@@ -66,4 +66,32 @@ describe("browse-session-store contract", () => {
     ).toBe(false);
     expect(store.getState().identity?.database).toBe("analytics");
   });
+
+  it("keeps a 20-page LRU and rejects stale cache writes", () => {
+    const store = createBrowseSessionStore();
+    store.getState().startBrowse(orders);
+    const generation = store.getState().generation;
+    for (let page = 0; page < 21; page += 1) {
+      store.getState().writePage(generation, page, {
+        columns: ["id"],
+        rows: [[page]],
+        durationMs: 1,
+        hasNext: page < 20,
+      });
+    }
+    expect(store.getState().readPage(0)).toBeNull();
+    expect(store.getState().readPage(20)?.rows).toEqual([[20]]);
+    expect(store.getState().cacheSize()).toBe(20);
+
+    store.getState().invalidate();
+    expect(
+      store.getState().writePage(generation, 9, {
+        columns: ["id"],
+        rows: [[9]],
+        durationMs: 1,
+        hasNext: false,
+      }),
+    ).toBe(false);
+    expect(store.getState().cacheSize()).toBe(0);
+  });
 });

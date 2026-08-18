@@ -1,6 +1,9 @@
 import { createStore, type StoreApi } from "zustand/vanilla";
 import type { ConnectionId, TableRef } from "../ipc/contract";
 
+export const BROWSE_PAGE_CACHE_LIMIT = 20;
+export const BROWSE_VISIBLE_PAGE_SIZE = 100;
+
 export type BrowseIdentity = {
   tabId: string;
   connectionId: ConnectionId;
@@ -18,6 +21,13 @@ export type BrowsePublishPatch = {
   hasNext?: boolean;
 };
 
+export type BrowseCachedPage = {
+  columns: string[];
+  rows: unknown[][];
+  durationMs: number;
+  hasNext: boolean;
+};
+
 export type BrowseSessionState = {
   identity: BrowseIdentity | null;
   page: number;
@@ -27,7 +37,12 @@ export type BrowseSessionState = {
   startBrowse: (identity: BrowseIdentity) => void;
   selectPage: (page: number) => void;
   invalidate: () => void;
+  invalidateCache: () => void;
   publish: (generation: BrowseGeneration, patch: BrowsePublishPatch) => boolean;
+  readPage: (page: number) => BrowseCachedPage | null;
+  writePage: (generation: BrowseGeneration, page: number, entry: BrowseCachedPage) => boolean;
+  cacheSize: () => number;
+  ownBrowsePageRequest: <T>(page: number, start: () => Promise<T>) => Promise<T>;
 };
 
 export type BrowseSessionSnapshot = {
@@ -60,15 +75,79 @@ export function browseSessionSnapshot(state: BrowseSessionState): BrowseSessionS
   };
 }
 
+/** Current-identity cache key: live connection, database, schema, table, page. */
+export function browsePageCacheKey(
+  identity: Pick<BrowseIdentity, "connectionId" | "database" | "table">,
+  page: number,
+): string {
+  return [
+    identity.connectionId,
+    identity.database,
+    identity.table.schema ?? "",
+    identity.table.name,
+    String(page),
+  ].join("\0");
+}
+
+export function browseIdentityMatches(
+  current: BrowseIdentity | null,
+  next: Pick<BrowseIdentity, "connectionId" | "database" | "table">,
+): boolean {
+  return (
+    current !== null &&
+    current.connectionId === next.connectionId &&
+    current.database === next.database &&
+    (current.table.schema ?? "") === (next.table.schema ?? "") &&
+    current.table.name === next.table.name
+  );
+}
+
+/** Deduplicate concurrent work for one cache key; the first caller owns the request. */
+export function ownBrowsePageRequest<T>(
+  inFlight: Map<string, Promise<unknown>>,
+  key: string,
+  start: () => Promise<T>,
+): Promise<T> {
+  const existing = inFlight.get(key);
+  if (existing !== undefined) return existing as Promise<T>;
+  const pending: Promise<T> = start().finally(() => {
+    if (inFlight.get(key) === pending) inFlight.delete(key);
+  });
+  inFlight.set(key, pending);
+  return pending;
+}
+
+function touchLru<V>(map: Map<string, V>, key: string, value: V): void {
+  map.delete(key);
+  map.set(key, value);
+}
+
+function evictLru<V>(map: Map<string, V>, limit: number): void {
+  while (map.size > limit) {
+    const oldest = map.keys().next().value;
+    if (oldest === undefined) break;
+    map.delete(oldest);
+  }
+}
+
 /**
  * Ephemeral browse identity / page / lifecycle store.
  * Does not own rendered tab results — those stay on tabs-store.
  */
 export function createBrowseSessionStore(): StoreApi<BrowseSessionState> {
+  const pageCache = new Map<string, BrowseCachedPage>();
+  const inFlight = new Map<string, Promise<unknown>>();
+
+  function clearCacheAndInFlight(): void {
+    pageCache.clear();
+    inFlight.clear();
+  }
+
   return createStore<BrowseSessionState>((set, get) => ({
     ...initialObservable(),
 
     startBrowse(identity) {
+      clearCacheAndInFlight();
       set({
         identity,
         page: 0,
@@ -82,6 +161,7 @@ export function createBrowseSessionStore(): StoreApi<BrowseSessionState> {
     },
 
     invalidate() {
+      clearCacheAndInFlight();
       set({
         identity: null,
         page: 0,
@@ -91,10 +171,58 @@ export function createBrowseSessionStore(): StoreApi<BrowseSessionState> {
       });
     },
 
+    invalidateCache() {
+      clearCacheAndInFlight();
+      set({
+        hasNext: false,
+        generation: get().generation + 1,
+      });
+    },
+
     publish(generation, patch) {
       if (generation !== get().generation) return false;
       set(patch);
       return true;
+    },
+
+    readPage(page) {
+      const identity = get().identity;
+      if (identity === null) return null;
+      const key = browsePageCacheKey(identity, page);
+      const entry = pageCache.get(key);
+      if (entry === undefined) return null;
+      touchLru(pageCache, key, entry);
+      return entry;
+    },
+
+    writePage(generation, page, entry) {
+      if (generation !== get().generation) return false;
+      const identity = get().identity;
+      if (identity === null) return false;
+      const key = browsePageCacheKey(identity, page);
+      const stored: BrowseCachedPage = {
+        columns: [...entry.columns],
+        rows: entry.rows.slice(0, BROWSE_VISIBLE_PAGE_SIZE),
+        durationMs: entry.durationMs,
+        hasNext: entry.hasNext,
+      };
+      touchLru(pageCache, key, stored);
+      evictLru(pageCache, BROWSE_PAGE_CACHE_LIMIT);
+      if (get().page === page) {
+        set({ hasNext: entry.hasNext });
+      }
+      return true;
+    },
+
+    cacheSize() {
+      return pageCache.size;
+    },
+
+    ownBrowsePageRequest(page, start) {
+      const identity = get().identity;
+      if (identity === null) return start();
+      const key = browsePageCacheKey(identity, page);
+      return ownBrowsePageRequest(inFlight, key, start);
     },
   }));
 }

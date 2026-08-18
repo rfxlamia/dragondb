@@ -44,8 +44,8 @@ Already-decided **out of SP-4b product chrome** (still listed where Swift screen
 **Headline Tauri status**
 
 - **DONE (UI):** SP-4a canvas plus SP-4b first-slice (shell + read-only grid) plus SP-4b workspace chrome (2026-08-15, `feat/sp-4b-ui` `e7b97f5`) plus last-slice connection chrome / SQL hatch / table browser host: welcome gating, “No connections”, tables list in the connection column (click = Show All Rows; expand loads columns + PK/FK icons; Refresh/DDL/Export/Truncate/Drop via dedicated IPC), connection-string mode, Queries column + B′ session cache, per-tab visual documents (persisted `visualDocumentJson`), tab bar (hidden at 1 tab, `+` always, Swift-style titles), history sheet + JSON/CSV/SQL export + relative dates, native Help / Shortcuts / Settings, Accel+T/W/Enter, collapsible connection sidebar, database picker, launch restore + loading overlay, Visual\|SQL hatch. SP-2/SP-3 connection panel (save / connect / disconnect / switch / delete / SSL / SSH).
-- **PARTIAL:** result-grid editability UI attaches but `RowOperationError` kinds don't surface distinct messages; table-browse pagination doesn't cache pages; Edit row uses plain text inputs (no typed pickers); context-mismatch help is missing. T12 last slice: mutation toast, DetailContent modals, background persist shipped.
-- **MISSING UI:** remaining SEQUENCE (context-mismatch editability help; row-editor typed pickers / saving-state disable; table-load timeout 300s; pagination cached-pages-skip-refetch). Workspace-chrome spec: `docs/pocket/spec/2026-08-15-sp4b-workspace-chrome/workspace-chrome.md`.
+- **PARTIAL:** result-grid editability UI attaches but `RowOperationError` kinds don't surface distinct messages; Edit row uses plain text inputs (no typed pickers); context-mismatch help is missing. T12 last slice: mutation toast, DetailContent modals, background persist shipped.
+- **MISSING UI:** remaining SEQUENCE (context-mismatch editability help; row-editor typed pickers / saving-state disable; table-load timeout 300s). Workspace-chrome spec: `docs/pocket/spec/2026-08-15-sp4b-workspace-chrome/workspace-chrome.md`.
 
 ---
 
@@ -231,7 +231,7 @@ Every §12.2 row appears here. Extras flagged `§12.2 miss`.
 | Keyboard shortcuts | `KeyboardShortcutsView` + `DragonDBApp.commands` | **DONE** native menu + Accel+T/W/Enter | ⌘T/W/↵ documented and bound | WORKSPACE-CHROME | SHIP — **done** |
 | Cancel query | `QueryState.cancelCurrentQuery` + Stop after 3s | **DONE** hatch Stop/Esc after 3s + `ipc.cancelQuery` | Esc/Stop cancels in-flight run, status “Query cancelled”, results cleared | SEQUENCE | SHIP; §12.2 miss — **done** |
 | Query timeout 300s | `QueryEditorView` / table-load alerts | Hatch timeout **DONE** (`QUERY_TIMEOUT_MS = 300_000` Try Again / Cancel); table-load timeout **MISSING** | Try Again reissues; Cancel dismisses | SEQUENCE | SHIP; §12.2 miss — hatch **done** |
-| Pagination | `QueryState` page cache + `requestPaginatedTableQuery` | **PARTIAL** — page navigation **DONE** (`browse` store `page`, `App.tsx` subscription, `onNextPage`/`onPrevPage`, 100 rows/page, Prev disabled page 0); cached-pages-skip-refetch **not implemented** (every nav re-fetches) | Page N of table browse is 100 rows; cached pages skip refetch | SEQUENCE | SHIP |
+| Pagination | `QueryState` page cache + `requestPaginatedTableQuery` | **DONE** — page navigation plus current-identity 20-page LRU (`browse.readPage`/`writePage`, `LIMIT 101` probe, 100 visible rows, `hasNext` separate; Refresh/Truncate invalidate+reload; Drop clears identity). Visible page stays per-tab `browsePage` (T3). | Page N of table browse is 100 rows; cached pages skip refetch | SEQUENCE | SHIP |
 | JSON viewer | `JSONViewerView` | **DONE** UI — `JsonViewer` now reachable with real `raw` data | Space/toolbar opens pretty JSON of selection | SEQUENCE | SHIP; §12.2 miss — **done** |
 | Mutation toast | `MutationToastView` + `QueryState.showMutationToast` | **DONE** — hosted in `AppWorkspace`; 5s auto-dismiss; View Table browses the schema-qualified table | 5s toast; View Table re-runs browse | SEQUENCE | SHIP; §12.2 miss — **done** |
 | Welcome gating | `shouldShowWelcomeScreen` | **DONE** `WelcomeView` | 0 profiles → welcome | WORKSPACE-CHROME | SHIP; §12.2 miss — **done** |
@@ -578,7 +578,7 @@ Extracted from §2 (FIRST-SLICE rows only):
 7. [x] History sheet from canvas toolbar; global list; Copy; export JSON/CSV/SQL; fail ≠ empty copy. Relative date labels shipped (epoch `created_at`).
 8. [x] Native Help / Keyboard Shortcuts / Settings; Accel+Enter Run (SELECT-only, no-op if disabled); Settings radios persist (grid dates applied).
 
-**Still SEQUENCE after this slice:** context-mismatch editability help; row-editor typed pickers / saving-state disable; table-load timeout 300s; pagination cached-pages-skip-refetch.
+**Still SEQUENCE after this slice:** context-mismatch editability help; row-editor typed pickers / saving-state disable; table-load timeout 300s.
 
 ---
 
@@ -612,7 +612,7 @@ Extracted from §2 (FIRST-SLICE rows only):
 ### Stop conditions honored
 
 - All 52 `Views/` files listed; none missing on disk.
-- First-slice implementation shipped 2026-08-15; workspace chrome shipped 2026-08-15 (`e7b97f5`); remaining SEQUENCE clusters not silently dropped (context-mismatch help, typed row-editor pickers, table-load timeout 300s, pagination page cache).
+- First-slice implementation shipped 2026-08-15; workspace chrome shipped 2026-08-15 (`e7b97f5`); remaining SEQUENCE clusters not silently dropped (context-mismatch help, typed row-editor pickers, table-load timeout 300s).
 - No DROP without unreachable-file evidence.
 - SP-2/SP-3 not claimed incomplete where files show shipped IPC/stores; SEQUENCE UI still missing.
 

@@ -2823,7 +2823,10 @@ describe("App table browser host wiring", () => {
     const ipc = createMockDragonIpc("happy");
     await ipc.createDatabase("analytics");
     vi.spyOn(ipc, "runQuery").mockImplementationOnce(
-      () => new Promise<QueryResult>((resolve) => { release = resolve; }),
+      () =>
+        new Promise<QueryResult>((resolve) => {
+          release = resolve;
+        }),
     );
     const user = userEvent.setup();
     render(<App ipc={ipc} />);
@@ -2877,15 +2880,15 @@ describe("App table browser host wiring", () => {
     const nextPage = () => screen.getByRole("button", { name: ResultsCopy.nextPage });
     await user.click(nextPage());
     await waitFor(() =>
-      expect(
-        runQuery.mock.calls.some((call) => String(call[1]?.text).includes("OFFSET 100")),
-      ).toBe(true),
+      expect(runQuery.mock.calls.some((call) => String(call[1]?.text).includes("OFFSET 100"))).toBe(
+        true,
+      ),
     );
     await user.click(nextPage());
     await waitFor(() =>
-      expect(
-        runQuery.mock.calls.some((call) => String(call[1]?.text).includes("OFFSET 200")),
-      ).toBe(true),
+      expect(runQuery.mock.calls.some((call) => String(call[1]?.text).includes("OFFSET 200"))).toBe(
+        true,
+      ),
     );
 
     await user.click(screen.getAllByRole("tab")[0]!);
@@ -2918,5 +2921,108 @@ describe("App table browser host wiring", () => {
         ),
       ).toHaveLength(1),
     );
+  });
+
+  it("reuses Prev cache and Refresh invalidates before reloading", async () => {
+    const ipc = createMockDragonIpc("happy");
+    vi.spyOn(ipc, "runQuery").mockResolvedValue({
+      columns: ["id"],
+      rows: Array.from({ length: 101 }, (_, index) => [index]),
+      rowsAffected: null,
+      durationMs: 1,
+    });
+    const user = userEvent.setup();
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
+    await user.click(screen.getByRole("button", { name: "users" }));
+    await user.click(await screen.findByRole("button", { name: ResultsCopy.nextPage }));
+    await user.click(screen.getByRole("button", { name: ResultsCopy.prevPage }));
+    expect(ipc.runQuery).toHaveBeenCalledTimes(2);
+
+    await user.click(screen.getAllByRole("button", { name: TablesCopy.menu })[0]!);
+    await user.click(screen.getByRole("menuitem", { name: TablesCopy.refresh }));
+    await waitFor(() => expect(ipc.runQuery).toHaveBeenCalledTimes(3));
+  });
+
+  // Row update/delete invalidation lives in Task 6 with its orchestrator, so
+  // this task covers only the admin boundary it actually owns.
+  it("invalidates all pages and reloads after a successful truncate", async () => {
+    const ipc = createMockDragonIpc("happy");
+    const runQuery = vi.spyOn(ipc, "runQuery").mockResolvedValue({
+      columns: ["id"],
+      rows: Array.from({ length: 101 }, (_, index) => [index]),
+      rowsAffected: null,
+      durationMs: 1,
+    });
+    const user = userEvent.setup();
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
+    await user.click(screen.getByRole("button", { name: "users" }));
+    await user.click(await screen.findByRole("button", { name: ResultsCopy.nextPage }));
+    await user.click(screen.getByRole("button", { name: ResultsCopy.prevPage }));
+    expect(runQuery).toHaveBeenCalledTimes(2);
+
+    await user.click(screen.getAllByRole("button", { name: TablesCopy.menu })[0]!);
+    await user.click(screen.getByRole("menuitem", { name: TablesCopy.truncate }));
+    await user.click(screen.getByRole("button", { name: TablesCopy.confirmTruncate }));
+
+    await waitFor(() => expect(runQuery).toHaveBeenCalledTimes(3));
+    await user.click(screen.getByRole("button", { name: ResultsCopy.nextPage }));
+    await user.click(screen.getByRole("button", { name: ResultsCopy.prevPage }));
+    expect(runQuery.mock.calls.length).toBeGreaterThan(3);
+  });
+
+  it("clears identity instead of reloading a dropped table", async () => {
+    const ipc = createMockDragonIpc("happy");
+    const runQuery = vi.spyOn(ipc, "runQuery").mockResolvedValue({
+      columns: ["id"],
+      rows: Array.from({ length: 101 }, (_, index) => [index]),
+      rowsAffected: null,
+      durationMs: 1,
+    });
+    const user = userEvent.setup();
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
+    await user.click(screen.getByRole("button", { name: "users" }));
+    await screen.findByTestId(ResultsAccessibility.grid);
+    await user.click(screen.getAllByRole("button", { name: TablesCopy.menu })[0]!);
+    await user.click(screen.getByRole("menuitem", { name: TablesCopy.drop }));
+    await user.click(screen.getByRole("button", { name: TablesCopy.confirmDrop }));
+    await waitFor(() => expect(screen.queryByTestId(ResultsAccessibility.grid)).toBeNull());
+    expect(runQuery).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps Prev available when the current page reloads empty", async () => {
+    const ipc = createMockDragonIpc("happy");
+    const runQuery = vi.spyOn(ipc, "runQuery");
+    runQuery
+      .mockResolvedValueOnce({
+        columns: ["id"],
+        rows: Array.from({ length: 101 }, (_, index) => [index]),
+        rowsAffected: null,
+        durationMs: 1,
+      })
+      .mockResolvedValueOnce({
+        columns: ["id"],
+        rows: Array.from({ length: 101 }, (_, index) => [index + 100]),
+        rowsAffected: null,
+        durationMs: 1,
+      })
+      .mockResolvedValueOnce({
+        columns: ["id"],
+        rows: [],
+        rowsAffected: null,
+        durationMs: 1,
+      });
+    const user = userEvent.setup();
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
+    await user.click(screen.getByRole("button", { name: "users" }));
+    await user.click(await screen.findByRole("button", { name: ResultsCopy.nextPage }));
+    await user.click(screen.getAllByRole("button", { name: TablesCopy.menu })[0]!);
+    await user.click(screen.getByRole("menuitem", { name: TablesCopy.refresh }));
+    await waitFor(() => expect(runQuery).toHaveBeenCalledTimes(3));
+    expect(screen.getByRole("button", { name: ResultsCopy.prevPage })).toBeEnabled();
+    expect(screen.getByText(ResultsCopy.noRowsFound)).toBeInTheDocument();
   });
 });

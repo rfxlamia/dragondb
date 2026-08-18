@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { DragonIpc } from "../../src/ipc/contract";
+import type { DragonIpc, QueryResult } from "../../src/ipc/contract";
 import { composeAppStores } from "../../src/stores/compose-app-stores";
 import { runBrowseOnActiveTab } from "../../src/stores/run-browse-on-active-tab";
 
@@ -41,7 +41,8 @@ describe("runBrowseOnActiveTab", () => {
     expect(tab?.selectedTableName).toBe("orders");
     expect(tab?.selectedTableSchema).toBe("public");
     expect(tab?.compact?.rows.length).toBeLessThanOrEqual(100);
-    expect(tab?.raw?.rows.length).toBe(101);
+    expect(tab?.raw?.rows.length).toBe(100);
+    expect(stores.browse.getState().hasNext).toBe(true);
   });
 
   it("does not call truncateTable or dropTable", async () => {
@@ -90,5 +91,83 @@ describe("runBrowseOnActiveTab", () => {
     const tab = stores.tabs.getState().tabs[0];
     expect(tab?.selectedTableName).toBe("customers");
     expect(tab?.raw?.rows).toEqual([[2]]);
+  });
+
+  it("serves a visited page from cache without a second query", async () => {
+    const ipc = composeIpc();
+    const stores = composeAppStores(ipc);
+    await stores.session.getState().connect("P");
+    const table = { schema: "public", name: "orders", tableType: "regular" as const };
+
+    await runBrowseOnActiveTab(stores, ipc, table, 0);
+    await runBrowseOnActiveTab(stores, ipc, table, 1);
+    await runBrowseOnActiveTab(stores, ipc, table, 0);
+
+    expect(ipc.runQuery).toHaveBeenCalledTimes(2);
+    expect(String(vi.mocked(ipc.runQuery).mock.calls[1]?.[1].text)).toMatch(/LIMIT 101 OFFSET 100/);
+    expect(stores.tabs.getState().tabs[0]?.raw?.rows).toHaveLength(100);
+  });
+
+  it("deduplicates two callers for the same missing page", async () => {
+    let release!: (result: QueryResult) => void;
+    const runQuery = vi.fn(
+      () =>
+        new Promise<QueryResult>((resolve) => {
+          release = resolve;
+        }),
+    );
+    const ipc = composeIpc({ runQuery });
+    const stores = composeAppStores(ipc);
+    await stores.session.getState().connect("P");
+    const table = { schema: "public", name: "orders", tableType: "regular" as const };
+
+    const first = runBrowseOnActiveTab(stores, ipc, table, 2);
+    const second = runBrowseOnActiveTab(stores, ipc, table, 2);
+    expect(runQuery).toHaveBeenCalledTimes(1);
+    release({
+      columns: ["id"],
+      rows: Array.from({ length: 101 }, (_, index) => [index]),
+      rowsAffected: null,
+      durationMs: 1,
+    });
+    await Promise.all([first, second]);
+    expect(stores.browse.getState().hasNext).toBe(true);
+    expect(stores.tabs.getState().tabs[0]?.compact?.rows).toHaveLength(100);
+  });
+
+  it("lets a valid late page fill only its own cache entry", async () => {
+    const releases: Array<(result: QueryResult) => void> = [];
+    const page = (start: number): QueryResult => ({
+      columns: ["id"],
+      rows: Array.from({ length: 101 }, (_, index) => [start + index]),
+      rowsAffected: null,
+      durationMs: 1,
+    });
+    const runQuery = vi.fn(
+      () =>
+        new Promise<QueryResult>((resolve) => {
+          releases.push(resolve);
+        }),
+    );
+    const ipc = composeIpc({ runQuery });
+    const stores = composeAppStores(ipc);
+    await stores.session.getState().connect("P");
+    const table = { schema: "public", name: "orders", tableType: "regular" as const };
+
+    const slow = runBrowseOnActiveTab(stores, ipc, table, 1);
+    const fast = runBrowseOnActiveTab(stores, ipc, table, 2);
+    expect(runQuery).toHaveBeenCalledTimes(2);
+
+    releases[1]?.(page(200));
+    await fast;
+    releases[0]?.(page(100));
+    await slow;
+
+    // Page 1 is still a valid entry for this identity, so it may cache …
+    expect(stores.browse.getState().readPage(1)?.rows[0]).toEqual([100]);
+    // … but page 2 stays the visible page and the rendered result.
+    // T3 ruling: visible page lives on the active tab, not browse.page.
+    expect(stores.tabs.getState().tabs[0]?.browsePage).toBe(2);
+    expect(stores.tabs.getState().tabs[0]?.raw?.rows[0]).toEqual([200]);
   });
 });
