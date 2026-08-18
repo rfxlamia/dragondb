@@ -1,62 +1,21 @@
-import type { ConnectionId, DragonIpc, QueryResult, TableRef } from "../ipc/contract";
+import type { DragonIpc, QueryResult, TableRef } from "../ipc/contract";
 import { QUERY_FAILED_MESSAGE, unknownErrorMessage } from "../lib/unknown-error-message";
 import {
   BROWSE_VISIBLE_PAGE_SIZE,
   type BrowseCachedPage,
   type BrowseIdentity,
-  type BrowseRetryTarget,
   browseIdentityMatches,
   browseRetryBlocked,
 } from "./browse-session-store";
 import type { AppStores } from "./compose-app-stores";
+import {
+  createFirstSettlement,
+  createTimerHandles,
+  raceBrowseQuery,
+  settleBrowseTimeout,
+} from "./recover-browse-after-timeout";
 
 export const PAGE_SIZE = BROWSE_VISIBLE_PAGE_SIZE;
-export const BROWSE_TIMEOUT_MS = 300_000;
-export const BROWSE_CANCEL_WAIT_MS = 12_000;
-
-const BROWSE_CANCEL_STUCK_MESSAGE = "Cancellation did not finish. Reconnect, then try again.";
-const BROWSE_CANCEL_FAILED_MESSAGE = "Couldn't cancel this request. Reconnect, then try again.";
-
-export class BrowseTimeoutError extends Error {
-  constructor() {
-    super("Browse timed out");
-    this.name = "BrowseTimeoutError";
-  }
-}
-
-/** Single owner for timeout / cancel-wait handles; always cleared in finally. */
-function createTimerHandles() {
-  const handles: ReturnType<typeof setTimeout>[] = [];
-  return {
-    arm(ms: number, callback: () => void): void {
-      handles.push(setTimeout(callback, ms));
-    },
-    clearAll(): void {
-      for (const handle of handles) clearTimeout(handle);
-      handles.length = 0;
-    },
-  };
-}
-
-/** Single owner for the first terminal event at a concurrency boundary. */
-function createFirstSettlement<T extends string>() {
-  let winner: T | null = null;
-  return {
-    tryWin(candidate: T): boolean {
-      if (winner !== null) return false;
-      winner = candidate;
-      return true;
-    },
-  };
-}
-
-type TimerHandles = ReturnType<typeof createTimerHandles>;
-type Settlement<T extends string> = ReturnType<typeof createFirstSettlement<T>>;
-
-type BrowseRaceOutcome =
-  | { kind: "query"; result: QueryResult }
-  | { kind: "query-error"; error: unknown }
-  | { kind: "timeout" };
 
 function quoteIdentifier(value: string): string {
   return `"${value.replaceAll('"', '""')}"`;
@@ -143,89 +102,112 @@ export async function reloadBrowseOnActiveTab(
   return runBrowseOnActiveTab(stores, ipc, identity.table, page);
 }
 
-function retryTargetFor(identity: BrowseIdentity, page: number): BrowseRetryTarget {
-  return { ...identity, page };
-}
+type BrowseRunContext = {
+  identity: BrowseIdentity;
+  identityAtStart: BrowseIdentity | null;
+  tabId: string;
+  safePage: number;
+  browseGeneration: number;
+};
 
-function raceBrowseQuery(
-  ipc: DragonIpc,
-  connectionId: ConnectionId,
+function beginBrowseOnActiveTab(
+  stores: AppStores,
   table: TableRef,
   page: number,
-  timers: TimerHandles,
-  settlement: Settlement<"query" | "timeout">,
-): Promise<BrowseRaceOutcome> {
-  return new Promise((resolve) => {
-    void ipc
-      .runQuery(connectionId, {
-        text: `SELECT * FROM ${quotedTableSql(table)} LIMIT ${PAGE_SIZE + 1} OFFSET ${page * PAGE_SIZE}`,
-        params: [],
-      })
-      .then(
-        (result) => {
-          if (!settlement.tryWin("query")) return;
-          resolve({ kind: "query", result });
-        },
-        (error: unknown) => {
-          if (!settlement.tryWin("query")) return;
-          resolve({ kind: "query-error", error });
-        },
-      );
-    timers.arm(BROWSE_TIMEOUT_MS, () => {
-      if (!settlement.tryWin("timeout")) return;
-      resolve({ kind: "timeout" });
+): BrowseRunContext {
+  if (browseRetryBlocked(stores.browse.getState().lifecycle)) {
+    throw new Error("Browse recovery in progress");
+  }
+  const identity = liveBrowseIdentity(stores, table);
+  if (!browseIdentityMatches(stores.browse.getState().identity, identity)) {
+    stores.browse.getState().startBrowse(identity);
+  }
+  const safePage = Math.max(0, Math.trunc(page));
+  if (stores.browse.getState().lifecycle.phase === "retryReady") {
+    stores.browse.getState().publish(stores.browse.getState().generation, {
+      lifecycle: { phase: "idle" },
     });
-  });
+  }
+  const browseGeneration = stores.browse.getState().generation;
+  const identityAtStart = stores.browse.getState().identity;
+  stores.browse.getState().selectPage(safePage);
+  stores.tabs.getState().setBrowsePage(identity.tabId, safePage);
+  return { identity, identityAtStart, tabId: identity.tabId, safePage, browseGeneration };
 }
 
-async function waitForBrowseCancellation(
-  ipc: DragonIpc,
-  connectionId: ConnectionId,
+async function serveCachedBrowsePage(
   stores: AppStores,
-  retry: BrowseRetryTarget,
-  timers: TimerHandles,
-): Promise<void> {
-  const cancelWait = createFirstSettlement<"cancel" | "stuck">();
-  await new Promise<void>((resolve) => {
-    const finish = (phase: "retryReady" | "reconnectRequired", error: string | null) => {
-      const generation = stores.browse.getState().generation;
-      stores.browse.getState().publish(generation, {
-        lifecycle: { phase, retry, error },
-      });
-      resolve();
-    };
-    timers.arm(BROWSE_CANCEL_WAIT_MS, () => {
-      if (!cancelWait.tryWin("stuck")) return;
-      finish("reconnectRequired", BROWSE_CANCEL_STUCK_MESSAGE);
-    });
-    void ipc.cancelQuery(connectionId).then(
-      () => {
-        if (!cancelWait.tryWin("cancel")) return;
-        finish("retryReady", null);
-      },
-      (error: unknown) => {
-        if (!cancelWait.tryWin("cancel")) return;
-        finish("reconnectRequired", unknownErrorMessage(error, BROWSE_CANCEL_FAILED_MESSAGE));
-      },
+  table: TableRef,
+  ctx: BrowseRunContext,
+  cached: BrowseCachedPage,
+): Promise<QueryResult> {
+  stores.browse.getState().publish(ctx.browseGeneration, {
+    hasNext: cached.hasNext,
+    lifecycle: { phase: "ready" },
+  });
+  const tabGeneration = stores.tabs.getState().beginRun(ctx.tabId, { preserveResults: true });
+  await publishBrowsePageToTab(stores, ctx.tabId, table, cached, tabGeneration);
+  return cachedPageToQueryResult(cached);
+}
+
+async function fetchAndPublishBrowsePage(
+  stores: AppStores,
+  ipc: DragonIpc,
+  table: TableRef,
+  ctx: BrowseRunContext,
+): Promise<QueryResult> {
+  const tabGeneration = stores.tabs.getState().beginRun(ctx.tabId);
+  const timers = createTimerHandles();
+  const settlement = createFirstSettlement<"query" | "timeout">();
+  try {
+    const outcome = await raceBrowseQuery(
+      ipc,
+      ctx.identity.connectionId,
+      table,
+      ctx.safePage,
+      timers,
+      settlement,
     );
-  });
-}
+    if (outcome.kind === "timeout") {
+      return await settleBrowseTimeout(
+        stores,
+        ipc,
+        ctx.identityAtStart ?? ctx.identity,
+        ctx.safePage,
+        timers,
+      );
+    }
+    if (outcome.kind === "query-error") {
+      if (stores.session.getState().isConnected && tabGeneration !== null) {
+        stores.tabs
+          .getState()
+          .applyRunFailure(
+            ctx.tabId,
+            unknownErrorMessage(outcome.error, QUERY_FAILED_MESSAGE),
+            tabGeneration,
+          );
+      }
+      throw outcome.error;
+    }
 
-async function settleBrowseTimeout(
-  stores: AppStores,
-  ipc: DragonIpc,
-  identity: BrowseIdentity,
-  page: number,
-  timers: TimerHandles,
-): Promise<never> {
-  stores.browse.getState().invalidateCache();
-  const retry = retryTargetFor(identity, page);
-  const generation = stores.browse.getState().generation;
-  stores.browse.getState().publish(generation, {
-    lifecycle: { phase: "cancelling", retry, error: null },
-  });
-  await waitForBrowseCancellation(ipc, identity.connectionId, stores, retry, timers);
-  throw new BrowseTimeoutError();
+    const visible = visibleBrowsePage(outcome.result);
+    const stillCurrentIdentity = browseIdentityMatches(
+      stores.browse.getState().identity,
+      ctx.identityAtStart ?? ctx.identity,
+    );
+    if (stillCurrentIdentity) {
+      stores.browse.getState().writePage(ctx.browseGeneration, ctx.safePage, visible);
+    }
+    if (isVisibleBrowsePage(stores, ctx.tabId, ctx.safePage)) {
+      await publishBrowsePageToTab(stores, ctx.tabId, table, visible, tabGeneration);
+    }
+    stores.browse.getState().publish(stores.browse.getState().generation, {
+      lifecycle: { phase: "ready" },
+    });
+    return cachedPageToQueryResult(visible);
+  } finally {
+    timers.clearAll();
+  }
 }
 
 export async function runBrowseOnActiveTab(
@@ -234,91 +216,12 @@ export async function runBrowseOnActiveTab(
   table: TableRef,
   page: number,
 ): Promise<QueryResult> {
-  if (browseRetryBlocked(stores.browse.getState().lifecycle)) {
-    throw new Error("Browse recovery in progress");
-  }
-  const identity = liveBrowseIdentity(stores, table);
-  if (!browseIdentityMatches(stores.browse.getState().identity, identity)) {
-    stores.browse.getState().startBrowse(identity);
-  }
-  const tabId = identity.tabId;
-  const safePage = Math.max(0, Math.trunc(page));
-  const startingLifecycle = stores.browse.getState().lifecycle;
-  if (startingLifecycle.phase === "retryReady") {
-    stores.browse.getState().publish(stores.browse.getState().generation, {
-      lifecycle: { phase: "idle" },
-    });
-  }
-  const browseGeneration = stores.browse.getState().generation;
-  const identityAtStart = stores.browse.getState().identity;
-
-  stores.browse.getState().selectPage(safePage);
-  stores.tabs.getState().setBrowsePage(tabId, safePage);
-
-  const cached = stores.browse.getState().readPage(safePage);
+  const ctx = beginBrowseOnActiveTab(stores, table, page);
+  const cached = stores.browse.getState().readPage(ctx.safePage);
   if (cached !== null) {
-    stores.browse.getState().publish(browseGeneration, {
-      hasNext: cached.hasNext,
-      lifecycle: { phase: "ready" },
-    });
-    const tabGeneration = stores.tabs.getState().beginRun(tabId, { preserveResults: true });
-    await publishBrowsePageToTab(stores, tabId, table, cached, tabGeneration);
-    return cachedPageToQueryResult(cached);
+    return serveCachedBrowsePage(stores, table, ctx, cached);
   }
-
-  return stores.browse.getState().ownBrowsePageRequest(safePage, async () => {
-    const tabGeneration = stores.tabs.getState().beginRun(tabId);
-    const timers = createTimerHandles();
-    const settlement = createFirstSettlement<"query" | "timeout">();
-    try {
-      const outcome = await raceBrowseQuery(
-        ipc,
-        identity.connectionId,
-        table,
-        safePage,
-        timers,
-        settlement,
-      );
-      if (outcome.kind === "timeout") {
-        return await settleBrowseTimeout(
-          stores,
-          ipc,
-          identityAtStart ?? identity,
-          safePage,
-          timers,
-        );
-      }
-      if (outcome.kind === "query-error") {
-        if (stores.session.getState().isConnected && tabGeneration !== null) {
-          stores.tabs
-            .getState()
-            .applyRunFailure(
-              tabId,
-              unknownErrorMessage(outcome.error, QUERY_FAILED_MESSAGE),
-              tabGeneration,
-            );
-        }
-        throw outcome.error;
-      }
-
-      const result = outcome.result;
-      const visible = visibleBrowsePage(result);
-      const stillCurrentIdentity = browseIdentityMatches(
-        stores.browse.getState().identity,
-        identityAtStart ?? identity,
-      );
-      if (stillCurrentIdentity) {
-        stores.browse.getState().writePage(browseGeneration, safePage, visible);
-      }
-      if (isVisibleBrowsePage(stores, tabId, safePage)) {
-        await publishBrowsePageToTab(stores, tabId, table, visible, tabGeneration);
-      }
-      stores.browse.getState().publish(stores.browse.getState().generation, {
-        lifecycle: { phase: "ready" },
-      });
-      return cachedPageToQueryResult(visible);
-    } finally {
-      timers.clearAll();
-    }
-  });
+  return stores.browse.getState().ownBrowsePageRequest(ctx.safePage, () =>
+    fetchAndPublishBrowsePage(stores, ipc, table, ctx),
+  );
 }
