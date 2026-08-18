@@ -209,4 +209,26 @@ describe("composeAppStores", () => {
     expect(listSavedQueries).toHaveBeenCalledOnce();
     expect(listQueryFolders).toHaveBeenCalledOnce();
   });
+
+  it("composes an isolated browse store for each app store graph", () => {
+    const ipc = {
+      connectProfile: vi.fn(async () => ({ connectionId: "c1", profileId: "P", database: "shop" })),
+      disconnect: vi.fn(async () => undefined),
+      listTables: vi.fn(async () => []),
+      listColumns: vi.fn(async () => []),
+      saveTabState: vi.fn(async () => undefined),
+      deleteTabState: vi.fn(async () => undefined),
+      listTabStates: vi.fn(async () => []),
+    } as unknown as DragonIpc;
+    const left = composeAppStores(ipc);
+    const right = composeAppStores(ipc);
+    left.browse.getState().startBrowse({
+      tabId: "t1",
+      connectionId: "c1",
+      database: "shop",
+      table: { schema: "public", name: "orders", tableType: "regular" },
+    });
+    expect(left.browse.getState().identity?.database).toBe("shop");
+    expect(right.browse.getState().identity).toBeNull();
+  });
 });
