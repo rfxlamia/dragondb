@@ -103,4 +103,12 @@ describe("workspace-accelerators", () => {
     expect(src).toMatch(/CmdOrCtrl\+W/);
     expect(src).toMatch(/\.accelerator\("CmdOrCtrl\+Enter"\)/);
   });
+
+  it("src-tauri lib.rs attaches predefined Edit clipboard items to the native menu", () => {
+    const src = readFileSync(join(process.cwd(), "src-tauri/src/lib.rs"), "utf8");
+    expect(src).toMatch(
+      /SubmenuBuilder::new\(handle, "Edit"\)[\s\S]*?\.undo\(\)[\s\S]*?\.redo\(\)[\s\S]*?\.cut\(\)[\s\S]*?\.copy\(\)[\s\S]*?\.paste\(\)[\s\S]*?\.select_all\(\)[\s\S]*?\.build\(\)\?/,
+    );
+    expect(src).toMatch(/\.item\(&edit_menu\)/);
+  });
 });

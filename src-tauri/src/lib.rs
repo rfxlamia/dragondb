@@ -38,6 +38,18 @@ fn install_native_menu(app: &tauri::App) -> tauri::Result<()> {
         .separator()
         .item(&run_query)
         .build()?;
+    // WKWebView routes Cmd/Ctrl+C/V/X/A/Z through native Edit first-responder
+    // items. Custom MenuItem accelerators do not deliver paste to the webview.
+    let edit_menu = SubmenuBuilder::new(handle, "Edit")
+        .undo()
+        .redo()
+        .separator()
+        .cut()
+        .copy()
+        .paste()
+        .separator()
+        .select_all()
+        .build()?;
     let help_menu = SubmenuBuilder::new(handle, "Help")
         .item(&help)
         .item(&shortcuts)
@@ -55,7 +67,11 @@ fn install_native_menu(app: &tauri::App) -> tauri::Result<()> {
             .build()?;
         builder = builder.item(&app_menu);
     }
-    let menu = builder.item(&file_menu).item(&help_menu).build()?;
+    let menu = builder
+        .item(&file_menu)
+        .item(&edit_menu)
+        .item(&help_menu)
+        .build()?;
     app.set_menu(menu)?;
     app.on_menu_event(|app, event| {
         let id = event.id().as_ref();
