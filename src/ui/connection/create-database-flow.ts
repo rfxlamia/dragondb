@@ -15,6 +15,7 @@ export type CreateDatabaseFlowAction =
   | { type: "createFailed"; message: string }
   | { type: "refreshFailed"; message: string }
   | { type: "connectRequested" }
+  | { type: "connectSucceeded" }
   | { type: "connectFailed"; message: string }
   | { type: "reset" };
 
@@ -72,6 +73,13 @@ export function reduceCreateDatabaseFlow(
       return {
         ...state,
         phase: "connecting",
+        connectError: null,
+      };
+    case "connectSucceeded":
+      if (state.phase !== "connecting") return state;
+      return {
+        ...state,
+        phase: "created",
         connectError: null,
       };
     case "connectFailed":

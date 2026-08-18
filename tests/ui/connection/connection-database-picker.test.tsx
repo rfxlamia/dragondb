@@ -139,4 +139,92 @@ describe("ConnectionDatabasePicker", () => {
     expect(screen.getByText(ConnectionCopy.databaseCreated)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: ConnectionCopy.connect })).toBeEnabled();
   });
+
+  it("does not capture window keydown and keeps native typing and Cancel", async () => {
+    const user = userEvent.setup();
+    const add = vi.spyOn(window, "addEventListener");
+    const onCreate = vi.fn(async () => undefined);
+    render(
+      <ConnectionDatabasePicker
+        isConnected={true}
+        databases={["postgres"]}
+        selected="postgres"
+        onSelect={vi.fn()}
+        onCreateDatabase={onCreate}
+        profileDatabase="postgres"
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: ConnectionCopy.createDatabase }));
+    const capturingKeydown = add.mock.calls.filter(([type, , options]) => {
+      if (type !== "keydown") return false;
+      return options === true || (typeof options === "object" && options?.capture === true);
+    });
+    expect(capturingKeydown).toHaveLength(0);
+    add.mockRestore();
+
+    const name = screen.getByLabelText(ConnectionCopy.databaseName) as HTMLInputElement;
+    await user.type(name, "shop");
+    name.setSelectionRange(2, 2);
+    await user.keyboard("X");
+    expect(name).toHaveValue("shXop");
+
+    name.setSelectionRange(0, 5);
+    await user.keyboard("ab");
+    expect(name).toHaveValue("ab");
+
+    await user.click(screen.getByRole("combobox"));
+    await user.keyboard("z");
+    expect(name).toHaveValue("ab");
+
+    screen.getByRole("button", { name: ConnectionCopy.cancel }).focus();
+    await user.keyboard("{Enter}");
+    expect(onCreate).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog", { name: ConnectionCopy.createDatabase })).toBeNull();
+  });
+
+  it("activates Cancel with Space and ignores keys while a button is focused", async () => {
+    const user = userEvent.setup();
+    render(
+      <ConnectionDatabasePicker
+        isConnected={true}
+        databases={["postgres"]}
+        selected="postgres"
+        onSelect={vi.fn()}
+        onCreateDatabase={vi.fn(async () => undefined)}
+        profileDatabase="postgres"
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: ConnectionCopy.createDatabase }));
+    const name = screen.getByLabelText(ConnectionCopy.databaseName);
+    await user.type(name, "shop");
+    const cancel = screen.getByRole("button", { name: ConnectionCopy.cancel });
+    cancel.focus();
+    await user.keyboard("x");
+    expect(name).toHaveValue("shop");
+    await user.keyboard(" ");
+    expect(screen.queryByRole("dialog", { name: ConnectionCopy.createDatabase })).toBeNull();
+  });
+
+  it("lets Cancel and Escape work after Connect resolves without a switch", async () => {
+    const user = userEvent.setup();
+    render(
+      <ConnectionDatabasePicker
+        isConnected={true}
+        databases={["postgres"]}
+        selected="postgres"
+        onSelect={vi.fn()}
+        onCreateDatabase={vi.fn(async () => undefined)}
+        profileDatabase="postgres"
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: ConnectionCopy.createDatabase }));
+    await user.type(screen.getByLabelText(ConnectionCopy.databaseName), "shop{Enter}");
+    await screen.findByText(ConnectionCopy.databaseCreated);
+    await user.click(screen.getByRole("button", { name: ConnectionCopy.connect }));
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: ConnectionCopy.cancel })).toBeEnabled();
+    });
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog", { name: ConnectionCopy.createDatabase })).toBeNull();
+  });
 });

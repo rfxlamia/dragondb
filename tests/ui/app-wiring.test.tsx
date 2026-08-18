@@ -2779,15 +2779,16 @@ describe("App table browser host wiring", () => {
     await connectFirst(user, ipc);
 
     await user.click(screen.getByRole("button", { name: ConnectionCopy.createDatabase }));
-    await user.type(screen.getByTestId(ConnectionAccessibility.createDatabaseName), "shop{Enter}");
+    fireEvent.change(screen.getByTestId(ConnectionAccessibility.createDatabaseName), {
+      target: { value: "shop" },
+    });
+    await user.click(screen.getByRole("button", { name: ConnectionCopy.create }));
     await screen.findByText(ConnectionCopy.databaseCreated);
     expect(createDatabase).toHaveBeenCalledTimes(1);
     expect(switchDatabase).not.toHaveBeenCalledWith(expect.any(String), "shop");
 
     await user.click(screen.getByRole("button", { name: ConnectionCopy.connect }));
-    await waitFor(() =>
-      expect(switchDatabase).toHaveBeenCalledWith(expect.any(String), "shop"),
-    );
+    await waitFor(() => expect(switchDatabase).toHaveBeenCalledWith(expect.any(String), "shop"));
     expect(createDatabase).toHaveBeenCalledTimes(1);
     expect(runQuery).not.toHaveBeenCalledWith(
       expect.anything(),
@@ -2805,9 +2806,14 @@ describe("App table browser host wiring", () => {
     listTables.mockRejectedValueOnce(new Error("catalog offline"));
 
     await user.click(screen.getByRole("button", { name: ConnectionCopy.createDatabase }));
-    await user.type(screen.getByTestId(ConnectionAccessibility.createDatabaseName), "shop{Enter}");
+    fireEvent.change(screen.getByTestId(ConnectionAccessibility.createDatabaseName), {
+      target: { value: "shop" },
+    });
+    await user.click(screen.getByRole("button", { name: ConnectionCopy.create }));
     await user.click(await screen.findByRole("button", { name: ConnectionCopy.connect }));
-    await screen.findByRole("alert");
+    const alert = await screen.findByRole("alert");
+    expect(alert.tagName).toBe("P");
+    expect(alert).toHaveTextContent(ConnectionCopy.tablesLoadError);
     expect(switchDatabase).toHaveBeenCalledTimes(1);
     expect(document.title).toBe("shop");
   });

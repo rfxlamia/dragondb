@@ -511,24 +511,22 @@ export function ConnectionPanel(props: ConnectionPanelProps): React.JSX.Element 
       ) : null}
 
       {sessionClaimed ? (
-        <div role={tablesErrorMessage ? "alert" : undefined}>
-          <ConnectionTablesList
-            tables={tables}
-            tablesLoading={tablesLoading}
-            tablesErrorMessage={tablesErrorMessage}
-            onBrowse={onBrowse}
-            columnsByTable={columnsByTable}
-            executing={executing}
-            onDrop={onDrop}
-            onTruncate={onTruncate}
-            onGenerateDdl={onGenerateDdl}
-            onRefresh={onRefresh}
-            onFetchAll={onFetchAll}
-            onExpand={onExpand}
-            saveCsvFile={saveCsvFile}
-            saveTextFile={saveTextFile}
-          />
-        </div>
+        <ConnectionTablesList
+          tables={tables}
+          tablesLoading={tablesLoading}
+          tablesErrorMessage={tablesErrorMessage}
+          onBrowse={onBrowse}
+          columnsByTable={columnsByTable}
+          executing={executing}
+          onDrop={onDrop}
+          onTruncate={onTruncate}
+          onGenerateDdl={onGenerateDdl}
+          onRefresh={onRefresh}
+          onFetchAll={onFetchAll}
+          onExpand={onExpand}
+          saveCsvFile={saveCsvFile}
+          saveTextFile={saveTextFile}
+        />
       ) : null}
 
       {formVisible ? (

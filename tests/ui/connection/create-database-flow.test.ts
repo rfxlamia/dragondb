@@ -36,6 +36,14 @@ describe("create database flow", () => {
 
     state = reduceCreateDatabaseFlow(state, { type: "connectRequested" });
     expect(state.phase).toBe("connecting");
+    const connecting = state;
+    expect(reduceCreateDatabaseFlow(connecting, { type: "connectRequested" })).toBe(connecting);
+
+    state = reduceCreateDatabaseFlow(connecting, { type: "connectSucceeded" });
+    expect(state).toMatchObject({ phase: "created", name: "shop", connectError: null });
+    expect(reduceCreateDatabaseFlow(state, { type: "connectSucceeded" })).toBe(state);
+
+    state = reduceCreateDatabaseFlow(state, { type: "connectRequested" });
     state = reduceCreateDatabaseFlow(state, {
       type: "connectFailed",
       message: "offline",
