@@ -23,7 +23,7 @@ import type {
   TabState,
 } from "../../stores/tabs-store";
 import { QueriesColumn } from "../library/queries-column";
-import { QueryResultsPane } from "../results/query-results-pane";
+import { QueryResultsPane, type RowReloadRecovery } from "../results/query-results-pane";
 import { MutationToast, type MutationToastTable } from "./mutation-toast";
 import { TabBar } from "./tab-bar";
 import { formatTabTitle } from "./tab-bar-copy";
@@ -58,9 +58,12 @@ export type AppWorkspaceProps = {
   onUpdateRow: (
     patch: Record<string, unknown | null>,
     primaryKey: Record<string, unknown>,
-  ) => void | Promise<void>;
-  onDeleteRows: (primaryKeys: Record<string, unknown>[]) => void | Promise<void>;
+  ) => undefined | Promise<{ kind: "ok" } | RowReloadRecovery | undefined>;
+  onDeleteRows: (
+    primaryKeys: Record<string, unknown>[],
+  ) => undefined | Promise<{ kind: "ok" } | RowReloadRecovery | undefined>;
   onSaveCsv: (csv: string) => void | Promise<void>;
+  onRetryRowReload: () => void | Promise<void>;
   mutationToast: MutationToastData | null;
   canvas: React.ReactNode;
   onNewTab: () => void;
@@ -113,6 +116,7 @@ export function AppWorkspace(props: AppWorkspaceProps): React.JSX.Element {
     onUpdateRow,
     onDeleteRows,
     onSaveCsv,
+    onRetryRowReload,
     mutationToast,
     canvas,
     onNewTab,
@@ -238,6 +242,7 @@ export function AppWorkspace(props: AppWorkspaceProps): React.JSX.Element {
             onUpdateRow={onUpdateRow}
             onDeleteRows={onDeleteRows}
             onSaveCsv={onSaveCsv}
+            onRetryRowReload={onRetryRowReload}
           />
         </div>
       }

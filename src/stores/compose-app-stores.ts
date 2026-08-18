@@ -5,10 +5,7 @@
  */
 import type { StoreApi } from "zustand/vanilla";
 import type { DragonIpc, ProfileId } from "../ipc/contract";
-import {
-  createBrowseSessionStore,
-  type BrowseSessionState,
-} from "./browse-session-store";
+import { type BrowseSessionState, createBrowseSessionStore } from "./browse-session-store";
 import { createHistoryStore, type HistoryState } from "./history-store";
 import { createLibraryStore, type LibraryState } from "./library-store";
 import { createSchemaStore, type SchemaState } from "./schema-store";

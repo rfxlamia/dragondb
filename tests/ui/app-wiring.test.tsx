@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -3062,6 +3062,105 @@ describe("App table browser host wiring", () => {
     await user.click(screen.getByRole("button", { name: ResultsCopy.edit }));
     expect(screen.getByLabelText("id")).toBeDisabled();
     expect(screen.getByLabelText("occurred_on")).toHaveAttribute("type", "date");
+  });
+
+  it("retries only the row reload after a committed update", async () => {
+    const ipc = createMockDragonIpc("happy");
+    const updateRow = vi.spyOn(ipc, "updateRow").mockResolvedValue(undefined);
+    const runQuery = vi.spyOn(ipc, "runQuery");
+    runQuery
+      .mockResolvedValueOnce({
+        columns: ["id", "name"],
+        rows: [[1, "before"]],
+        rowsAffected: null,
+        durationMs: 1,
+      })
+      .mockRejectedValueOnce(new Error("reload offline"))
+      .mockResolvedValueOnce({
+        columns: ["id", "name"],
+        rows: [[1, "after"]],
+        rowsAffected: null,
+        durationMs: 1,
+      });
+    const user = userEvent.setup();
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
+    await user.click(screen.getByRole("button", { name: "users" }));
+    await user.click((await screen.findAllByRole("row"))[1]!);
+    await user.click(screen.getByRole("button", { name: ResultsCopy.edit }));
+    await user.click(screen.getByRole("button", { name: ResultsCopy.save }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("could not be reloaded");
+    expect(updateRow).toHaveBeenCalledTimes(1);
+
+    await user.click(screen.getByRole("button", { name: ResultsCopy.reloadRows }));
+    await waitFor(() => expect(screen.getByText("after")).toBeInTheDocument());
+    expect(updateRow).toHaveBeenCalledTimes(1);
+    expect(runQuery).toHaveBeenCalledTimes(3);
+  });
+
+  const browsePage = (start: number) => ({
+    columns: ["id"],
+    rows: Array.from({ length: 101 }, (_, index) => [start + index]),
+    rowsAffected: null,
+    durationMs: 1,
+  });
+
+  it.each(["update", "delete"] as const)(
+    "invalidates all pages and reloads after a successful %s",
+    async (operation) => {
+      const ipc = createMockDragonIpc("happy");
+      vi.spyOn(ipc, "updateRow").mockResolvedValue(undefined);
+      vi.spyOn(ipc, "deleteRows").mockResolvedValue(undefined);
+      const runQuery = vi.spyOn(ipc, "runQuery").mockResolvedValue(browsePage(0));
+      const user = userEvent.setup();
+      render(<App ipc={ipc} />);
+      await connectFirst(user, ipc);
+      await user.click(screen.getByRole("button", { name: "users" }));
+      await user.click(await screen.findByRole("button", { name: ResultsCopy.nextPage }));
+      await user.click(screen.getByRole("button", { name: ResultsCopy.prevPage }));
+      expect(runQuery).toHaveBeenCalledTimes(2);
+
+      await user.click((await screen.findAllByRole("row"))[1]!);
+      await user.click(
+        operation === "update"
+          ? screen.getByRole("button", { name: ResultsCopy.edit })
+          : within(screen.getByTestId(ResultsAccessibility.toolbar)).getByRole("button", {
+              name: ResultsCopy.delete,
+            }),
+      );
+      await user.click(
+        operation === "update"
+          ? screen.getByRole("button", { name: ResultsCopy.save })
+          : screen.getAllByRole("button", { name: ResultsCopy.delete }).slice(-1)[0]!,
+      );
+
+      await waitFor(() => expect(runQuery).toHaveBeenCalledTimes(3));
+      await user.click(screen.getByRole("button", { name: ResultsCopy.nextPage }));
+      await user.click(screen.getByRole("button", { name: ResultsCopy.prevPage }));
+      expect(runQuery.mock.calls.length).toBeGreaterThan(3);
+    },
+  );
+
+  it("keeps cached pages when an update fails", async () => {
+    const ipc = createMockDragonIpc("happy");
+    vi.spyOn(ipc, "updateRow").mockRejectedValue({ kind: "updateFailed", message: "denied" });
+    const runQuery = vi.spyOn(ipc, "runQuery").mockResolvedValue(browsePage(0));
+    const user = userEvent.setup();
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
+    await user.click(screen.getByRole("button", { name: "users" }));
+    await user.click(await screen.findByRole("button", { name: ResultsCopy.nextPage }));
+    await user.click(screen.getByRole("button", { name: ResultsCopy.prevPage }));
+    expect(runQuery).toHaveBeenCalledTimes(2);
+
+    await user.click((await screen.findAllByRole("row"))[1]!);
+    await user.click(screen.getByRole("button", { name: ResultsCopy.edit }));
+    await user.click(screen.getByRole("button", { name: ResultsCopy.save }));
+    await screen.findByRole("alert");
+    await user.click(screen.getByRole("button", { name: ResultsCopy.cancel }));
+    await user.click(screen.getByRole("button", { name: ResultsCopy.nextPage }));
+    await user.click(screen.getByRole("button", { name: ResultsCopy.prevPage }));
+    expect(runQuery).toHaveBeenCalledTimes(2);
   });
 
   it("does not start a second browse until explicit reconnect completes", async () => {

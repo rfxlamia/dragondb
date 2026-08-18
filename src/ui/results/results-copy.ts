@@ -28,6 +28,9 @@ export const ResultsCopy = {
   browseTimeoutTitle: "Table load timed out",
   browseTimeoutBody:
     "This table took too long to load. Wait for the request to cancel, then try again.",
+  reloadRows: "Reload rows",
+  rowReloadFailed: "The row was saved, but the page could not be reloaded.",
+  rowsReloadFailed: "The selected rows were deleted, but the page could not be reloaded.",
 } as const;
 
 export function deleteRowsPrompt(count: number): string {

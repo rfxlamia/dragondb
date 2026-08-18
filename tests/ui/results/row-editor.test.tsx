@@ -116,4 +116,42 @@ describe("RowEditor", () => {
     await user.click(screen.getByRole("button", { name: ResultsCopy.save }));
     expect(onSubmit).toHaveBeenCalledWith({ note: "keep me" });
   });
+
+  it("keeps a failed draft and blocks duplicate Save while pending", async () => {
+    let rejectSave!: (reason: unknown) => void;
+    const onSubmit = vi.fn(
+      () =>
+        new Promise<void>((_resolve, reject) => {
+          rejectSave = reject;
+        }),
+    );
+    const user = userEvent.setup();
+    render(
+      <RowEditor
+        selectedCount={1}
+        columns={[
+          column({ name: "occurred_on", dataType: "date" }),
+          column({ name: "note", isNullable: true }),
+        ]}
+        values={["2026-08-18", "launch"]}
+        onSubmit={onSubmit}
+        onCancel={vi.fn()}
+      />,
+    );
+    await user.clear(screen.getByLabelText("occurred_on"));
+    await user.type(screen.getByLabelText("occurred_on"), "2026-08-19");
+    await user.clear(screen.getByLabelText("note"));
+    await user.type(screen.getByLabelText("note"), "retry me");
+    await user.click(screen.getByRole("button", { name: ResultsCopy.save }));
+    await user.keyboard("{Enter}");
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("button", { name: ResultsCopy.save })).toBeDisabled();
+    expect(screen.getByRole("button", { name: ResultsCopy.cancel })).toBeDisabled();
+
+    rejectSave({ kind: "updateFailed", message: "denied" });
+    expect(await screen.findByRole("alert")).toHaveTextContent("Your changes are still here");
+    expect(screen.getByLabelText("occurred_on")).toHaveValue("2026-08-19");
+    expect(screen.getByLabelText("note")).toHaveValue("retry me");
+    expect(screen.getByRole("button", { name: ResultsCopy.save })).toBeEnabled();
+  });
 });

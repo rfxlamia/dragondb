@@ -1,6 +1,6 @@
 import { useContext, useMemo, useState } from "react";
-import { toCsv } from "../../lib/csv-exporter";
 import type { ColumnInfo } from "../../ipc/contract";
+import { toCsv } from "../../lib/csv-exporter";
 import type { QueryResultsDateFormat } from "../../lib/date-format-setting";
 import { determineEditability } from "../../lib/query-editability";
 import type { BrowseLifecycle } from "../../stores/browse-session-store";
@@ -23,6 +23,11 @@ import { deleteRowsPrompt, ResultsCopy } from "./results-copy";
 import { RowEditor } from "./row-editor";
 import "./query-results.css";
 
+export type RowReloadRecovery = {
+  kind: "reloadFailed";
+  message: string;
+};
+
 export function QueryResultsPane(props: {
   status: TabRunStatus;
   compact: TabResultGrid | null | undefined;
@@ -39,9 +44,12 @@ export function QueryResultsPane(props: {
   onUpdateRow?: (
     patch: Record<string, unknown | null>,
     primaryKey: Record<string, unknown>,
-  ) => void | Promise<void>;
-  onDeleteRows?: (primaryKeys: Record<string, unknown>[]) => void | Promise<void>;
+  ) => undefined | Promise<{ kind: "ok" } | RowReloadRecovery | undefined>;
+  onDeleteRows?: (
+    primaryKeys: Record<string, unknown>[],
+  ) => undefined | Promise<{ kind: "ok" } | RowReloadRecovery | undefined>;
   onSaveCsv?: (csv: string) => void | Promise<void>;
+  onRetryRowReload?: () => void | Promise<void>;
   browseLifecycle?: BrowseLifecycle;
   onBrowseTryAgain?: () => void;
   onBrowseReconnect?: () => void;
@@ -53,9 +61,39 @@ export function QueryResultsPane(props: {
   const onBrowseTryAgain = props.onBrowseTryAgain ?? timeoutContext?.onTryAgain;
   const onBrowseReconnect = props.onBrowseReconnect ?? timeoutContext?.onReconnect;
   const onBrowseCancel = props.onBrowseCancel ?? timeoutContext?.onCancel;
+  const [reloadRecovery, setReloadRecovery] = useState<RowReloadRecovery | null>(null);
+
+  async function retryReload(): Promise<void> {
+    try {
+      await props.onRetryRowReload?.();
+      setReloadRecovery(null);
+    } catch {
+      /* keep the reload-only alert; never repeat the mutation */
+    }
+  }
+
   return (
     <div className="query-results" data-testid={ResultsAccessibility.pane}>
-      {renderPaneBody(props, dateFormat)}
+      {renderPaneBody(props, dateFormat, setReloadRecovery)}
+      {reloadRecovery ? (
+        <div className="query-results__reload-recovery">
+          <p
+            className="query-results__dialog-error"
+            role="alert"
+            data-testid={ResultsAccessibility.rowOperationAlert}
+          >
+            {reloadRecovery.message}
+          </p>
+          <button
+            type="button"
+            className="query-results__btn query-results__btn--primary"
+            data-testid={ResultsAccessibility.reloadRows}
+            onClick={() => void retryReload()}
+          >
+            {ResultsCopy.reloadRows}
+          </button>
+        </div>
+      ) : null}
       {browseLifecycle !== undefined &&
       onBrowseTryAgain !== undefined &&
       onBrowseReconnect !== undefined &&
@@ -74,6 +112,7 @@ export function QueryResultsPane(props: {
 function renderPaneBody(
   props: Parameters<typeof QueryResultsPane>[0],
   dateFormat: QueryResultsDateFormat,
+  onReloadFailed: (recovery: RowReloadRecovery) => void,
 ): React.JSX.Element {
   switch (props.status.kind) {
     case "idle":
@@ -102,12 +141,15 @@ function renderPaneBody(
         </p>
       );
     case "ok":
-      return <ResultGrid {...props} dateFormat={dateFormat} />;
+      return <ResultGrid {...props} dateFormat={dateFormat} onReloadFailed={onReloadFailed} />;
   }
 }
 
 function ResultGrid(
-  props: Parameters<typeof QueryResultsPane>[0] & { dateFormat: QueryResultsDateFormat },
+  props: Parameters<typeof QueryResultsPane>[0] & {
+    dateFormat: QueryResultsDateFormat;
+    onReloadFailed: (recovery: RowReloadRecovery) => void;
+  },
 ): React.JSX.Element {
   const compact = props.compact;
   const columns = compact?.columns ?? [];
@@ -115,7 +157,9 @@ function ResultGrid(
   const rawGrid = props.raw;
   const dateFormat = props.dateFormat;
   const columnMetadata = props.columnMetadata ?? [];
-  const pkColumns = columnMetadata.filter((column) => column.isPrimaryKey).map((column) => column.name);
+  const pkColumns = columnMetadata
+    .filter((column) => column.isPrimaryKey)
+    .map((column) => column.name);
 
   const [filter, setFilter] = useState("");
   const [sort, setSort] = useState<{ column: number; dir: "asc" | "desc" } | null>(null);
@@ -210,17 +254,23 @@ function ResultGrid(
   }
 
   async function confirmDelete(): Promise<void> {
-    await props.onDeleteRows?.(selectedPrimaryKeys());
+    const outcome = await props.onDeleteRows?.(selectedPrimaryKeys());
     setDeleteOpen(false);
     setSelected([]);
+    if (outcome !== undefined && outcome.kind === "reloadFailed") {
+      props.onReloadFailed(outcome);
+    }
   }
 
   async function submitEdit(patch: Record<string, unknown | null>): Promise<void> {
     const keys = selectedPrimaryKeys();
     const pk = keys[0];
     if (pk === undefined) return;
-    await props.onUpdateRow?.(patch, pk);
+    const outcome = await props.onUpdateRow?.(patch, pk);
     setEditorOpen(false);
+    if (outcome !== undefined && outcome.kind === "reloadFailed") {
+      props.onReloadFailed(outcome);
+    }
   }
 
   const editorValues =
@@ -334,7 +384,7 @@ function ResultGrid(
           selectedCount={selected.length}
           columns={editorColumns}
           values={Array.isArray(editorValues) ? editorValues : []}
-          onSubmit={(patch) => void submitEdit(patch)}
+          onSubmit={submitEdit}
           onCancel={() => setEditorOpen(false)}
         />
       ) : null}

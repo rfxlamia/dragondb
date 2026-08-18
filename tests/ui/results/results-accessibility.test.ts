@@ -16,6 +16,8 @@ const EXPECTED = [
   "queryResults.pagination",
   "queryResults.timeoutDialog",
   "queryResults.timeoutAlert",
+  "queryResults.rowOperationAlert",
+  "queryResults.reloadRows",
 ] as const;
 
 describe("ResultsAccessibility", () => {
@@ -38,5 +40,12 @@ describe("ResultsAccessibility", () => {
     for (const id of ids) {
       expect(id.startsWith("queryResults.")).toBe(true);
     }
+  });
+
+  it("exports stable row-recovery identifiers", () => {
+    expect(ResultsAccessibility.rowOperationAlert).toBe("queryResults.rowOperationAlert");
+    expect(ResultsAccessibility.reloadRows).toBe("queryResults.reloadRows");
+    expect(ResultsAccessibility.allIdentifiers).toContain(ResultsAccessibility.rowOperationAlert);
+    expect(ResultsAccessibility.allIdentifiers).toContain(ResultsAccessibility.reloadRows);
   });
 });

@@ -248,7 +248,9 @@ describe("composeAppStores", () => {
     const stores = composeAppStores(ipc);
     await stores.session.getState().connect("P");
     stores.browse.getState().startBrowse({
-      tabId: "t1", connectionId: "c1", database: "shop",
+      tabId: "t1",
+      connectionId: "c1",
+      database: "shop",
       table: { schema: "public", name: "orders", tableType: "regular" },
     });
 
@@ -273,7 +275,9 @@ describe("composeAppStores", () => {
     const stores = composeAppStores(ipc);
     await stores.session.getState().connect("P");
     stores.browse.getState().startBrowse({
-      tabId: "t1", connectionId: "c1", database: "shop",
+      tabId: "t1",
+      connectionId: "c1",
+      database: "shop",
       table: { schema: "public", name: "orders", tableType: "regular" },
     });
     await stores.session.getState().disconnect();

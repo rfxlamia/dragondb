@@ -278,6 +278,37 @@ describe("QueryResultsPane", () => {
     expect(screen.getByLabelText("occurred_on")).toHaveAttribute("type", "date");
   });
 
+  it("closes after committed update and exposes reload-only retry", async () => {
+    const user = userEvent.setup();
+    const onUpdateRow = vi.fn(async () => ({
+      kind: "reloadFailed" as const,
+      message: "The row was saved, but the page could not be reloaded.",
+    }));
+    const onRetryRowReload = vi.fn(async () => undefined);
+    render(
+      <QueryResultsPane
+        status={{ kind: "ok", rowCount: 1, durationMs: 1 }}
+        compact={{ columns: ["id", "note"], rows: [[1, "before"]] }}
+        raw={{ columns: ["id", "note"], rows: [[1, "before"]] }}
+        sourceTable={{ schema: "public", name: "orders" }}
+        columnMetadata={[
+          column({ name: "id", dataType: "bigint", isPrimaryKey: true }),
+          column({ name: "note", isNullable: true }),
+        ]}
+        onUpdateRow={onUpdateRow}
+        onRetryRowReload={onRetryRowReload}
+      />,
+    );
+    await user.click(screen.getAllByRole("row")[1]!);
+    await user.click(screen.getByRole("button", { name: ResultsCopy.edit }));
+    await user.click(screen.getByRole("button", { name: ResultsCopy.save }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("could not be reloaded");
+    expect(screen.queryByTestId(ResultsAccessibility.rowEditor)).toBeNull();
+    await user.click(screen.getByRole("button", { name: ResultsCopy.reloadRows }));
+    expect(onRetryRowReload).toHaveBeenCalledTimes(1);
+    expect(onUpdateRow).toHaveBeenCalledTimes(1);
+  });
+
   it("Space opens JSON viewer when a row is selected", async () => {
     const user = userEvent.setup();
     render(

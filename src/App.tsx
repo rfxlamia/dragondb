@@ -15,7 +15,7 @@ import { coreToTableRef, tableRefToCore } from "./ipc/table-ref";
 import { createTauriDragonIpc } from "./ipc/tauri-client";
 import { loadDateFormat, type QueryResultsDateFormat } from "./lib/date-format-setting";
 import { newSavedQueryName } from "./lib/new-saved-query-name";
-import { browseRetryBlocked } from "./stores/browse-session-store";
+import { type BrowseRetryTarget, browseRetryBlocked } from "./stores/browse-session-store";
 import { type AppStores, composeAppStores } from "./stores/compose-app-stores";
 import { recoverBrowseAfterTimeout } from "./stores/recover-browse-after-timeout";
 import {
@@ -23,6 +23,11 @@ import {
   reloadBrowseOnActiveTab,
   runBrowseOnActiveTab,
 } from "./stores/run-browse-on-active-tab";
+import {
+  retryRowOperationReload,
+  runDeleteRowsOnActiveTab,
+  runUpdateRowOnActiveTab,
+} from "./stores/run-row-operation-on-active-tab";
 import { runSelectOnActiveTab } from "./stores/run-select-on-active-tab";
 import { runSqlOnActiveTab } from "./stores/run-sql-on-active-tab";
 import { ConnectionCopy, humanIpcErrorMessage } from "./ui/connection/connection-copy";
@@ -35,6 +40,8 @@ import { QueriesCopy } from "./ui/library/queries-copy";
 import { createSavedQueryResultCache } from "./ui/library/saved-query-result-cache";
 import { useSavedQueryAutosave } from "./ui/library/use-saved-query-autosave";
 import { BrowseTimeoutContext } from "./ui/results/browse-timeout-dialog";
+import type { RowReloadRecovery } from "./ui/results/query-results-pane";
+import { ResultsCopy } from "./ui/results/results-copy";
 import { AppWorkspace } from "./ui/shell/app-workspace";
 import { LoadingOverlay } from "./ui/shell/loading-overlay";
 import type { MutationToastTable } from "./ui/shell/mutation-toast";
@@ -170,6 +177,7 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
   const [columnMetadata, setColumnMetadata] = useState<ColumnInfo[]>([]);
   const canvasHandleRef = useRef<VisualQueryCanvasHandle | null>(null);
   const connectionPanelRef = useRef<ConnectionPanelHandle | null>(null);
+  const rowReloadRetryRef = useRef<BrowseRetryTarget | null>(null);
   /**
    * Pulses true→false around a saved-query selection's queryText load, reusing
    * the autosave hook's isRestoring skip so the loaded SQL is never mistaken
@@ -761,35 +769,51 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
   async function handleUpdateRow(
     patch: Record<string, unknown | null>,
     primaryKey: Record<string, unknown>,
-  ): Promise<void> {
+  ): Promise<{ kind: "ok" } | RowReloadRecovery | undefined> {
     if (connectionId === null || sourceTable === undefined) return;
-    await ipc.updateRow({
-      connectionId,
-      table: { schema: sourceTable.schema, name: sourceTable.name, tableType: "regular" },
+    const table = {
+      schema: sourceTable.schema,
+      name: sourceTable.name,
+      tableType: "regular" as const,
+    };
+    const outcome = await runUpdateRowOnActiveTab(
+      stores,
+      ipc,
+      table,
+      browsePage,
       primaryKey,
       patch,
-    });
-    await runBrowseOnActiveTab(
-      stores,
-      ipc,
-      { schema: sourceTable.schema, name: sourceTable.name, tableType: "regular" },
-      browsePage,
-    ).catch(() => undefined);
+    );
+    if (outcome.kind === "reloadFailed") {
+      rowReloadRetryRef.current = outcome.retry;
+      return { kind: "reloadFailed", message: ResultsCopy.rowReloadFailed };
+    }
+    rowReloadRetryRef.current = null;
+    return outcome;
   }
 
-  async function handleDeleteRows(primaryKeys: Record<string, unknown>[]): Promise<void> {
+  async function handleDeleteRows(
+    primaryKeys: Record<string, unknown>[],
+  ): Promise<{ kind: "ok" } | RowReloadRecovery | undefined> {
     if (connectionId === null || sourceTable === undefined) return;
-    await ipc.deleteRows({
-      connectionId,
-      table: { schema: sourceTable.schema, name: sourceTable.name, tableType: "regular" },
-      primaryKeys,
-    });
-    await runBrowseOnActiveTab(
-      stores,
-      ipc,
-      { schema: sourceTable.schema, name: sourceTable.name, tableType: "regular" },
-      browsePage,
-    ).catch(() => undefined);
+    const table = {
+      schema: sourceTable.schema,
+      name: sourceTable.name,
+      tableType: "regular" as const,
+    };
+    const outcome = await runDeleteRowsOnActiveTab(stores, ipc, table, browsePage, primaryKeys);
+    if (outcome.kind === "reloadFailed") {
+      rowReloadRetryRef.current = outcome.retry;
+      return { kind: "reloadFailed", message: ResultsCopy.rowsReloadFailed };
+    }
+    rowReloadRetryRef.current = null;
+    return outcome;
+  }
+
+  async function handleRetryRowReload(): Promise<void> {
+    const retry = rowReloadRetryRef.current;
+    if (retry === null) return;
+    await retryRowOperationReload(stores, ipc, retry);
   }
 
   async function handleSaveCsv(csv: string): Promise<void> {
@@ -1103,6 +1127,7 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
               onUpdateRow={handleUpdateRow}
               onDeleteRows={handleDeleteRows}
               onSaveCsv={handleSaveCsv}
+              onRetryRowReload={handleRetryRowReload}
               mutationToast={mutationToast}
               canvas={canvas}
               onNewTab={handleNewTab}

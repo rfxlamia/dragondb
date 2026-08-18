@@ -14,6 +14,8 @@ export const ResultsAccessibility = {
   pagination: "queryResults.pagination",
   timeoutDialog: "queryResults.timeoutDialog",
   timeoutAlert: "queryResults.timeoutAlert",
+  rowOperationAlert: "queryResults.rowOperationAlert",
+  reloadRows: "queryResults.reloadRows",
   get allIdentifiers() {
     return [
       ResultsAccessibility.pane,
@@ -30,6 +32,8 @@ export const ResultsAccessibility = {
       ResultsAccessibility.pagination,
       ResultsAccessibility.timeoutDialog,
       ResultsAccessibility.timeoutAlert,
+      ResultsAccessibility.rowOperationAlert,
+      ResultsAccessibility.reloadRows,
     ];
   },
 } as const;

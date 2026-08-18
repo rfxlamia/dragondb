@@ -221,7 +221,7 @@ export async function runBrowseOnActiveTab(
   if (cached !== null) {
     return serveCachedBrowsePage(stores, table, ctx, cached);
   }
-  return stores.browse.getState().ownBrowsePageRequest(ctx.safePage, () =>
-    fetchAndPublishBrowsePage(stores, ipc, table, ctx),
-  );
+  return stores.browse
+    .getState()
+    .ownBrowsePageRequest(ctx.safePage, () => fetchAndPublishBrowsePage(stores, ipc, table, ctx));
 }

@@ -60,6 +60,7 @@ function stubProps(overrides: Partial<AppWorkspaceProps> = {}): AppWorkspaceProp
     onUpdateRow: noop,
     onDeleteRows: noop,
     onSaveCsv: noop,
+    onRetryRowReload: noop,
     mutationToast: null,
     canvas: <div data-testid="canvas-slot" />,
     onNewTab: noop,

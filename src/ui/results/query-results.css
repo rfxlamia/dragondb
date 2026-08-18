@@ -330,3 +330,10 @@
   font-size: 12px;
   gap: 6px;
 }
+
+.query-results__reload-recovery {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 12px 12px;
+}
