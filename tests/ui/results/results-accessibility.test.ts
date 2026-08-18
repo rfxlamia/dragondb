@@ -14,6 +14,8 @@ const EXPECTED = [
   "queryResults.jsonViewer",
   "queryResults.rowEditor",
   "queryResults.pagination",
+  "queryResults.timeoutDialog",
+  "queryResults.timeoutAlert",
 ] as const;
 
 describe("ResultsAccessibility", () => {

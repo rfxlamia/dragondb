@@ -247,6 +247,22 @@
   margin: 0;
 }
 
+.query-results__dialog-error {
+  background: var(--error-tint);
+  border-radius: var(--radius);
+  color: var(--error-text);
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 0;
+  padding: 8px 10px;
+}
+
+.query-results__btn--primary:disabled {
+  background: var(--neutral-200);
+  border-color: var(--neutral-200);
+  color: var(--neutral-600);
+}
+
 .query-results__dialog-actions {
   display: flex;
   flex-wrap: wrap;

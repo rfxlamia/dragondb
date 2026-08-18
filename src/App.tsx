@@ -14,7 +14,9 @@ import { coreToTableRef, tableRefToCore } from "./ipc/table-ref";
 import { createTauriDragonIpc } from "./ipc/tauri-client";
 import { loadDateFormat, type QueryResultsDateFormat } from "./lib/date-format-setting";
 import { newSavedQueryName } from "./lib/new-saved-query-name";
+import { browseRetryBlocked } from "./stores/browse-session-store";
 import { type AppStores, composeAppStores } from "./stores/compose-app-stores";
+import { recoverBrowseAfterTimeout } from "./stores/recover-browse-after-timeout";
 import {
   quotedTableSql,
   reloadBrowseOnActiveTab,
@@ -31,6 +33,7 @@ import { SidebarIcon } from "./ui/icons";
 import { QueriesCopy } from "./ui/library/queries-copy";
 import { createSavedQueryResultCache } from "./ui/library/saved-query-result-cache";
 import { useSavedQueryAutosave } from "./ui/library/use-saved-query-autosave";
+import { BrowseTimeoutContext } from "./ui/results/browse-timeout-dialog";
 import { AppWorkspace } from "./ui/shell/app-workspace";
 import { LoadingOverlay } from "./ui/shell/loading-overlay";
 import type { MutationToastTable } from "./ui/shell/mutation-toast";
@@ -130,6 +133,7 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
     (s) => s.tabs.find((t) => t.id === s.activeTabId)?.browsePage ?? 0,
   );
   const hasNextPage = useStore(stores.browse, (s) => s.hasNext);
+  const browseLifecycle = useStore(stores.browse, (s) => s.lifecycle);
   const mutationToast = useStore(
     stores.tabs,
     (s) => s.tabs.find((t) => t.id === s.activeTabId)?.mutationToast ?? null,
@@ -615,6 +619,7 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
   // case — this reproduces Swift's net effect (exactly one query per click)
   // without a second, easy-to-double-fire code path.
   function startBrowseSession(table: TableRef): void {
+    if (browseRetryBlocked(stores.browse.getState().lifecycle)) return;
     const session = stores.session.getState();
     const tabId = stores.tabs.getState().activeTabId;
     if (session.connectionId === null || session.databaseName === null || tabId === null) {
@@ -629,6 +634,25 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
     stores.tabs.getState().setBrowsePage(tabId, 0);
   }
 
+  function handleBrowseTryAgain(): void {
+    const lifecycle = stores.browse.getState().lifecycle;
+    if (lifecycle.phase !== "retryReady" || lifecycle.retry === undefined) return;
+    void runBrowseOnActiveTab(stores, ipc, lifecycle.retry.table, lifecycle.retry.page).catch(
+      () => undefined,
+    );
+  }
+
+  function handleBrowseReconnect(): void {
+    const profileId = stores.session.getState().profileId ?? lastProfileIdRef.current;
+    if (profileId === null) return;
+    void recoverBrowseAfterTimeout(stores, profileId).catch(() => undefined);
+  }
+
+  function handleBrowseTimeoutCancel(): void {
+    const generation = stores.browse.getState().generation;
+    stores.browse.getState().publish(generation, { lifecycle: { phase: "idle" } });
+  }
+
   function handleViewMutationTable(table: MutationToastTable): void {
     startBrowseSession({ schema: table.schema, name: table.name, tableType: "regular" });
     void runBrowseOnActiveTab(
@@ -640,6 +664,7 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
   }
 
   function handleBrowseTable(table: TableRef): void {
+    if (browseRetryBlocked(stores.browse.getState().lifecycle)) return;
     startBrowseSession(table);
     void runBrowseOnActiveTab(stores, ipc, table, 0).catch(() => undefined);
   }
@@ -701,6 +726,7 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
   }
 
   function handleNextPage(): void {
+    if (browseRetryBlocked(stores.browse.getState().lifecycle)) return;
     if (sourceTable === undefined) return;
     const tabId = stores.tabs.getState().activeTabId;
     if (tabId === null) return;
@@ -716,6 +742,7 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
   }
 
   function handlePrevPage(): void {
+    if (browseRetryBlocked(stores.browse.getState().lifecycle)) return;
     if (sourceTable === undefined || browsePage === 0) return;
     const tabId = stores.tabs.getState().activeTabId;
     if (tabId === null) return;
@@ -965,138 +992,147 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
   return (
     <>
       {overlayPhase ? <LoadingOverlay phase={overlayPhase} /> : null}
-      <main className={connectionCollapsed ? "app-shell app-shell--collapsed" : "app-shell"}>
-        {launchError ? (
-          <div className="app-connection-error" role="alert">
-            <strong>{ConnectionCopy.connectionError}</strong>
-            <p>{launchError}</p>
-          </div>
-        ) : null}
-        {/* Rail and panel share one column and both stay mounted: the column
+      <BrowseTimeoutContext.Provider
+        value={{
+          lifecycle: browseLifecycle,
+          onTryAgain: handleBrowseTryAgain,
+          onReconnect: handleBrowseReconnect,
+          onCancel: handleBrowseTimeoutCancel,
+        }}
+      >
+        <main className={connectionCollapsed ? "app-shell app-shell--collapsed" : "app-shell"}>
+          {launchError ? (
+            <div className="app-connection-error" role="alert">
+              <strong>{ConnectionCopy.connectionError}</strong>
+              <p>{launchError}</p>
+            </div>
+          ) : null}
+          {/* Rail and panel share one column and both stay mounted: the column
             animates its width while the panel fades under the rail, so hiding
             the sidebar reads as a drawer closing rather than a jump cut.
             Whichever layer is not showing is inert, so tab order and the
             accessibility tree only ever contain the visible one. */}
-        <div className="app-sidebar">
-          <div
-            className="app-sidebar__rail"
-            inert={connectionCollapsed ? undefined : true}
-            aria-hidden={connectionCollapsed ? undefined : true}
-          >
-            <button
-              type="button"
-              className="ui-icon-btn"
-              aria-label={ConnectionCopy.showConnection}
-              title={ConnectionCopy.showConnection}
-              onClick={() => setConnectionCollapsed(false)}
+          <div className="app-sidebar">
+            <div
+              className="app-sidebar__rail"
+              inert={connectionCollapsed ? undefined : true}
+              aria-hidden={connectionCollapsed ? undefined : true}
             >
-              <SidebarIcon />
-            </button>
+              <button
+                type="button"
+                className="ui-icon-btn"
+                aria-label={ConnectionCopy.showConnection}
+                title={ConnectionCopy.showConnection}
+                onClick={() => setConnectionCollapsed(false)}
+              >
+                <SidebarIcon />
+              </button>
+            </div>
+            <div
+              className="app-sidebar__panel"
+              inert={connectionCollapsed ? true : undefined}
+              aria-hidden={connectionCollapsed ? true : undefined}
+            >
+              <ConnectionPanel
+                ref={connectionPanelRef}
+                ipc={ipc}
+                isConnected={isConnected}
+                activeProfileId={profileId ?? undefined}
+                formVisible={formVisible}
+                onFormVisibleChange={handleFormVisibleChange}
+                onProfilesLoaded={handleProfilesLoaded}
+                tables={visibleTables}
+                tablesLoading={tablesLoading}
+                tablesErrorMessage={tablesErrorMessage}
+                onBrowse={handleBrowseTable}
+                columnsByTable={columnsByTable}
+                executing={status.kind === "running"}
+                onDrop={handleDropTable}
+                onTruncate={handleTruncateTable}
+                onGenerateDdl={handleGenerateTableDdl}
+                onRefresh={handleRefreshTables}
+                onFetchAll={handleFetchAllTable}
+                onExpand={handleExpandTable}
+                saveCsvFile={(csv, defaultPath) => ipc.saveCsvFile(csv, defaultPath)}
+                saveTextFile={(text, defaultPath, filter) =>
+                  ipc.saveTextFile(text, defaultPath, filter)
+                }
+                connectionId={connectionId}
+                databaseName={databaseName}
+                onSwitchDatabase={handleSwitchDatabase}
+                onClearDatabase={handleClearDatabaseSelection}
+                onCollapse={() => setConnectionCollapsed(true)}
+                missingDatabase={missingDatabase}
+                connectProfile={(id) => stores.session.getState().connect(id)}
+                disconnectSession={() => stores.session.getState().disconnect()}
+                onConnected={handleConnected}
+                onDisconnected={handleDisconnected}
+                onSwitchSuccess={handleSwitchSuccess}
+                onSwitchFailure={handleSwitchFailure}
+              />
+            </div>
           </div>
-          <div
-            className="app-sidebar__panel"
-            inert={connectionCollapsed ? true : undefined}
-            aria-hidden={connectionCollapsed ? true : undefined}
-          >
-            <ConnectionPanel
-              ref={connectionPanelRef}
-              ipc={ipc}
-              isConnected={isConnected}
-              activeProfileId={profileId ?? undefined}
-              formVisible={formVisible}
-              onFormVisibleChange={handleFormVisibleChange}
-              onProfilesLoaded={handleProfilesLoaded}
-              tables={visibleTables}
-              tablesLoading={tablesLoading}
-              tablesErrorMessage={tablesErrorMessage}
-              onBrowse={handleBrowseTable}
-              columnsByTable={columnsByTable}
-              executing={status.kind === "running"}
-              onDrop={handleDropTable}
-              onTruncate={handleTruncateTable}
-              onGenerateDdl={handleGenerateTableDdl}
-              onRefresh={handleRefreshTables}
-              onFetchAll={handleFetchAllTable}
-              onExpand={handleExpandTable}
-              saveCsvFile={(csv, defaultPath) => ipc.saveCsvFile(csv, defaultPath)}
-              saveTextFile={(text, defaultPath, filter) =>
-                ipc.saveTextFile(text, defaultPath, filter)
-              }
-              connectionId={connectionId}
-              databaseName={databaseName}
-              onSwitchDatabase={handleSwitchDatabase}
-              onClearDatabase={handleClearDatabaseSelection}
-              onCollapse={() => setConnectionCollapsed(true)}
-              missingDatabase={missingDatabase}
-              connectProfile={(id) => stores.session.getState().connect(id)}
-              disconnectSession={() => stores.session.getState().disconnect()}
-              onConnected={handleConnected}
-              onDisconnected={handleDisconnected}
-              onSwitchSuccess={handleSwitchSuccess}
-              onSwitchFailure={handleSwitchFailure}
+          <div className="app-main-column" aria-busy={workspaceReady ? undefined : true}>
+            <AppWorkspace
+              workspaceReady={workspaceReady}
+              tabs={tabs}
+              activeTabId={activeTabId}
+              pendingDeletedIds={pendingDeletedIds}
+              profiles={profiles}
+              profileId={profileId}
+              libraryQueries={libraryQueries}
+              libraryFolders={libraryFolders}
+              savedQueryId={savedQueryId}
+              executingQueryId={executingQueryId}
+              schemaNames={schemaNames}
+              selectedSchema={selectedSchema}
+              schemaError={schemaError}
+              status={status}
+              compact={compact}
+              raw={raw}
+              dateFormat={dateFormat}
+              query={sourceTable !== undefined ? queryText : ""}
+              sourceTable={sourceTable}
+              primaryKeyColumns={primaryKeyColumns}
+              browse={sourceTable !== undefined}
+              hasNextPage={hasNextPage}
+              hasPrevPage={hasPrevPage}
+              onNextPage={handleNextPage}
+              onPrevPage={handlePrevPage}
+              onUpdateRow={handleUpdateRow}
+              onDeleteRows={handleDeleteRows}
+              onSaveCsv={handleSaveCsv}
+              mutationToast={mutationToast}
+              canvas={canvas}
+              onNewTab={handleNewTab}
+              onSwitchTab={(id) => stores.tabs.getState().switchTab(id)}
+              onCloseTab={handleCloseTab}
+              onSelectQuery={handleSelectQuery}
+              onNewQuery={handleNewQuery}
+              onRenameQuery={handleRenameQuery}
+              onDeleteQuery={handleDeleteQuery}
+              onMoveQuery={handleMoveQuery}
+              onDeleteFolder={handleDeleteFolder}
+              onLibraryRefresh={handleLibraryRefresh}
+              onDuplicateQuery={(id) => {
+                void stores.library.getState().duplicateSavedQuery(id);
+              }}
+              onRenameFolder={(id, name) => {
+                void stores.library.getState().renameQueryFolder(id, name);
+              }}
+              onCreateFolder={(name) => stores.library.getState().createQueryFolder(name)}
+              hasCachedResult={(id) => savedQueryCacheRef.current.read(id) !== null}
+              onSelectSchema={(schema) => {
+                void handleSelectSchema(schema);
+              }}
+              onDismissSchemaError={() => setSchemaError(null)}
+              onDismissMutationToast={handleDismissMutationToast}
+              onViewMutationTable={handleViewMutationTable}
             />
           </div>
-        </div>
-        <div className="app-main-column" aria-busy={workspaceReady ? undefined : true}>
-          <AppWorkspace
-            workspaceReady={workspaceReady}
-            tabs={tabs}
-            activeTabId={activeTabId}
-            pendingDeletedIds={pendingDeletedIds}
-            profiles={profiles}
-            profileId={profileId}
-            libraryQueries={libraryQueries}
-            libraryFolders={libraryFolders}
-            savedQueryId={savedQueryId}
-            executingQueryId={executingQueryId}
-            schemaNames={schemaNames}
-            selectedSchema={selectedSchema}
-            schemaError={schemaError}
-            status={status}
-            compact={compact}
-            raw={raw}
-            dateFormat={dateFormat}
-            query={sourceTable !== undefined ? queryText : ""}
-            sourceTable={sourceTable}
-            primaryKeyColumns={primaryKeyColumns}
-            browse={sourceTable !== undefined}
-            hasNextPage={hasNextPage}
-            hasPrevPage={hasPrevPage}
-            onNextPage={handleNextPage}
-            onPrevPage={handlePrevPage}
-            onUpdateRow={handleUpdateRow}
-            onDeleteRows={handleDeleteRows}
-            onSaveCsv={handleSaveCsv}
-            mutationToast={mutationToast}
-            canvas={canvas}
-            onNewTab={handleNewTab}
-            onSwitchTab={(id) => stores.tabs.getState().switchTab(id)}
-            onCloseTab={handleCloseTab}
-            onSelectQuery={handleSelectQuery}
-            onNewQuery={handleNewQuery}
-            onRenameQuery={handleRenameQuery}
-            onDeleteQuery={handleDeleteQuery}
-            onMoveQuery={handleMoveQuery}
-            onDeleteFolder={handleDeleteFolder}
-            onLibraryRefresh={handleLibraryRefresh}
-            onDuplicateQuery={(id) => {
-              void stores.library.getState().duplicateSavedQuery(id);
-            }}
-            onRenameFolder={(id, name) => {
-              void stores.library.getState().renameQueryFolder(id, name);
-            }}
-            onCreateFolder={(name) => stores.library.getState().createQueryFolder(name)}
-            hasCachedResult={(id) => savedQueryCacheRef.current.read(id) !== null}
-            onSelectSchema={(schema) => {
-              void handleSelectSchema(schema);
-            }}
-            onDismissSchemaError={() => setSchemaError(null)}
-            onDismissMutationToast={handleDismissMutationToast}
-            onViewMutationTable={handleViewMutationTable}
-          />
-        </div>
-        {chromeDialogs}
-      </main>
+          {chromeDialogs}
+        </main>
+      </BrowseTimeoutContext.Provider>
     </>
   );
 }

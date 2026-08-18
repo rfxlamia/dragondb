@@ -11,7 +11,37 @@ export type BrowseIdentity = {
   table: TableRef;
 };
 
-export type BrowseLifecycle = { phase: "idle" } | { phase: "ready" };
+export type BrowseRetryTarget = BrowseIdentity & { page: number };
+
+export type BrowseLifecycle =
+  | { phase: "idle" }
+  | { phase: "ready" }
+  | { phase: "cancelling"; retry?: BrowseRetryTarget; error?: string | null }
+  | { phase: "retryReady"; retry?: BrowseRetryTarget; error?: string | null }
+  | {
+      phase: "reconnectRequired";
+      retry?: BrowseRetryTarget;
+      error?: string | null;
+      busy?: boolean;
+    };
+
+/** True while cancel or reconnect must finish before another browse may start. */
+export function browseRetryBlocked(lifecycle: BrowseLifecycle): boolean {
+  return lifecycle.phase === "cancelling" || lifecycle.phase === "reconnectRequired";
+}
+
+export function isBrowseTimeoutPhase(lifecycle: BrowseLifecycle): boolean {
+  return (
+    lifecycle.phase === "cancelling" ||
+    lifecycle.phase === "retryReady" ||
+    lifecycle.phase === "reconnectRequired"
+  );
+}
+
+export function browseRetryOf(lifecycle: BrowseLifecycle): BrowseRetryTarget | undefined {
+  if (lifecycle.phase === "idle" || lifecycle.phase === "ready") return undefined;
+  return lifecycle.retry;
+}
 
 export type BrowseGeneration = number;
 

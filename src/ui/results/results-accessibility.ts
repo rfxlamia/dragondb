@@ -12,6 +12,8 @@ export const ResultsAccessibility = {
   jsonViewer: "queryResults.jsonViewer",
   rowEditor: "queryResults.rowEditor",
   pagination: "queryResults.pagination",
+  timeoutDialog: "queryResults.timeoutDialog",
+  timeoutAlert: "queryResults.timeoutAlert",
   get allIdentifiers() {
     return [
       ResultsAccessibility.pane,
@@ -26,6 +28,8 @@ export const ResultsAccessibility = {
       ResultsAccessibility.jsonViewer,
       ResultsAccessibility.rowEditor,
       ResultsAccessibility.pagination,
+      ResultsAccessibility.timeoutDialog,
+      ResultsAccessibility.timeoutAlert,
     ];
   },
 } as const;

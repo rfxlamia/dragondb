@@ -45,7 +45,7 @@ Already-decided **out of SP-4b product chrome** (still listed where Swift screen
 
 - **DONE (UI):** SP-4a canvas plus SP-4b first-slice (shell + read-only grid) plus SP-4b workspace chrome (2026-08-15, `feat/sp-4b-ui` `e7b97f5`) plus last-slice connection chrome / SQL hatch / table browser host: welcome gating, “No connections”, tables list in the connection column (click = Show All Rows; expand loads columns + PK/FK icons; Refresh/DDL/Export/Truncate/Drop via dedicated IPC), connection-string mode, Queries column + B′ session cache, per-tab visual documents (persisted `visualDocumentJson`), tab bar (hidden at 1 tab, `+` always, Swift-style titles), history sheet + JSON/CSV/SQL export + relative dates, native Help / Shortcuts / Settings, Accel+T/W/Enter, collapsible connection sidebar, database picker, launch restore + loading overlay, Visual\|SQL hatch. SP-2/SP-3 connection panel (save / connect / disconnect / switch / delete / SSL / SSH).
 - **PARTIAL:** result-grid editability UI attaches but `RowOperationError` kinds don't surface distinct messages; Edit row uses plain text inputs (no typed pickers); context-mismatch help is missing. T12 last slice: mutation toast, DetailContent modals, background persist shipped.
-- **MISSING UI:** remaining SEQUENCE (context-mismatch editability help; row-editor typed pickers / saving-state disable; table-load timeout 300s). Workspace-chrome spec: `docs/pocket/spec/2026-08-15-sp4b-workspace-chrome/workspace-chrome.md`.
+- **MISSING UI:** remaining SEQUENCE (context-mismatch editability help; row-editor typed pickers / saving-state disable). Workspace-chrome spec: `docs/pocket/spec/2026-08-15-sp4b-workspace-chrome/workspace-chrome.md`.
 
 ---
 
@@ -107,7 +107,7 @@ Parent §12.1: 8 files, 1,544 LOC.
 - [x] **Sidebar refresh.** Swift: toolbar `arrow.clockwise` → `refreshOnDemandFromToolbar`, min 0.45s spinner (`isRefreshingSidebarMetadata`). Tests: `ConnectionSidebarViewModelTests`. Tauri: **DONE** Queries-column Refresh (`REFRESH_MIN_MS = 450`) calls `library.refresh` + `reloadTables` + `ConnectionPanel.refreshDatabases`; overlay on the Queries column (not the tables list). Button label is `Refresh`, not Swift’s longer help string. **Done:** refresh re-fetches database list and `listTables`. **SEQUENCE**.
 - [x] **Schema filter when `schemas.count > 1`.** Swift: `SchemaPicker` “All Schemas” vs named; clears selected table if schema mismatch; `setSchemaSearchPathDebounced`; `tabManager.updateActiveTabSchemaFilter`. Tauri: **DONE** Queries toolbar schema `<select>` when `schemaNames.length > 1`; client-side filter on `TableRef.schema`; `handleSelectSchema` → `ipc.setSearchPath` then `loadTables`. **Done:** filter is client-side on `TableRef.schema`; selecting a schema runs `SET search_path`. **SEQUENCE**.
 - [x] **Schema error alert.** Swift: `appState.connection.schemaError`. Tauri: **DONE** Queries toolbar `role="alert"` + OK (`QueriesCopy.schemaError` / `onDismissSchemaError`). **Done:** failed SET search_path shows alert, OK clears. **SEQUENCE**.
-- [ ] **Table-load timeout alert.** Swift: 300s `Constants.Timeout.databaseOperation`, Try Again / Cancel. Tauri: **MISSING**. **SEQUENCE**.
+- [x] **Table-load timeout alert.** Swift: 300s `Constants.Timeout.databaseOperation`, Try Again / Cancel. Tauri: **DONE** browse timeout (`BROWSE_TIMEOUT_MS = 300_000`) cancels once, waits 12s, then explicit Reconnect; Try Again disabled until cancel succeeds. **SEQUENCE**.
 - [x] **Saved-queries column: title Queries + new query.** Swift: `SavedQueriesSidebarSection` also has filter field + six-way sort. Tauri: **DONE** resizable `QueriesColumn` left of canvas (including disconnected); `+` names `Query yy-MM-dd H:mm:ss` and clears the active tab canvas+grid. Filter field, six-way sort, duplicate, multi-select, green cache dot **shipped**. **WORKSPACE-CHROME**.
 - [x] **Empty copy.** Swift: `"No saved queries"` / `"No matching queries"`. Tauri: **DONE** `"No saved queries"` and `"No matching queries"` when the filter matches nothing. **WORKSPACE-CHROME**.
 - [x] **Folders as disclosure groups; unfoldered queries below.** Swift: `folderDisclosureGroup` + `QueryFolderRowView`. Tauri: **DONE** `QueriesFolderRow` `aria-expanded` disclosure; unfiled queries render *above* folders (Swift puts unfoldered below). **SEQUENCE**.
@@ -230,7 +230,7 @@ Every §12.2 row appears here. Extras flagged `§12.2 miss`.
 | SSL modes | `SSLMode` | Form+Rust **DONE** | Six modes; SSH hides verify-ca/full | FIRST-SLICE | SHIP — **done** |
 | Keyboard shortcuts | `KeyboardShortcutsView` + `DragonDBApp.commands` | **DONE** native menu + Accel+T/W/Enter | ⌘T/W/↵ documented and bound | WORKSPACE-CHROME | SHIP — **done** |
 | Cancel query | `QueryState.cancelCurrentQuery` + Stop after 3s | **DONE** hatch Stop/Esc after 3s + `ipc.cancelQuery` | Esc/Stop cancels in-flight run, status “Query cancelled”, results cleared | SEQUENCE | SHIP; §12.2 miss — **done** |
-| Query timeout 300s | `QueryEditorView` / table-load alerts | Hatch timeout **DONE** (`QUERY_TIMEOUT_MS = 300_000` Try Again / Cancel); table-load timeout **MISSING** | Try Again reissues; Cancel dismisses | SEQUENCE | SHIP; §12.2 miss — hatch **done** |
+| Query timeout 300s | `QueryEditorView` / table-load alerts | Hatch timeout **DONE** (`QUERY_TIMEOUT_MS = 300_000` Try Again / Cancel); table-load timeout **DONE** (`BROWSE_TIMEOUT_MS = 300_000`, cancel-before-retry, 12s reconnect) | Try Again reissues after cancel; Cancel dismisses; Reconnect is explicit | SEQUENCE | SHIP; §12.2 miss — hatch **done**; table-load **done** |
 | Pagination | `QueryState` page cache + `requestPaginatedTableQuery` | **DONE** — page navigation plus current-identity 20-page LRU (`browse.readPage`/`writePage`, `LIMIT 101` probe, 100 visible rows, `hasNext` separate; Refresh/Truncate invalidate+reload; Drop clears identity). Visible page stays per-tab `browsePage` (T3). | Page N of table browse is 100 rows; cached pages skip refetch | SEQUENCE | SHIP |
 | JSON viewer | `JSONViewerView` | **DONE** UI — `JsonViewer` now reachable with real `raw` data | Space/toolbar opens pretty JSON of selection | SEQUENCE | SHIP; §12.2 miss — **done** |
 | Mutation toast | `MutationToastView` + `QueryState.showMutationToast` | **DONE** — hosted in `AppWorkspace`; 5s auto-dismiss; View Table browses the schema-qualified table | 5s toast; View Table re-runs browse | SEQUENCE | SHIP; §12.2 miss — **done** |
@@ -578,7 +578,7 @@ Extracted from §2 (FIRST-SLICE rows only):
 7. [x] History sheet from canvas toolbar; global list; Copy; export JSON/CSV/SQL; fail ≠ empty copy. Relative date labels shipped (epoch `created_at`).
 8. [x] Native Help / Keyboard Shortcuts / Settings; Accel+Enter Run (SELECT-only, no-op if disabled); Settings radios persist (grid dates applied).
 
-**Still SEQUENCE after this slice:** context-mismatch editability help; row-editor typed pickers / saving-state disable; table-load timeout 300s.
+**Still SEQUENCE after this slice:** context-mismatch editability help; row-editor typed pickers / saving-state disable.
 
 ---
 
@@ -602,7 +602,7 @@ Extracted from §2 (FIRST-SLICE rows only):
 2. **Per-tab visual IR after quit** — **done** (`visualDocumentJson` persist + hydrate).
 3. **History from canvas** — **done** 2026-08-15 (Swift visual mode hid the button; Tauri exposes it on the canvas toolbar).
 4. **SELECT-only canvas run** vs Swift CREATE confirm — **recorded 2026-08-15:** keep SELECT-only for first-slice; confirm+execute remains SEQUENCE if reversed.
-5. **Cancel query** — hatch Stop/Esc + `ipc.cancelQuery` **shipped**; table-load timeout still missing.
+5. **Cancel query** — hatch Stop/Esc + `ipc.cancelQuery` **shipped**; table-load timeout **shipped** (cancel-before-retry + explicit Reconnect).
 6. **Truncate/Drop/DDL** — **done** dedicated `ipc.truncateTable` / `dropTable` / `generateTableDdl` (never hatch `runQuery`).
 7. **Favorites**, **PK badges** without catalog enrichment (foreign-table icon shipped).
 8. **Auto-create SavedQuery** on SQL typing — **done** (`useSavedQueryAutosave`).
@@ -612,7 +612,7 @@ Extracted from §2 (FIRST-SLICE rows only):
 ### Stop conditions honored
 
 - All 52 `Views/` files listed; none missing on disk.
-- First-slice implementation shipped 2026-08-15; workspace chrome shipped 2026-08-15 (`e7b97f5`); remaining SEQUENCE clusters not silently dropped (context-mismatch help, typed row-editor pickers, table-load timeout 300s).
+- First-slice implementation shipped 2026-08-15; workspace chrome shipped 2026-08-15 (`e7b97f5`); remaining SEQUENCE clusters not silently dropped (context-mismatch help, typed row-editor pickers). Table-load timeout 300s shipped with cancel-before-retry.
 - No DROP without unreachable-file evidence.
 - SP-2/SP-3 not claimed incomplete where files show shipped IPC/stores; SEQUENCE UI still missing.
 

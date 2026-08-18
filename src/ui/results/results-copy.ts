@@ -19,6 +19,11 @@ export const ResultsCopy = {
   setNull: "NULL",
   nextPage: "Next",
   prevPage: "Previous",
+  tryAgain: "Try Again",
+  reconnect: "Reconnect",
+  browseTimeoutTitle: "Table load timed out",
+  browseTimeoutBody:
+    "This table took too long to load. Wait for the request to cancel, then try again.",
 } as const;
 
 export function deleteRowsPrompt(count: number): string {

@@ -1,7 +1,8 @@
-import { useMemo, useState } from "react";
+import { useContext, useMemo, useState } from "react";
 import { toCsv } from "../../lib/csv-exporter";
 import type { QueryResultsDateFormat } from "../../lib/date-format-setting";
 import { determineEditability } from "../../lib/query-editability";
+import type { BrowseLifecycle } from "../../stores/browse-session-store";
 import type { TabResultGrid, TabRunStatus } from "../../stores/tabs-store";
 import {
   BracesIcon,
@@ -13,6 +14,7 @@ import {
   TrashIcon,
 } from "../icons";
 import { SqlHatchCopy } from "../sql-editor/sql-hatch-copy";
+import { BrowseTimeoutContext, BrowseTimeoutDialog } from "./browse-timeout-dialog";
 import { formatResultCell } from "./format-result-cell";
 import { JsonViewer } from "./json-viewer";
 import { ResultsAccessibility } from "./results-accessibility";
@@ -39,11 +41,31 @@ export function QueryResultsPane(props: {
   ) => void | Promise<void>;
   onDeleteRows?: (primaryKeys: Record<string, unknown>[]) => void | Promise<void>;
   onSaveCsv?: (csv: string) => void | Promise<void>;
+  browseLifecycle?: BrowseLifecycle;
+  onBrowseTryAgain?: () => void;
+  onBrowseReconnect?: () => void;
+  onBrowseCancel?: () => void;
 }): React.JSX.Element {
   const dateFormat = props.dateFormat ?? "iso8601";
+  const timeoutContext = useContext(BrowseTimeoutContext);
+  const browseLifecycle = props.browseLifecycle ?? timeoutContext?.lifecycle;
+  const onBrowseTryAgain = props.onBrowseTryAgain ?? timeoutContext?.onTryAgain;
+  const onBrowseReconnect = props.onBrowseReconnect ?? timeoutContext?.onReconnect;
+  const onBrowseCancel = props.onBrowseCancel ?? timeoutContext?.onCancel;
   return (
     <div className="query-results" data-testid={ResultsAccessibility.pane}>
       {renderPaneBody(props, dateFormat)}
+      {browseLifecycle !== undefined &&
+      onBrowseTryAgain !== undefined &&
+      onBrowseReconnect !== undefined &&
+      onBrowseCancel !== undefined ? (
+        <BrowseTimeoutDialog
+          lifecycle={browseLifecycle}
+          onTryAgain={onBrowseTryAgain}
+          onReconnect={onBrowseReconnect}
+          onCancel={onBrowseCancel}
+        />
+      ) : null}
     </div>
   );
 }

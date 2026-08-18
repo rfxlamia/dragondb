@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DragonIpc, QueryResult } from "../../src/ipc/contract";
 import { composeAppStores } from "../../src/stores/compose-app-stores";
 import { runBrowseOnActiveTab } from "../../src/stores/run-browse-on-active-tab";
@@ -169,5 +169,168 @@ describe("runBrowseOnActiveTab", () => {
     // T3 ruling: visible page lives on the active tab, not browse.page.
     expect(stores.tabs.getState().tabs[0]?.browsePage).toBe(2);
     expect(stores.tabs.getState().tabs[0]?.raw?.rows[0]).toEqual([200]);
+  });
+});
+
+describe("browse timeout", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it("times out at 300 seconds and enables retry only after cancellation", async () => {
+    const runQuery = vi.fn(() => new Promise<QueryResult>(() => {}));
+    let releaseCancel!: () => void;
+    const cancelQuery = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          releaseCancel = resolve;
+        }),
+    );
+    const ipc = composeIpc({ runQuery, cancelQuery });
+    const stores = composeAppStores(ipc);
+    await stores.session.getState().connect("P");
+    const request = runBrowseOnActiveTab(
+      stores,
+      ipc,
+      { schema: "public", name: "orders", tableType: "regular" },
+      0,
+    );
+
+    await vi.advanceTimersByTimeAsync(299_999);
+    expect(cancelQuery).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(cancelQuery).toHaveBeenCalledTimes(1);
+    expect(stores.browse.getState().lifecycle.phase).toBe("cancelling");
+
+    releaseCancel();
+    await expect(request).rejects.toMatchObject({ name: "BrowseTimeoutError" });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(stores.browse.getState().lifecycle.phase).toBe("retryReady");
+  });
+
+  it("issues exactly one retry for the same table and page after cancellation", async () => {
+    let releaseCancel!: () => void;
+    const runQuery = vi
+      .fn()
+      .mockImplementationOnce(() => new Promise<QueryResult>(() => {}))
+      .mockResolvedValue({ columns: ["id"], rows: [[7]], rowsAffected: null, durationMs: 1 });
+    const cancelQuery = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          releaseCancel = resolve;
+        }),
+    );
+    const ipc = composeIpc({ runQuery, cancelQuery });
+    const stores = composeAppStores(ipc);
+    await stores.session.getState().connect("P");
+    const table = { schema: "public", name: "orders", tableType: "regular" as const };
+    void runBrowseOnActiveTab(stores, ipc, table, 3).catch(() => undefined);
+
+    await vi.advanceTimersByTimeAsync(300_000);
+    releaseCancel();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(stores.browse.getState().lifecycle.phase).toBe("retryReady");
+
+    // Try Again is now allowed exactly once, for the same table and page.
+    await runBrowseOnActiveTab(stores, ipc, table, 3);
+    expect(runQuery).toHaveBeenCalledTimes(2);
+    expect(String(vi.mocked(runQuery).mock.calls[1]?.[1].text)).toMatch(/LIMIT 101 OFFSET 300/);
+    expect(stores.browse.getState().lifecycle.phase).toBe("ready");
+  });
+
+  it("requires reconnect when cancellation remains pending for 12 seconds", async () => {
+    const ipc = composeIpc({
+      runQuery: vi.fn(() => new Promise<QueryResult>(() => {})),
+      cancelQuery: vi.fn(() => new Promise<void>(() => {})),
+    });
+    const stores = composeAppStores(ipc);
+    await stores.session.getState().connect("P");
+    void runBrowseOnActiveTab(
+      stores,
+      ipc,
+      { schema: "public", name: "orders", tableType: "regular" },
+      0,
+    ).catch(() => undefined);
+
+    await vi.advanceTimersByTimeAsync(300_000);
+    await vi.advanceTimersByTimeAsync(11_999);
+    expect(stores.browse.getState().lifecycle.phase).toBe("cancelling");
+    await vi.advanceTimersByTimeAsync(1);
+    expect(stores.browse.getState().lifecycle.phase).toBe("reconnectRequired");
+  });
+
+  it("lets only the first exact-boundary settlement publish", async () => {
+    let releaseQuery!: (value: QueryResult) => void;
+    const ipc = composeIpc({
+      runQuery: vi.fn(
+        () =>
+          new Promise<QueryResult>((resolve) => {
+            releaseQuery = resolve;
+          }),
+      ),
+      cancelQuery: vi.fn(async () => undefined),
+    });
+    const stores = composeAppStores(ipc);
+    await stores.session.getState().connect("P");
+    const request = runBrowseOnActiveTab(
+      stores,
+      ipc,
+      { schema: "public", name: "orders", tableType: "regular" },
+      0,
+    );
+    releaseQuery({ columns: ["id"], rows: [[1]], rowsAffected: null, durationMs: 300_000 });
+    await vi.advanceTimersByTimeAsync(300_000);
+    await expect(request).resolves.toMatchObject({ rows: [[1]] });
+    expect(ipc.cancelQuery).not.toHaveBeenCalled();
+    expect(stores.browse.getState().lifecycle.phase).toBe("ready");
+  });
+
+  it("moves directly to reconnect recovery when cancel rejects", async () => {
+    const ipc = composeIpc({
+      runQuery: vi.fn(() => new Promise<QueryResult>(() => {})),
+      cancelQuery: vi.fn(async () => {
+        throw new Error("cancel failed");
+      }),
+    });
+    const stores = composeAppStores(ipc);
+    await stores.session.getState().connect("P");
+    void runBrowseOnActiveTab(
+      stores,
+      ipc,
+      { schema: "public", name: "orders", tableType: "regular" },
+      0,
+    ).catch(() => undefined);
+    await vi.advanceTimersByTimeAsync(300_000);
+    expect(stores.browse.getState().lifecycle).toMatchObject({
+      phase: "reconnectRequired",
+      error: expect.any(String),
+    });
+  });
+
+  it("ignores the original query result after cancellation wins", async () => {
+    let releaseQuery!: (value: QueryResult) => void;
+    const ipc = composeIpc({
+      runQuery: vi.fn(
+        () =>
+          new Promise<QueryResult>((resolve) => {
+            releaseQuery = resolve;
+          }),
+      ),
+      cancelQuery: vi.fn(async () => undefined),
+    });
+    const stores = composeAppStores(ipc);
+    await stores.session.getState().connect("P");
+    const request = runBrowseOnActiveTab(
+      stores,
+      ipc,
+      { schema: "public", name: "orders", tableType: "regular" },
+      0,
+    );
+    const timedOut = expect(request).rejects.toMatchObject({ name: "BrowseTimeoutError" });
+    await vi.advanceTimersByTimeAsync(300_000);
+    await timedOut;
+    releaseQuery({ columns: ["id"], rows: [[999]], rowsAffected: null, durationMs: 300_001 });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(stores.tabs.getState().tabs[0]?.raw?.rows).not.toEqual([[999]]);
+    expect(stores.browse.getState().cacheSize()).toBe(0);
   });
 });

@@ -3025,4 +3025,26 @@ describe("App table browser host wiring", () => {
     expect(screen.getByRole("button", { name: ResultsCopy.prevPage })).toBeEnabled();
     expect(screen.getByText(ResultsCopy.noRowsFound)).toBeInTheDocument();
   });
+
+  it("does not start a second browse until explicit reconnect completes", async () => {
+    const ipc = createMockDragonIpc("happy");
+    vi.spyOn(ipc, "runQuery").mockImplementation(() => new Promise(() => {}));
+    vi.spyOn(ipc, "cancelQuery").mockImplementation(() => new Promise(() => {}));
+    const reconnect = vi.spyOn(ipc, "connectProfile");
+    const user = userEvent.setup();
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
+    vi.useFakeTimers();
+    try {
+      const timedUser = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+      await timedUser.click(screen.getByRole("button", { name: "users" }));
+      await vi.advanceTimersByTimeAsync(312_000);
+      expect(screen.getByRole("button", { name: ResultsCopy.tryAgain })).toBeDisabled();
+      await timedUser.click(screen.getByRole("button", { name: ResultsCopy.reconnect }));
+      await waitFor(() => expect(reconnect).toHaveBeenCalledTimes(2));
+      expect(ipc.runQuery).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
