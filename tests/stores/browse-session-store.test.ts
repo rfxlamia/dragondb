@@ -52,4 +52,18 @@ describe("browse-session-store contract", () => {
     ).toBe(false);
     expect(store.getState().page).toBe(0);
   });
+
+  it("a new startBrowse after invalidate uses the bumped generation", () => {
+    const store = createBrowseSessionStore();
+    store.getState().startBrowse(orders);
+    const first = store.getState().generation;
+    store.getState().invalidate();
+    store.getState().startBrowse({ ...orders, database: "analytics" });
+    expect(store.getState().generation).toBe(first + 1);
+    expect(store.getState().identity?.database).toBe("analytics");
+    expect(
+      store.getState().publish(first, { lifecycle: { phase: "ready" }, page: 0, hasNext: false }),
+    ).toBe(false);
+    expect(store.getState().identity?.database).toBe("analytics");
+  });
 });

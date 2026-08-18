@@ -866,4 +866,50 @@ describe("tabs-store", () => {
     );
     expect(saveTabState.mock.calls[0]?.[0]?.queryText).not.toBe(ir);
   });
+
+  it("clearBrowseResults clears browse payloads but preserves SQL/canvas payloads", () => {
+    const store = createTabsStore({} as DragonIpc, {
+      getConnectionId: () => "P",
+      getDatabaseName: () => "shop",
+    });
+    store.setState({
+      activeTabId: "browse",
+      tabs: [
+        {
+          ...baseTab({
+            id: "browse",
+            selectedTableSchema: "public",
+            selectedTableName: "orders",
+          }),
+          raw: { columns: ["id"], rows: [[1]] },
+          compact: { columns: ["id"], rows: [[1]] },
+          status: { kind: "ok", rowCount: 1, durationMs: 1 },
+        },
+        {
+          ...baseTab({
+            id: "sql",
+            queryText: "SELECT 1",
+            visualDocumentJson: '{"statementKind":"select"}',
+          }),
+          raw: { columns: ["?column?"], rows: [[1]] },
+          compact: { columns: ["?column?"], rows: [[1]] },
+          status: { kind: "ok", rowCount: 1, durationMs: 1 },
+        },
+      ],
+    });
+
+    store.getState().clearBrowseResults();
+
+    expect(store.getState().tabs.find((tab) => tab.id === "browse")).toMatchObject({
+      selectedTableSchema: null,
+      selectedTableName: null,
+      raw: null,
+      compact: null,
+    });
+    expect(store.getState().tabs.find((tab) => tab.id === "sql")).toMatchObject({
+      queryText: "SELECT 1",
+      raw: { rows: [[1]] },
+      compact: { rows: [[1]] },
+    });
+  });
 });

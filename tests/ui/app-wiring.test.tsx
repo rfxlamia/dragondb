@@ -39,7 +39,7 @@ vi.mock("@tauri-apps/api/event", () => ({
 import type { UserEvent } from "@testing-library/user-event";
 import App from "../../src/App";
 import { QueryDocument } from "../../src/core";
-import type { DragonIpc, SavedQueryDto, TabStateDto } from "../../src/ipc/contract";
+import type { DragonIpc, QueryResult, SavedQueryDto, TabStateDto } from "../../src/ipc/contract";
 import {
   createMockDragonIpc,
   FIXTURE_CONNECTION_ID,
@@ -2816,5 +2816,41 @@ describe("App table browser host wiring", () => {
     expect(alert).toHaveTextContent(ConnectionCopy.tablesLoadError);
     expect(switchDatabase).toHaveBeenCalledTimes(1);
     expect(document.title).toBe("shop");
+  });
+
+  it("ignores a browse response released after the database context changes", async () => {
+    let release!: (value: QueryResult) => void;
+    const ipc = createMockDragonIpc("happy");
+    await ipc.createDatabase("analytics");
+    vi.spyOn(ipc, "runQuery").mockImplementationOnce(
+      () => new Promise<QueryResult>((resolve) => { release = resolve; }),
+    );
+    const user = userEvent.setup();
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
+    await user.click(screen.getByRole("button", { name: "users" }));
+    await user.selectOptions(
+      screen.getByTestId(ConnectionAccessibility.databasePicker),
+      "analytics",
+    );
+    release({ columns: ["id"], rows: [[99]], rowsAffected: null, durationMs: 1 });
+
+    await waitFor(() => expect(document.title).toBe("analytics"));
+    expect(screen.queryByText("99")).toBeNull();
+  });
+
+  it("clears browse results on disconnect and leaves them cleared after a failed reconnect", async () => {
+    const ipc = createMockDragonIpc("happy");
+    const user = userEvent.setup();
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
+    await user.click(screen.getByRole("button", { name: "users" }));
+    await screen.findByTestId(ResultsAccessibility.grid);
+    await user.click(screen.getByRole("button", { name: /disconnect/i }));
+    expect(screen.queryByTestId(ResultsAccessibility.grid)).toBeNull();
+    vi.spyOn(ipc, "connectProfile").mockRejectedValueOnce(new Error("offline"));
+    await user.click(screen.getByRole("button", { name: ConnectionCopy.connect }));
+    await screen.findByRole("alert");
+    expect(screen.queryByTestId(ResultsAccessibility.grid)).toBeNull();
   });
 });

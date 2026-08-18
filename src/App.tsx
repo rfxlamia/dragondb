@@ -150,7 +150,7 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
   const [schemaError, setSchemaError] = useState<string | null>(null);
   const [dateFormat, setDateFormat] = useState<QueryResultsDateFormat>(loadDateFormat);
   const [primaryKeyColumns, setPrimaryKeyColumns] = useState<string[]>([]);
-  const [browsePage, setBrowsePage] = useState(0);
+  const browsePage = useStore(stores.browse, (s) => s.page);
   const canvasHandleRef = useRef<VisualQueryCanvasHandle | null>(null);
   const connectionPanelRef = useRef<ConnectionPanelHandle | null>(null);
   /**
@@ -197,13 +197,6 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
   );
   const hasNextPage = (raw?.rows.length ?? 0) > PAGE_SIZE;
   const hasPrevPage = browsePage > 0;
-
-  // Reset pagination whenever the browsed table (or active tab) changes —
-  // page 0 is always the correct start for a newly-selected table.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: deps are intentional re-run triggers (table/tab change), not values read in the effect body.
-  useEffect(() => {
-    setBrowsePage(0);
-  }, [activeTabId, selectedTableSchema, selectedTableName]);
 
   useEffect(() => {
     if (connectionId === null || sourceTable === undefined) {
@@ -523,6 +516,7 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
     stores.noteCanvasDisconnect(lastProfileIdRef.current);
     setSelectedSchema(null);
     setSchemaError(null);
+    setLaunchError(null);
   }
 
   function handleSwitchSuccess(result: ConnectResult): void {
@@ -533,6 +527,7 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
   function handleSwitchFailure(_error: IpcError): void {
     // Snapshot already set by onDisconnected after A teardown — keep it for remount-on-B.
     // See tests/stores/sp3-spec-audit.test.ts "App.handleSwitchFailure must not wipe the disconnect snapshot".
+    setLaunchError(null);
   }
 
   function handleCommittedFromChange(table: TableReference | null): void {
@@ -610,7 +605,22 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
   // applyRunSuccess's selectedTable option) and loads the table in every
   // case — this reproduces Swift's net effect (exactly one query per click)
   // without a second, easy-to-double-fire code path.
+  function startBrowseSession(table: TableRef): void {
+    const session = stores.session.getState();
+    const tabId = stores.tabs.getState().activeTabId;
+    if (session.connectionId === null || session.databaseName === null || tabId === null) {
+      return;
+    }
+    stores.browse.getState().startBrowse({
+      tabId,
+      connectionId: session.connectionId,
+      database: session.databaseName,
+      table,
+    });
+  }
+
   function handleViewMutationTable(table: MutationToastTable): void {
+    startBrowseSession({ schema: table.schema, name: table.name, tableType: "regular" });
     void runBrowseOnActiveTab(
       stores,
       ipc,
@@ -620,6 +630,7 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
   }
 
   function handleBrowseTable(table: TableRef): void {
+    startBrowseSession(table);
     void runBrowseOnActiveTab(stores, ipc, table, 0).catch(() => undefined);
   }
 
@@ -674,7 +685,7 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
       { schema: sourceTable.schema, name: sourceTable.name, tableType: "regular" },
       nextPage,
     )
-      .then(() => setBrowsePage(nextPage))
+      .then(() => stores.browse.getState().selectPage(nextPage))
       .catch(() => undefined);
   }
 
@@ -687,7 +698,7 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
       { schema: sourceTable.schema, name: sourceTable.name, tableType: "regular" },
       prevPage,
     )
-      .then(() => setBrowsePage(prevPage))
+      .then(() => stores.browse.getState().selectPage(prevPage))
       .catch(() => undefined);
   }
 
@@ -989,7 +1000,16 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
               onClearDatabase={handleClearDatabaseSelection}
               onCollapse={() => setConnectionCollapsed(true)}
               missingDatabase={missingDatabase}
-              connectProfile={(id) => stores.session.getState().connect(id)}
+              connectProfile={async (id) => {
+                try {
+                  const result = await stores.session.getState().connect(id);
+                  setLaunchError(null);
+                  return result;
+                } catch (error) {
+                  setLaunchError(humanIpcErrorMessage(error));
+                  throw error;
+                }
+              }}
               disconnectSession={() => stores.session.getState().disconnect()}
               onConnected={handleConnected}
               onDisconnected={handleDisconnected}

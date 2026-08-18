@@ -231,4 +231,56 @@ describe("composeAppStores", () => {
     expect(left.browse.getState().identity?.database).toBe("shop");
     expect(right.browse.getState().identity).toBeNull();
   });
+
+  it("resets browse only after switchDatabase commits", async () => {
+    let rejectSwitch = true;
+    const ipc = {
+      connectProfile: vi.fn(async () => ({ connectionId: "c1", profileId: "P", database: "shop" })),
+      switchDatabase: vi.fn(async () => {
+        if (rejectSwitch) throw new Error("switch failed");
+      }),
+      listTables: vi.fn(async () => []),
+      listColumns: vi.fn(async () => []),
+      saveTabState: vi.fn(async () => undefined),
+      deleteTabState: vi.fn(async () => undefined),
+      listTabStates: vi.fn(async () => []),
+    } as unknown as DragonIpc;
+    const stores = composeAppStores(ipc);
+    await stores.session.getState().connect("P");
+    stores.browse.getState().startBrowse({
+      tabId: "t1", connectionId: "c1", database: "shop",
+      table: { schema: "public", name: "orders", tableType: "regular" },
+    });
+
+    await expect(stores.session.getState().switchDatabase("analytics")).rejects.toThrow();
+    expect(stores.browse.getState().identity?.database).toBe("shop");
+
+    rejectSwitch = false;
+    await stores.session.getState().switchDatabase("analytics");
+    expect(stores.browse.getState().identity).toBeNull();
+  });
+
+  it("clears browse identity on disconnect and leaves it cleared after a failed reconnect", async () => {
+    const ipc = {
+      connectProfile: vi.fn(async () => ({ connectionId: "c1", profileId: "P", database: "shop" })),
+      disconnect: vi.fn(async () => undefined),
+      listTables: vi.fn(async () => []),
+      listColumns: vi.fn(async () => []),
+      saveTabState: vi.fn(async () => undefined),
+      deleteTabState: vi.fn(async () => undefined),
+      listTabStates: vi.fn(async () => []),
+    } as unknown as DragonIpc;
+    const stores = composeAppStores(ipc);
+    await stores.session.getState().connect("P");
+    stores.browse.getState().startBrowse({
+      tabId: "t1", connectionId: "c1", database: "shop",
+      table: { schema: "public", name: "orders", tableType: "regular" },
+    });
+    await stores.session.getState().disconnect();
+    expect(stores.browse.getState().identity).toBeNull();
+
+    vi.mocked(ipc.connectProfile).mockRejectedValueOnce(new Error("offline"));
+    await expect(stores.session.getState().connect("P")).rejects.toThrow("offline");
+    expect(stores.browse.getState().identity).toBeNull();
+  });
 });

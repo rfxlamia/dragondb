@@ -80,6 +80,8 @@ export type TabsState = {
   clearTabResults: (tabId: string) => void;
   clearMutationToast: (tabId: string) => void;
   clearInMemoryResults: () => void;
+  /** Clears in-memory browse payloads only (tabs with selected-table metadata). */
+  clearBrowseResults: () => void;
   setDatabaseName: (tabId: string, databaseName: string | null) => Promise<void>;
   setQueryText: (tabId: string, text: string) => void;
   setVisualDocumentJson: (tabId: string, json: string) => Promise<void>;
@@ -501,6 +503,32 @@ export function createTabsStore(ipc: DragonIpc, getters: TabsSessionGetters): St
             compact: null,
             status: { kind: "idle" as const },
           })),
+        }));
+      },
+
+      clearBrowseResults() {
+        const browseTabIds = get()
+          .tabs.filter((tab) => tab.selectedTableName !== null || tab.selectedTableSchema !== null)
+          .map((tab) => tab.id);
+        for (const tabId of browseTabIds) {
+          bumpRunGeneration(tabId);
+        }
+        set((state) => ({
+          tabs: state.tabs.map((tab) => {
+            if (tab.selectedTableName === null && tab.selectedTableSchema === null) {
+              return tab;
+            }
+            return {
+              ...tab,
+              selectedTableSchema: null,
+              selectedTableName: null,
+              raw: null,
+              compact: null,
+              status: { kind: "idle" as const },
+              cachedResultsData: null,
+              cachedColumnNames: null,
+            };
+          }),
         }));
       },
 

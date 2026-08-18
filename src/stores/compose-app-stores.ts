@@ -1,6 +1,7 @@
 /**
  * Thin orchestrator — constructs session + schema + tabs + library + history + browse
- * and wires disconnect clear / connect loadTables. No React / UI imports.
+ * and wires disconnect clear / database-switch browse reset / connect loadTables.
+ * No React / UI imports.
  */
 import type { StoreApi } from "zustand/vanilla";
 import type { DragonIpc, ProfileId } from "../ipc/contract";
@@ -43,12 +44,28 @@ export function composeAppStores(ipc: DragonIpc): AppStores {
   let canvasEpoch = 0;
   const canvasEpochListeners = new Set<() => void>();
 
+  function resetBrowseContext(): void {
+    const browseTabId = browse.getState().identity?.tabId ?? null;
+    const inFlightBrowse =
+      browseTabId !== null &&
+      tabs.getState().tabs.some((tab) => tab.id === browseTabId && tab.status?.kind === "running");
+    browse.getState().invalidate();
+    tabs.getState().clearBrowseResults();
+    if (inFlightBrowse && browseTabId !== null) {
+      tabs.getState().clearTabResults(browseTabId);
+    }
+  }
+
   const session = createSessionStore(ipc, {
     onConnected: ({ connectionId }) => schema.getState().loadTables(connectionId),
-    onDatabaseSwitched: (connectionId) => schema.getState().reloadTables(connectionId),
+    onDatabaseSwitched: (connectionId) => {
+      resetBrowseContext();
+      return schema.getState().reloadTables(connectionId);
+    },
     onDisconnected: () => {
       schema.getState().clear();
       tabs.getState().clearInMemoryResults();
+      browse.getState().invalidate();
     },
   });
 
