@@ -748,6 +748,41 @@ describe("ConnectionPanel Save-then-Connect", () => {
     expect(input?.secrets.password).toBe("s3cret");
   });
 
+  it("Test in Connection String mode probes the parsed URI, not the empty field form", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    const testSpy = vi.spyOn(ipc, "testConnection");
+    render(
+      <ConnectionPanel
+        ipc={ipc}
+        isConnected={false}
+        formVisible={true}
+        onFormVisibleChange={vi.fn()}
+        onProfilesLoaded={vi.fn()}
+        {...sessionPropsFromIpc(ipc)}
+        onConnected={vi.fn()}
+        onDisconnected={vi.fn()}
+        onSwitchSuccess={vi.fn()}
+        onSwitchFailure={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByLabelText(ConnectionCopy.connectionStringMode));
+    await user.type(
+      screen.getByTestId(ConnectionAccessibility.connectionStringField),
+      "postgres://alice:s3cret@localhost:5432/app",
+    );
+    await user.click(screen.getByRole("button", { name: ConnectionCopy.test }));
+    await waitFor(() => expect(testSpy).toHaveBeenCalled());
+    expect(testSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        host: "localhost",
+        username: "alice",
+        database: "app",
+        password: "s3cret",
+      }),
+    );
+  });
+
   it("Save of a malformed URI shows a parser error and does not call saveProfile", async () => {
     const user = userEvent.setup();
     const ipc = createMockDragonIpc("happy");

@@ -34,22 +34,29 @@ export function useSavedQueryAutosave(args: SavedQueryAutosaveArgs): void {
     }
     if (queryText.length === 0) return;
 
+    const tabs = stores.tabs.getState();
+    const tabId = tabs.activeTabId;
+    const savedQueryId = tabs.tabs.find((item) => item.id === tabId)?.savedQueryId ?? null;
+
     const timer = window.setTimeout(() => {
-      void persistHatchText(stores, queryText);
+      void persistHatchText(stores, queryText, tabId, savedQueryId);
     }, AUTOSAVE_MS);
 
     return () => window.clearTimeout(timer);
   }, [stores, queryText, isRestoring]);
 }
 
-async function persistHatchText(stores: AppStores, queryText: string): Promise<void> {
-  const tabs = stores.tabs.getState();
-  const tabId = tabs.activeTabId;
+async function persistHatchText(
+  stores: AppStores,
+  queryText: string,
+  tabId: string | null,
+  savedQueryId: string | null,
+): Promise<void> {
   if (tabId === null) return;
-  const tab = tabs.tabs.find((item) => item.id === tabId);
+  const tab = stores.tabs.getState().tabs.find((item) => item.id === tabId);
   if (tab === undefined) return;
+  if (tab.savedQueryId !== savedQueryId) return;
 
-  const savedQueryId = tab.savedQueryId;
   if (savedQueryId !== null) {
     const existing = stores.library.getState().queries.find((query) => query.id === savedQueryId);
     if (existing === undefined) return;
@@ -75,5 +82,7 @@ async function persistHatchText(stores: AppStores, queryText: string): Promise<v
     updatedAt: now,
     folderId: null,
   });
+  const still = stores.tabs.getState().tabs.find((item) => item.id === tabId);
+  if (still === undefined || still.savedQueryId !== null) return;
   stores.tabs.getState().setSavedQueryId(tabId, id);
 }

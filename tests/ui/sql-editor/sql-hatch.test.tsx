@@ -163,12 +163,11 @@ describe("SqlHatch", () => {
     expect(dispatchIndex).toBeGreaterThan(deferIndex);
   });
 
-  it("offers Try Again after 300s and reruns the current buffer", async () => {
-    vi.useFakeTimers();
+  it("disables Run while a request is in flight and ignores a second submit", async () => {
     const onRun = vi.fn();
     render(
       <SqlHatch
-        queryText="SELECT pg_sleep(301)"
+        queryText="INSERT INTO t VALUES (1)"
         onChange={vi.fn()}
         onRun={onRun}
         isConnected={true}
@@ -176,9 +175,43 @@ describe("SqlHatch", () => {
         running
       />,
     );
+    const run = screen.getByRole("button", { name: SqlHatchCopy.run });
+    expect(run).toBeDisabled();
+    fireEvent.click(run);
+    expect(onRun).not.toHaveBeenCalled();
+  });
+
+  it("offers Try Again after 300s, cancels the in-flight request, then reruns", async () => {
+    vi.useFakeTimers();
+    const onRun = vi.fn();
+    const order: string[] = [];
+    function Harness(): React.JSX.Element {
+      const [running, setRunning] = useState(true);
+      return (
+        <SqlHatch
+          queryText="SELECT pg_sleep(301)"
+          onChange={vi.fn()}
+          onRun={(text) => {
+            order.push("run");
+            onRun(text);
+            setRunning(true);
+          }}
+          onCancel={() => {
+            order.push("cancel");
+            setRunning(false);
+          }}
+          isConnected={true}
+          databaseName="app"
+          running={running}
+        />
+      );
+    }
+    render(<Harness />);
 
     await act(async () => vi.advanceTimersByTimeAsync(300_000));
     fireEvent.click(screen.getByRole("button", { name: SqlHatchCopy.tryAgain }));
+    await act(async () => undefined);
+    expect(order).toEqual(["cancel", "run"]);
     expect(onRun).toHaveBeenCalledWith("SELECT pg_sleep(301)");
     vi.useRealTimers();
   });

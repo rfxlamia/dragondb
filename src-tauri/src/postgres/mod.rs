@@ -15,17 +15,20 @@ pub mod ssl;
 pub mod table_admin;
 
 pub use cancel::CancelRegistry;
-pub use connection::{build_connect_config, connect, ConnectConfig, ConnectParams};
-pub use connection_test::{probe as test_connection, probe_config, ProbeConfig};
-pub use database_admin::{
-    create_database, drop_database, list_databases, maintenance_database,
-    set_session_database_name,
-};
-pub use error::{map_postgres_error, map_tokio_postgres_error, DriverFailure, IpcErrorKind, MappedIpcError};
 pub use catalog::{
     list_columns, list_tables, ColumnInfoRow, TableRefRow, LIST_COLUMNS_SQL, LIST_TABLES_SQL,
 };
-pub use query::{json_params_to_owned, map_query_rows, run_query, MappedRowSet, QueryResultData, Value};
+pub use connection::{build_connect_config, connect, ConnectConfig, ConnectParams};
+pub use connection_test::{probe as test_connection, probe_config, ProbeConfig};
+pub use database_admin::{
+    create_database, drop_database, list_databases, maintenance_database, set_session_database_name,
+};
+pub use error::{
+    map_postgres_error, map_tokio_postgres_error, DriverFailure, IpcErrorKind, MappedIpcError,
+};
+pub use query::{
+    json_params_to_owned, map_query_rows, run_query, MappedRowSet, QueryResultData, Value,
+};
 pub use row_ops::{
     delete_rows, fetch_primary_key_columns, update_row, validate_delete_preconditions,
     validate_update_preconditions, RowOperationError, RowOperationErrorKind,

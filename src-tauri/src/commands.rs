@@ -161,7 +161,11 @@ pub async fn connect_profile(
 }
 
 #[tauri::command]
-pub async fn disconnect(state: State<'_, Mutex<AppSession>>) -> Result<(), MappedIpcError> {
+pub async fn disconnect(
+    state: State<'_, Mutex<AppSession>>,
+    registry: State<'_, CancelRegistry>,
+) -> Result<(), MappedIpcError> {
+    registry.force_close();
     let mut session = state.lock().await;
     session.disconnect().await
 }

@@ -11,6 +11,7 @@ export function TableContextMenu(props: {
   onExport: () => void;
   onTruncate: () => void;
   onDrop: () => void;
+  truncateDisabled?: boolean;
 }): React.JSX.Element {
   const {
     executing,
@@ -20,6 +21,7 @@ export function TableContextMenu(props: {
     onExport,
     onTruncate,
     onDrop,
+    truncateDisabled = false,
   } = props;
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -95,7 +97,7 @@ export function TableContextMenu(props: {
             type="button"
             role="menuitem"
             className="ui-menu__danger"
-            disabled={executing}
+            disabled={executing || truncateDisabled}
             onClick={() => run(onTruncate)}
           >
             <TrashIcon size={14} />

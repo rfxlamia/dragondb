@@ -2,7 +2,7 @@
 
 use tokio_postgres::Client;
 
-use super::{map_tokio_postgres_error, MappedIpcError};
+use super::{map_tokio_postgres_error, IpcErrorKind, MappedIpcError};
 
 fn quote_identifier(identifier: &str) -> String {
     format!("\"{}\"", identifier.replace('"', "\"\""))
@@ -16,9 +16,15 @@ pub fn truncate_table_sql(schema: &str, table: &str) -> String {
     )
 }
 
-pub fn drop_table_sql(schema: &str, table: &str) -> String {
+pub fn drop_table_sql(schema: &str, table: &str, table_type: Option<&str>) -> String {
+    let command = if table_type == Some("foreign") {
+        "DROP FOREIGN TABLE"
+    } else {
+        "DROP TABLE"
+    };
     format!(
-        "DROP TABLE {}.{}",
+        "{} {}.{}",
+        command,
         quote_identifier(schema),
         quote_identifier(table)
     )
@@ -28,8 +34,14 @@ pub fn generate_table_ddl_sql(schema: &str, table: &str) -> String {
     let schema_literal = schema.replace('\'', "''");
     let table_literal = table.replace('\'', "''");
     format!(
-        "SELECT 'CREATE TABLE {}.{} (' || string_agg(format('%I %s%s', column_name, data_type, CASE WHEN is_nullable = 'NO' THEN ' NOT NULL' ELSE '' END), ', ' ORDER BY ordinal_position) || ')' FROM information_schema.columns WHERE table_schema = '{}' AND table_name = '{}'",
-        quote_identifier(schema), quote_identifier(table), schema_literal, table_literal
+        "SELECT \
+(EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = '{schema}' AND table_name = '{table}') \
+OR EXISTS (SELECT 1 FROM information_schema.foreign_tables WHERE foreign_table_schema = '{schema}' AND foreign_table_name = '{table}')) AS found, \
+'CREATE TABLE {quoted} (' || string_agg(format('%I %s%s', column_name, data_type, CASE WHEN is_nullable = 'NO' THEN ' NOT NULL' ELSE '' END), ', ' ORDER BY ordinal_position) || ')' \
+FROM information_schema.columns WHERE table_schema = '{schema}' AND table_name = '{table}'",
+        schema = schema_literal,
+        table = table_literal,
+        quoted = format!("{}.{}", quote_identifier(schema), quote_identifier(table)),
     )
 }
 
@@ -51,9 +63,14 @@ pub async fn truncate_table(
         .map_err(|e| map_tokio_postgres_error(&e))
 }
 
-pub async fn drop_table(client: &Client, schema: &str, table: &str) -> Result<(), MappedIpcError> {
+pub async fn drop_table(
+    client: &Client,
+    schema: &str,
+    table: &str,
+    table_type: Option<&str>,
+) -> Result<(), MappedIpcError> {
     client
-        .batch_execute(&drop_table_sql(schema, table))
+        .batch_execute(&drop_table_sql(schema, table, table_type))
         .await
         .map_err(|e| map_tokio_postgres_error(&e))
 }
@@ -67,7 +84,22 @@ pub async fn generate_table_ddl(
         .query_one(&generate_table_ddl_sql(schema, table), &[])
         .await
         .map_err(|e| map_tokio_postgres_error(&e))?;
-    Ok(row.get(0))
+    let found: bool = row.try_get(0).map_err(|e| map_tokio_postgres_error(&e))?;
+    let ddl: Option<String> = row.try_get(1).map_err(|e| map_tokio_postgres_error(&e))?;
+    if !found {
+        return Err(MappedIpcError {
+            kind: IpcErrorKind::Unknown,
+            message: "Table not found.".into(),
+            position: None,
+        });
+    }
+    Ok(ddl.unwrap_or_else(|| {
+        format!(
+            "CREATE TABLE {}.{} ()",
+            quote_identifier(schema),
+            quote_identifier(table)
+        )
+    }))
 }
 
 pub async fn set_search_path(client: &Client, schema: Option<&str>) -> Result<(), MappedIpcError> {
@@ -88,8 +120,12 @@ mod tests {
             r#"TRUNCATE TABLE "public"."temp""#
         );
         assert_eq!(
-            drop_table_sql("public", "temp"),
+            drop_table_sql("public", "temp", None),
             r#"DROP TABLE "public"."temp""#
+        );
+        assert_eq!(
+            drop_table_sql("public", "remote_orders", Some("foreign")),
+            r#"DROP FOREIGN TABLE "public"."remote_orders""#
         );
         assert!(!truncate_table_sql("public", "temp").contains("public.temp"));
     }
@@ -108,5 +144,7 @@ mod tests {
         let sql = generate_table_ddl_sql("public", "orders");
         assert!(sql.contains("\"public\""));
         assert!(sql.contains("\"orders\""));
+        assert!(sql.contains("EXISTS"));
+        assert!(sql.contains("found"));
     }
 }

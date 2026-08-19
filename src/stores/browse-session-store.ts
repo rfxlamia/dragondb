@@ -73,6 +73,8 @@ export type BrowseSessionState = {
   writePage: (generation: BrowseGeneration, page: number, entry: BrowseCachedPage) => boolean;
   cacheSize: () => number;
   ownBrowsePageRequest: <T>(page: number, start: () => Promise<T>) => Promise<T>;
+  /** Restore identity / hasNext / lifecycle for a tab without dropping other tabs' cache. */
+  rebindToTab: (tabId: string, identity: BrowseIdentity | null, page: number) => void;
 };
 
 export type BrowseSessionSnapshot = {
@@ -167,16 +169,31 @@ function evictLru<V>(map: Map<string, V>, limit: number): void {
 export function createBrowseSessionStore(): StoreApi<BrowseSessionState> {
   const pageCache = new Map<string, BrowseCachedPage>();
   const inFlight = new Map<string, Promise<unknown>>();
+  const tabProjections = new Map<
+    string,
+    Pick<BrowseSessionSnapshot, "identity" | "page" | "hasNext" | "lifecycle">
+  >();
 
   function clearCacheAndInFlight(): void {
     pageCache.clear();
     inFlight.clear();
   }
 
+  function persistProjection(state: BrowseSessionState): void {
+    if (state.identity === null) return;
+    tabProjections.set(state.identity.tabId, {
+      identity: state.identity,
+      page: state.page,
+      hasNext: state.hasNext,
+      lifecycle: state.lifecycle,
+    });
+  }
+
   return createStore<BrowseSessionState>((set, get) => ({
     ...initialObservable(),
 
     startBrowse(identity) {
+      persistProjection(get());
       clearCacheAndInFlight();
       set({
         identity,
@@ -184,14 +201,17 @@ export function createBrowseSessionStore(): StoreApi<BrowseSessionState> {
         hasNext: false,
         lifecycle: IDLE,
       });
+      persistProjection(get());
     },
 
     selectPage(page) {
       set({ page });
+      persistProjection(get());
     },
 
     invalidate() {
       clearCacheAndInFlight();
+      tabProjections.clear();
       set({
         identity: null,
         page: 0,
@@ -207,11 +227,13 @@ export function createBrowseSessionStore(): StoreApi<BrowseSessionState> {
         hasNext: false,
         generation: get().generation + 1,
       });
+      persistProjection(get());
     },
 
     publish(generation, patch) {
       if (generation !== get().generation) return false;
       set(patch);
+      persistProjection(get());
       return true;
     },
 
@@ -241,6 +263,7 @@ export function createBrowseSessionStore(): StoreApi<BrowseSessionState> {
       if (get().page === page) {
         set({ hasNext: entry.hasNext });
       }
+      persistProjection(get());
       return true;
     },
 
@@ -253,6 +276,29 @@ export function createBrowseSessionStore(): StoreApi<BrowseSessionState> {
       if (identity === null) return start();
       const key = browsePageCacheKey(identity, page);
       return ownBrowsePageRequest(inFlight, key, start);
+    },
+
+    rebindToTab(tabId, identity, page) {
+      persistProjection(get());
+      const generation = get().generation + 1;
+      const saved = tabProjections.get(tabId);
+      if (saved !== undefined) {
+        set({
+          identity: saved.identity,
+          page: saved.page,
+          hasNext: saved.hasNext,
+          lifecycle: saved.lifecycle,
+          generation,
+        });
+        return;
+      }
+      set({
+        identity,
+        page,
+        hasNext: false,
+        lifecycle: IDLE,
+        generation,
+      });
     },
   }));
 }

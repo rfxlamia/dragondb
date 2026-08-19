@@ -320,28 +320,33 @@ export function ConnectionPanel(props: ConnectionPanelProps): React.JSX.Element 
     setBannerPhase(form.profile.sshEnabled ? "testingSSH" : "testing");
     setBannerMessage(null);
     try {
+      const { profile, secrets } = uri.applyParseOnSave(form, selectedId);
       await ipc.testConnection({
-        host: form.profile.host,
-        port: form.profile.port,
-        username: form.profile.username,
-        database: form.profile.database,
-        sslMode: form.profile.sslMode,
-        sshEnabled: form.profile.sshEnabled,
-        sshHost: form.profile.sshHost,
-        sshPort: form.profile.sshPort,
-        sshUsername: form.profile.sshUsername,
-        sshAuthMethod: form.profile.sshAuthMethod,
-        password: form.secrets.password,
-        sshPassword: form.secrets.sshPassword,
-        sshPrivateKey: form.secrets.sshPrivateKey,
-        sshPassphrase: form.secrets.sshPassphrase,
+        host: profile.host,
+        port: profile.port,
+        username: profile.username,
+        database: profile.database,
+        sslMode: profile.sslMode,
+        sshEnabled: profile.sshEnabled,
+        sshHost: profile.sshHost,
+        sshPort: profile.sshPort,
+        sshUsername: profile.sshUsername,
+        sshAuthMethod: profile.sshAuthMethod,
+        password: secrets.password,
+        sshPassword: secrets.sshPassword,
+        sshPrivateKey: secrets.sshPrivateKey,
+        sshPassphrase: secrets.sshPassphrase,
       });
       await waitRemaining(startedAt, TEST_BANNER_MIN_MS);
       setBannerPhase("success");
     } catch (error) {
       await waitRemaining(startedAt, TEST_BANNER_MIN_MS);
       setBannerPhase("error");
-      setBannerMessage(humanIpcErrorMessage(error));
+      if (error instanceof ConnectionStringParseError) {
+        setBannerMessage(error.message);
+      } else {
+        setBannerMessage(humanIpcErrorMessage(error));
+      }
     }
   }
 

@@ -8,4 +8,10 @@ describe("formatQueryDate", () => {
     expect(long.length).toBeGreaterThan(64);
     expect(formatQueryDate(long, "us")).toBe(long);
   });
+
+  it("formats timezone-free postgres timestamps on the original calendar day", () => {
+    expect(formatQueryDate("2026-01-01 00:30:00", "iso8601DateOnly")).toBe("2026-01-01");
+    expect(formatQueryDate("2026-01-01 00:30:00", "us")).toBe("1/1/2026");
+    expect(formatQueryDate("2026-01-01 00:30:00", "european")).toBe("1/1/2026");
+  });
 });

@@ -94,4 +94,34 @@ describe("browse-session-store contract", () => {
     ).toBe(false);
     expect(store.getState().cacheSize()).toBe(0);
   });
+
+  it("rebindToTab restores the target tab's hasNext and lifecycle", () => {
+    const store = createBrowseSessionStore();
+    const customers = {
+      tabId: "t2",
+      connectionId: "c1",
+      database: "shop",
+      table: { schema: "public", name: "customers", tableType: "regular" as const },
+    };
+    store.getState().startBrowse(orders);
+    const generation = store.getState().generation;
+    store.getState().publish(generation, { hasNext: true, lifecycle: { phase: "ready" } });
+
+    store.getState().startBrowse(customers);
+    store.getState().publish(store.getState().generation, { hasNext: false });
+    expect(store.getState().hasNext).toBe(false);
+
+    store.getState().rebindToTab("t1", orders, 0);
+    expect(store.getState()).toMatchObject({
+      identity: orders,
+      hasNext: true,
+      lifecycle: { phase: "ready" },
+    });
+
+    store.getState().rebindToTab("t2", customers, 0);
+    expect(store.getState()).toMatchObject({
+      identity: customers,
+      hasNext: false,
+    });
+  });
 });

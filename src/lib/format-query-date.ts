@@ -26,10 +26,24 @@ export function formatQueryDate(value: string, format: QueryResultsDateFormat): 
   }
 }
 
+const NAIVE_TIMESTAMP = /^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}):(\d{2})(?:\.\d+)?)?$/;
+const HAS_EXPLICIT_OFFSET = /(?:Z|[+-]\d{2}:\d{2})$/i;
+
 function parseQueryDate(value: string): Date | null {
   if (value.length === 0 || value.length > DATE_PARSE_MAX_CHARS) return null;
   if (!ISO_DATE_PREFIX.test(value)) return null;
   const normalized = value.includes(" ") ? value.replace(" ", "T") : value;
+  if (!HAS_EXPLICIT_OFFSET.test(normalized)) {
+    const naive = NAIVE_TIMESTAMP.exec(normalized);
+    if (naive === null) return null;
+    const year = Number(naive[1]);
+    const month = Number(naive[2]);
+    const day = Number(naive[3]);
+    const hour = Number(naive[4] ?? "0");
+    const minute = Number(naive[5] ?? "0");
+    const second = Number(naive[6] ?? "0");
+    return new Date(Date.UTC(year, month - 1, day, hour, minute, second));
+  }
   const ms = Date.parse(normalized);
   if (Number.isNaN(ms)) return null;
   return new Date(ms);

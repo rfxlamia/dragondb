@@ -85,11 +85,14 @@ export function SqlHatch(props: SqlHatchProps): React.JSX.Element {
   const [noDatabaseAlert, setNoDatabaseAlert] = useState(false);
   const [timedOut, setTimedOut] = useState(false);
   const runningStartedAt = useRef<number | null>(null);
+  const runningRef = useRef(running);
+  const pendingRetryRef = useRef(false);
 
   onChangeRef.current = onChange;
   onRunRef.current = onRun;
   isConnectedRef.current = isConnected;
   databaseNameRef.current = databaseName;
+  runningRef.current = running;
 
   useEffect(() => {
     queryTextRef.current = queryText;
@@ -100,6 +103,7 @@ export function SqlHatch(props: SqlHatchProps): React.JSX.Element {
   }
 
   function submitRun(): void {
+    if (runningRef.current) return;
     if (!isConnectedRef.current) return;
     if (databaseNameRef.current === null || databaseNameRef.current.length === 0) {
       setNoDatabaseAlert(true);
@@ -110,6 +114,12 @@ export function SqlHatch(props: SqlHatchProps): React.JSX.Element {
     onRunRef.current(currentBuffer());
   }
   submitRunRef.current = submitRun;
+
+  function retryAfterTimeout(): void {
+    if (pendingRetryRef.current) return;
+    pendingRetryRef.current = true;
+    onCancel?.();
+  }
 
   useImperativeHandle(ref, () => ({ run: submitRun }));
 
@@ -186,6 +196,10 @@ export function SqlHatch(props: SqlHatchProps): React.JSX.Element {
     if (!running) {
       runningStartedAt.current = null;
       setTimedOut(false);
+      if (pendingRetryRef.current) {
+        pendingRetryRef.current = false;
+        submitRunRef.current();
+      }
       return;
     }
     runningStartedAt.current = Date.now();
@@ -225,7 +239,7 @@ export function SqlHatch(props: SqlHatchProps): React.JSX.Element {
         <div ref={hostRef} className="sql-hatch__editor" data-testid="sqlHatch.editor" />
       )}
       <div className="sql-hatch__actions">
-        <button type="button" className="sql-hatch__run" onClick={submitRun}>
+        <button type="button" className="sql-hatch__run" onClick={submitRun} disabled={running}>
           {SqlHatchCopy.run}
         </button>
         {running ? (
@@ -255,7 +269,7 @@ export function SqlHatch(props: SqlHatchProps): React.JSX.Element {
         >
           <p>{SqlHatchCopy.queryTimeout}</p>
           <div className="sql-hatch__timeout-actions">
-            <button type="button" className="sql-hatch__run" onClick={submitRun}>
+            <button type="button" className="sql-hatch__run" onClick={retryAfterTimeout}>
               {SqlHatchCopy.tryAgain}
             </button>
             <button type="button" className="sql-hatch__stop" onClick={() => onCancel?.()}>

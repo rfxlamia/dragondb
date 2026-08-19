@@ -1,8 +1,10 @@
 //! Cancellation state is independent from the application-session mutex so a
 //! cancel command remains reachable while a query awaits the server.
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 
+use tokio::task::AbortHandle;
 use tokio_postgres::{CancelToken, NoTls};
 
 use super::{
@@ -12,25 +14,52 @@ use super::{
 #[derive(Clone, Default)]
 pub struct CancelRegistry {
     inner: Arc<RwLock<Option<CancelRegistration>>>,
+    teardown: Arc<AtomicBool>,
 }
 
 struct CancelRegistration {
     connection_id: String,
     token: Option<CancelToken>,
     tls: EffectiveTls,
+    connection_abort: Option<AbortHandle>,
 }
 
 impl CancelRegistry {
-    pub fn register(&self, connection_id: String, token: CancelToken, tls: EffectiveTls) {
+    pub fn register(
+        &self,
+        connection_id: String,
+        token: CancelToken,
+        tls: EffectiveTls,
+        connection_abort: Option<AbortHandle>,
+    ) {
+        self.teardown.store(false, Ordering::SeqCst);
         self.replace(CancelRegistration {
             connection_id,
             token: Some(token),
             tls,
+            connection_abort,
         });
     }
 
     pub fn clear(&self) {
         self.replace_none();
+        self.teardown.store(false, Ordering::SeqCst);
+    }
+
+    /// Abort the live postgres connection driver without taking the session mutex.
+    pub fn force_close(&self) {
+        self.teardown.store(true, Ordering::SeqCst);
+        if let Ok(mut guard) = self.inner.write() {
+            if let Some(registration) = guard.as_mut() {
+                if let Some(abort) = registration.connection_abort.take() {
+                    abort.abort();
+                }
+            }
+        }
+    }
+
+    pub fn teardown_requested(&self) -> bool {
+        self.teardown.load(Ordering::SeqCst)
     }
 
     pub async fn cancel_token(&self, connection_id: &str) -> Result<(), MappedIpcError> {
@@ -87,6 +116,17 @@ impl CancelRegistry {
             connection_id: connection_id.into(),
             token: None,
             tls: EffectiveTls::NoTls,
+            connection_abort: None,
+        });
+    }
+
+    #[cfg(test)]
+    fn register_abort_handle(&self, abort: AbortHandle) {
+        self.replace(CancelRegistration {
+            connection_id: "connection-a".into(),
+            token: None,
+            tls: EffectiveTls::NoTls,
+            connection_abort: Some(abort),
         });
     }
 
@@ -141,5 +181,19 @@ mod tests {
             .join()
             .expect("registry thread");
         assert_eq!(joined.as_deref(), Some("connection-a"));
+    }
+
+    #[tokio::test]
+    async fn force_close_aborts_the_driver_task_and_blocks_oneshot_reconnect() {
+        let registry = CancelRegistry::default();
+        let handle = tokio::spawn(async {
+            loop {
+                tokio::time::sleep(std::time::Duration::from_secs(60)).await;
+            }
+        });
+        registry.register_abort_handle(handle.abort_handle());
+        registry.force_close();
+        assert!(registry.teardown_requested());
+        assert!(handle.await.unwrap_err().is_cancelled());
     }
 }

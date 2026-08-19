@@ -351,11 +351,20 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
             await stores.session.getState().switchDatabase(wanted);
             setMissingDatabase(false);
           } else if (wanted) {
-            // Persisted db missing from the live list: clear the selection
-            // rather than keep connect's default profile.database — the
-            // picker must show the "Select DB" pulse with nothing chosen.
+            // Persisted db missing from the live list: treat as a full
+            // database-context invalidation, not a frontend-only picker pulse.
+            // Hatch/canvas receive tab.databaseName ?? session.databaseName, so
+            // leaving the tab's name would keep Run enabled against the
+            // profile default still live in Rust.
             stores.session.setState({ databaseName: null });
             setMissingDatabase(true);
+            const tabId = stores.tabs.getState().activeTabId;
+            if (tabId !== null) {
+              await stores.tabs.getState().setDatabaseName(tabId, null);
+            }
+            stores.tabs.getState().clearBrowseResults();
+            stores.browse.getState().invalidate();
+            stores.schema.getState().clear();
           }
           if (!stores.schema.getState().tablesLoading) {
             setOverlayPhase(null);
@@ -418,6 +427,26 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
   function handleCloseTab(id: string): void {
     stores.tabs.getState().closeTab(id);
     tabDocumentsRef.current.delete(id);
+  }
+
+  function handleSwitchTab(id: string): void {
+    stores.tabs.getState().switchTab(id);
+    const tab = stores.tabs.getState().tabs.find((item) => item.id === id);
+    const session = stores.session.getState();
+    const identity =
+      tab?.selectedTableName && session.connectionId !== null && session.databaseName !== null
+        ? {
+            tabId: id,
+            connectionId: session.connectionId,
+            database: session.databaseName,
+            table: {
+              schema: tab.selectedTableSchema ?? undefined,
+              name: tab.selectedTableName,
+              tableType: "regular" as const,
+            },
+          }
+        : null;
+    stores.browse.getState().rebindToTab(id, identity, tab?.browsePage ?? 0);
   }
 
   useLayoutEffect(() => {
@@ -858,6 +887,8 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
     if (tabId !== null) {
       await stores.tabs.getState().setDatabaseName(tabId, null);
     }
+    stores.tabs.getState().clearBrowseResults();
+    stores.browse.getState().invalidate();
     stores.schema.getState().clear();
   }
 
@@ -1131,7 +1162,7 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
               mutationToast={mutationToast}
               canvas={canvas}
               onNewTab={handleNewTab}
-              onSwitchTab={(id) => stores.tabs.getState().switchTab(id)}
+              onSwitchTab={handleSwitchTab}
               onCloseTab={handleCloseTab}
               onSelectQuery={handleSelectQuery}
               onNewQuery={handleNewQuery}

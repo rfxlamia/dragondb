@@ -81,6 +81,24 @@ describe("TableList", () => {
     expect(screen.getByLabelText(TablesCopy.foreignTable)).toBeInTheDocument();
   });
 
+  it("disables Truncate for foreign tables", async () => {
+    const user = userEvent.setup();
+    render(
+      <TableList
+        tables={[remote]}
+        columnsByTable={{}}
+        executing={false}
+        onBrowse={vi.fn()}
+        onDrop={vi.fn()}
+        onTruncate={vi.fn()}
+        onGenerateDdl={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: TablesCopy.menu }));
+    expect(screen.getByRole("menuitem", { name: TablesCopy.truncate })).toBeDisabled();
+    expect(screen.getByRole("menuitem", { name: TablesCopy.drop })).toBeEnabled();
+  });
+
   it("Drop confirm calls dropTable callback, not onRunQuery", async () => {
     const user = userEvent.setup();
     const onDrop = vi.fn();

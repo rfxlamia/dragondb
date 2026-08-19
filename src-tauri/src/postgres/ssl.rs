@@ -28,7 +28,9 @@ pub fn collapse_ssl_mode(mode: &str) -> EffectiveTls {
 }
 
 /// Build a `MakeTlsConnector` for TLS connect paths.
-pub fn make_tls_connector(tls: EffectiveTls) -> Result<Option<MakeTlsConnector>, native_tls::Error> {
+pub fn make_tls_connector(
+    tls: EffectiveTls,
+) -> Result<Option<MakeTlsConnector>, native_tls::Error> {
     match tls {
         EffectiveTls::NoTls => Ok(None),
         EffectiveTls::TlsNoVerify => {

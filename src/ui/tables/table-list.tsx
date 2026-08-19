@@ -176,6 +176,7 @@ export function TableList(props: TableListProps): React.JSX.Element {
                         }}
                         onTruncate={() => setPending({ table, kind: "truncate" })}
                         onDrop={() => setPending({ table, kind: "drop" })}
+                        truncateDisabled={table.tableType === "foreign"}
                       />
                     </div>
                     {isExpanded ? (

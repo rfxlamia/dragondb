@@ -28,7 +28,7 @@ pub struct ProbeConfig {
 /// dropping the returned client before tearing down that tunnel keeps the probe
 /// fully isolated from the live connection.
 pub async fn probe(params: ConnectParams<'_>) -> Result<(), MappedIpcError> {
-    let client: Client = connect(params).await?;
+    let (client, _abort): (Client, _) = connect(params).await?;
     drop(client);
     Ok(())
 }

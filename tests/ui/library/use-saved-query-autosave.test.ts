@@ -171,6 +171,41 @@ describe("useSavedQueryAutosave", () => {
     expect(library.find((item) => item.id === "q2")?.queryText).toBe("SELECT 2");
   });
 
+  it("a pending debounce stays on the tab that typed, even after switching to an equal buffer", async () => {
+    vi.useFakeTimers();
+    const saveSavedQuery = vi.fn(async (q: SavedQueryDto) => q);
+    const ipc = ipcWithSave(saveSavedQuery);
+    const stores = composeAppStores(ipc);
+    const first = stores.tabs.getState().createTab();
+    const second = stores.tabs.getState().createTab();
+    stores.tabs.getState().switchTab(first.id);
+
+    const { rerender } = renderHook(
+      ({ queryText }) => useSavedQueryAutosave({ stores, queryText, isRestoring: false }),
+      { initialProps: { queryText: "" } },
+    );
+
+    act(() => stores.tabs.getState().setQueryText(first.id, "SELECT shared"));
+    rerender({ queryText: "SELECT shared" });
+    await vi.advanceTimersByTimeAsync(200);
+
+    act(() => {
+      stores.tabs.getState().switchTab(second.id);
+      stores.tabs.getState().setQueryText(second.id, "SELECT shared");
+    });
+    rerender({ queryText: "SELECT shared" });
+    await vi.advanceTimersByTimeAsync(500);
+
+    const created = saveSavedQuery.mock.calls[0]?.[0];
+    expect(created?.queryText).toBe("SELECT shared");
+    expect(stores.tabs.getState().tabs.find((tab) => tab.id === first.id)?.savedQueryId).toBe(
+      created?.id,
+    );
+    expect(
+      stores.tabs.getState().tabs.find((tab) => tab.id === second.id)?.savedQueryId,
+    ).toBeNull();
+  });
+
   it("deselect while a debounce is pending cancels it — no extra SavedQuery is auto-created", async () => {
     vi.useFakeTimers();
     const saveSavedQuery = vi.fn(async (q: SavedQueryDto) => q);

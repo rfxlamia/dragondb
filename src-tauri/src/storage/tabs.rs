@@ -416,16 +416,33 @@ mod tests {
     #[test]
     fn visual_document_json_round_trips_without_clobbering_query_text() {
         let conn = open();
-        let id = upsert_tab_state(&conn, TabStateWrite {
-            id: None, connection_id: Some("c1".into()), database_name: Some("app".into()),
-            query_text: "SELECT 1".into(), saved_query_id: None, is_active: true, order_index: 0,
-            created_at: Some("10".into()), last_accessed_at: Some("20".into()),
-            selected_table_schema: None, selected_table_name: None, selected_schema_filter: None,
-            include_cached_results: false, cached_results_data: None, cached_column_names: None,
-            visual_document_json: Some(r#"{"from":"orders"}"#.into()),
-        }).unwrap();
+        let id = upsert_tab_state(
+            &conn,
+            TabStateWrite {
+                id: None,
+                connection_id: Some("c1".into()),
+                database_name: Some("app".into()),
+                query_text: "SELECT 1".into(),
+                saved_query_id: None,
+                is_active: true,
+                order_index: 0,
+                created_at: Some("10".into()),
+                last_accessed_at: Some("20".into()),
+                selected_table_schema: None,
+                selected_table_name: None,
+                selected_schema_filter: None,
+                include_cached_results: false,
+                cached_results_data: None,
+                cached_column_names: None,
+                visual_document_json: Some(r#"{"from":"orders"}"#.into()),
+            },
+        )
+        .unwrap();
         let row = get_tab_state(&conn, &id).unwrap().unwrap();
         assert_eq!(row.query_text, "SELECT 1");
-        assert_eq!(row.visual_document_json.as_deref(), Some(r#"{"from":"orders"}"#));
+        assert_eq!(
+            row.visual_document_json.as_deref(),
+            Some(r#"{"from":"orders"}"#)
+        );
     }
 }
