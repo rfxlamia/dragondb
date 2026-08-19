@@ -27,6 +27,17 @@ export function quotedTableSql(table: TableRef): string {
   return table.schema ? `${quoteIdentifier(table.schema)}.${name}` : name;
 }
 
+/**
+ * Primary-key columns for `table`, from the catalog the tables list already
+ * loaded. Empty when the columns have not been fetched yet — browse then falls
+ * back to the ctid ordering rather than blocking on a metadata round trip.
+ */
+function browsePrimaryKeyColumns(stores: AppStores, table: TableRef): string[] {
+  const key = table.schema ? `${table.schema}.${table.name}` : table.name;
+  const columns = stores.schema.getState().columnsByTable[key] ?? [];
+  return columns.filter((column) => column.isPrimaryKey).map((column) => column.name);
+}
+
 function ensureActiveTab(stores: AppStores): string {
   return stores.tabs.getState().activeTabId ?? stores.tabs.getState().createTab().id;
 }
@@ -169,6 +180,7 @@ async function fetchAndPublishBrowsePage(
       tabGeneration,
       timers,
       settlement,
+      browsePrimaryKeyColumns(stores, table),
     );
     if (outcome.kind === "timeout") {
       return await settleBrowseTimeout(

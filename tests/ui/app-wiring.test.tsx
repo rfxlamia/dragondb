@@ -2723,8 +2723,13 @@ describe("App table browser host wiring", () => {
     expect(runQuery).not.toHaveBeenCalled();
     await user.click(name);
     await waitFor(() => expect(runQuery).toHaveBeenCalled());
+    // Browse pages are ordered so LIMIT/OFFSET is deterministic: by primary key
+    // when the catalog columns are loaded, by ctid on a heap table otherwise.
+    // Columns are not fetched yet on this first click, so ctid is expected.
     expect(runQuery.mock.calls[0]?.[1]).toMatchObject({
-      text: expect.stringMatching(/SELECT \* FROM "public"\."users" LIMIT 101/i),
+      text: expect.stringMatching(
+        /SELECT \* FROM "public"\."users" ORDER BY ctid LIMIT 101 OFFSET 0/i,
+      ),
     });
     expect(await screen.findByTestId(ResultsAccessibility.grid)).toBeInTheDocument();
   });

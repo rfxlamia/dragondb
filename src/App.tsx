@@ -18,6 +18,7 @@ import { newSavedQueryName } from "./lib/new-saved-query-name";
 import { unknownErrorMessage } from "./lib/unknown-error-message";
 import { type BrowseRetryTarget, browseRetryBlocked } from "./stores/browse-session-store";
 import { type AppStores, composeAppStores } from "./stores/compose-app-stores";
+import { reconcileTabDatabase } from "./stores/reconcile-tab-database";
 import { recoverBrowseAfterTimeout } from "./stores/recover-browse-after-timeout";
 import {
   quotedTableSql,
@@ -390,6 +391,21 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
     document.title = databaseName ?? "DragonDB";
   }, [databaseName]);
 
+  /**
+   * A tab created before a session existed carries `databaseName === null`.
+   * Stamp the live database onto it once connected so that re-activating it
+   * later reconciles against a real name; without this, handleSwitchTab would
+   * read it as a tab with no database and clear the context that Run needs.
+   * A tab whose database was deleted is not re-stamped: that path nulls
+   * `session.databaseName` too, so this effect returns early.
+   */
+  useEffect(() => {
+    if (!isConnected || databaseName === null || activeTabId === null) return;
+    const active = stores.tabs.getState().tabs.find((item) => item.id === activeTabId);
+    if (active === undefined || active.databaseName !== null) return;
+    void stores.tabs.getState().setDatabaseName(activeTabId, databaseName);
+  }, [isConnected, databaseName, activeTabId, stores]);
+
   useEffect(() => {
     if (tablesLoading) {
       setOverlayPhase((current) => (current === null ? null : "Loading tables…"));
@@ -444,13 +460,25 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
     const target = stores.tabs.getState().tabs.find((item) => item.id === id);
     const live = stores.session.getState();
 
-    if (target?.databaseName && live.isConnected && live.databaseName !== target.databaseName) {
+    const reconciliation = reconcileTabDatabase({
+      tabDatabase: target?.databaseName ?? null,
+      liveDatabase: live.databaseName,
+      isConnected: live.isConnected,
+    });
+    if (reconciliation.kind === "switch") {
       try {
-        await stores.session.getState().switchDatabase(target.databaseName);
+        await stores.session.getState().switchDatabase(reconciliation.database);
       } catch (error) {
         setDatabaseSwitchError(unknownErrorMessage(error, ConnectionCopy.databaseSwitchErrorHint));
         return;
       }
+    } else if (reconciliation.kind === "clear") {
+      // The tab has no database of its own. Drop the frontend's database
+      // context so Run stays gated and the picker asks for an explicit
+      // selection, instead of the tab inheriting the database the previously
+      // active tab left live in Rust.
+      stores.session.setState({ databaseName: null });
+      setMissingDatabase(true);
     }
     setDatabaseSwitchError(null);
 

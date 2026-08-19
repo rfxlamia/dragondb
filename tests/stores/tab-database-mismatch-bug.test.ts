@@ -6,6 +6,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { DragonIpc } from "../../src/ipc/contract";
 import { composeAppStores } from "../../src/stores/compose-app-stores";
+import { reconcileTabDatabase } from "../../src/stores/reconcile-tab-database";
 
 function composeIpc(overrides: Partial<DragonIpc> = {}): DragonIpc {
   return {
@@ -107,5 +108,44 @@ describe("tab database mismatch bug (proof)", () => {
 
     expect(stores.session.getState().databaseName).toBe("beta");
     expect(ipc.switchDatabase).not.toHaveBeenCalledWith("c1", "alpha");
+  });
+});
+
+describe("reconcileTabDatabase", () => {
+  it("switches the live database to the tab's when they differ", () => {
+    expect(
+      reconcileTabDatabase({ tabDatabase: "alpha", liveDatabase: "beta", isConnected: true }),
+    ).toEqual({ kind: "switch", database: "alpha" });
+  });
+
+  it("does nothing when the tab already matches the live database", () => {
+    expect(
+      reconcileTabDatabase({ tabDatabase: "alpha", liveDatabase: "alpha", isConnected: true }),
+    ).toEqual({ kind: "none" });
+  });
+
+  it("clears the database context for a tab that has none while another is live", () => {
+    // Regression: deleting a tab's database persists databaseName === null. If
+    // the user visits another tab and comes back, the null tab must not adopt
+    // the database that tab left live — the hatch reads
+    // `tab.databaseName ?? session.databaseName` and would re-enable Run.
+    expect(
+      reconcileTabDatabase({ tabDatabase: null, liveDatabase: "beta", isConnected: true }),
+    ).toEqual({ kind: "clear" });
+  });
+
+  it("does nothing for a null tab when no database is live either", () => {
+    expect(
+      reconcileTabDatabase({ tabDatabase: null, liveDatabase: null, isConnected: true }),
+    ).toEqual({ kind: "none" });
+  });
+
+  it("does nothing while disconnected", () => {
+    expect(
+      reconcileTabDatabase({ tabDatabase: null, liveDatabase: "beta", isConnected: false }),
+    ).toEqual({ kind: "none" });
+    expect(
+      reconcileTabDatabase({ tabDatabase: "alpha", liveDatabase: "beta", isConnected: false }),
+    ).toEqual({ kind: "none" });
   });
 });

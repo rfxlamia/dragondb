@@ -1,5 +1,6 @@
 import type { ConnectionId, DragonIpc, ProfileId, QueryResult, TableRef } from "../ipc/contract";
 import { unknownErrorMessage } from "../lib/unknown-error-message";
+import { browsePageSql } from "./browse-page-sql";
 import {
   BROWSE_VISIBLE_PAGE_SIZE,
   type BrowseIdentity,
@@ -57,15 +58,6 @@ type BrowseRaceOutcome =
   | { kind: "query-error"; error: unknown }
   | { kind: "timeout" };
 
-function quoteIdentifier(value: string): string {
-  return `"${value.replaceAll('"', '""')}"`;
-}
-
-function quotedBrowseTableSql(table: TableRef): string {
-  const name = quoteIdentifier(table.name);
-  return table.schema ? `${quoteIdentifier(table.schema)}.${name}` : name;
-}
-
 function retryTargetFor(identity: BrowseIdentity, page: number): BrowseRetryTarget {
   return { ...identity, page };
 }
@@ -78,13 +70,20 @@ export function raceBrowseQuery(
   runId: number,
   timers: TimerHandles,
   settlement: Settlement<"query" | "timeout">,
+  /** Primary-key columns, so successive pages have a deterministic order. */
+  primaryKeyColumns: string[] = [],
 ): Promise<BrowseRaceOutcome> {
   return new Promise((resolve) => {
     void ipc
       .runQuery(
         connectionId,
         {
-          text: `SELECT * FROM ${quotedBrowseTableSql(table)} LIMIT ${BROWSE_VISIBLE_PAGE_SIZE + 1} OFFSET ${page * BROWSE_VISIBLE_PAGE_SIZE}`,
+          text: browsePageSql({
+            table,
+            page,
+            pageSize: BROWSE_VISIBLE_PAGE_SIZE,
+            primaryKeyColumns,
+          }),
           params: [],
         },
         runId,
