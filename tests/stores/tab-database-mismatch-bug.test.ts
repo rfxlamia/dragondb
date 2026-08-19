@@ -6,7 +6,10 @@
 import { describe, expect, it, vi } from "vitest";
 import type { DragonIpc } from "../../src/ipc/contract";
 import { composeAppStores } from "../../src/stores/compose-app-stores";
-import { reconcileTabDatabase } from "../../src/stores/reconcile-tab-database";
+import {
+  reconcileTabDatabase,
+  shouldStampTabDatabase,
+} from "../../src/stores/reconcile-tab-database";
 
 function composeIpc(overrides: Partial<DragonIpc> = {}): DragonIpc {
   return {
@@ -147,5 +150,63 @@ describe("reconcileTabDatabase", () => {
     expect(
       reconcileTabDatabase({ tabDatabase: "alpha", liveDatabase: "beta", isConnected: false }),
     ).toEqual({ kind: "none" });
+  });
+});
+
+describe("shouldStampTabDatabase", () => {
+  it("stamps a tab created before any session once a database is live", () => {
+    expect(
+      shouldStampTabDatabase({
+        tabDatabase: null,
+        liveDatabase: "alpha",
+        isConnected: true,
+        databaseSelectionCleared: false,
+      }),
+    ).toBe(true);
+  });
+
+  it("never stamps a tab whose database selection was cleared", () => {
+    // Regression: closing a neighbouring tab activates this one without going
+    // through the switch path. Stamping there would bind the tab to the
+    // database the closed tab left live — the very adoption the clear exists
+    // to prevent.
+    expect(
+      shouldStampTabDatabase({
+        tabDatabase: null,
+        liveDatabase: "beta",
+        isConnected: true,
+        databaseSelectionCleared: true,
+      }),
+    ).toBe(false);
+  });
+
+  it("leaves a tab that already has a database alone", () => {
+    expect(
+      shouldStampTabDatabase({
+        tabDatabase: "alpha",
+        liveDatabase: "beta",
+        isConnected: true,
+        databaseSelectionCleared: false,
+      }),
+    ).toBe(false);
+  });
+
+  it("does nothing while disconnected or with no live database", () => {
+    expect(
+      shouldStampTabDatabase({
+        tabDatabase: null,
+        liveDatabase: "alpha",
+        isConnected: false,
+        databaseSelectionCleared: false,
+      }),
+    ).toBe(false);
+    expect(
+      shouldStampTabDatabase({
+        tabDatabase: null,
+        liveDatabase: null,
+        isConnected: true,
+        databaseSelectionCleared: false,
+      }),
+    ).toBe(false);
   });
 });

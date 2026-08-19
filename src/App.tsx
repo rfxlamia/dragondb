@@ -18,7 +18,7 @@ import { newSavedQueryName } from "./lib/new-saved-query-name";
 import { unknownErrorMessage } from "./lib/unknown-error-message";
 import { type BrowseRetryTarget, browseRetryBlocked } from "./stores/browse-session-store";
 import { type AppStores, composeAppStores } from "./stores/compose-app-stores";
-import { reconcileTabDatabase } from "./stores/reconcile-tab-database";
+import { reconcileTabDatabase, shouldStampTabDatabase } from "./stores/reconcile-tab-database";
 import { recoverBrowseAfterTimeout } from "./stores/recover-browse-after-timeout";
 import {
   quotedTableSql,
@@ -396,15 +396,24 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
    * Stamp the live database onto it once connected so that re-activating it
    * later reconciles against a real name; without this, handleSwitchTab would
    * read it as a tab with no database and clear the context that Run needs.
-   * A tab whose database was deleted is not re-stamped: that path nulls
-   * `session.databaseName` too, so this effect returns early.
+   * `missingDatabase` keeps a tab whose database was deleted out of this: it
+   * can become active without passing through handleSwitchTab at all — closing
+   * its neighbour activates it directly — and stamping there would rebind it to
+   * whatever database the closed tab left live.
    */
   useEffect(() => {
-    if (!isConnected || databaseName === null || activeTabId === null) return;
+    if (activeTabId === null) return;
     const active = stores.tabs.getState().tabs.find((item) => item.id === activeTabId);
-    if (active === undefined || active.databaseName !== null) return;
+    if (active === undefined) return;
+    const stamp = shouldStampTabDatabase({
+      tabDatabase: active.databaseName,
+      liveDatabase: databaseName,
+      isConnected,
+      databaseSelectionCleared: missingDatabase,
+    });
+    if (!stamp || databaseName === null) return;
     void stores.tabs.getState().setDatabaseName(activeTabId, databaseName);
-  }, [isConnected, databaseName, activeTabId, stores]);
+  }, [isConnected, databaseName, activeTabId, missingDatabase, stores]);
 
   useEffect(() => {
     if (tablesLoading) {
