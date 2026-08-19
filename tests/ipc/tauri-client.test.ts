@@ -103,10 +103,12 @@ describe("createTauriDragonIpc", () => {
         isForeignKey: false,
       },
     ]);
-    expect(await ipc.listColumns("c-uuid", { name: "users", schema: "public" })).toHaveLength(1);
+    expect(
+      await ipc.listColumns("c-uuid", { name: "users", schema: "public", tableType: "regular" }),
+    ).toHaveLength(1);
     expect(invoke).toHaveBeenCalledWith("list_columns", {
       connectionId: "c-uuid",
-      table: { name: "users", schema: "public" },
+      table: { name: "users", schema: "public", tableType: "regular" },
     });
 
     invoke.mockResolvedValueOnce({
@@ -115,12 +117,13 @@ describe("createTauriDragonIpc", () => {
       rowsAffected: null,
       durationMs: 9,
     });
-    const result = await ipc.runQuery("c-uuid", { text: "SELECT 1", params: [] });
+    const result = await ipc.runQuery("c-uuid", { text: "SELECT 1", params: [] }, 1);
     expect(result.rows).toEqual([[1]]);
     expect(result.durationMs).toBe(9);
     expect(invoke).toHaveBeenCalledWith("run_query", {
       connectionId: "c-uuid",
       sql: { text: "SELECT 1", params: [] },
+      runId: 1,
     });
   });
 
@@ -140,7 +143,7 @@ describe("createTauriDragonIpc", () => {
       message: "syntax error",
       position: 12,
     });
-    await expect(ipc.runQuery("c", { text: "SELEC", params: [] })).rejects.toEqual({
+    await expect(ipc.runQuery("c", { text: "SELEC", params: [] }, 2)).rejects.toEqual({
       kind: "syntax",
       message: "syntax error",
       position: 12,
@@ -306,6 +309,7 @@ describe("createTauriDragonIpc", () => {
       selectedSchemaFilter: null,
       cachedResultsData: null,
       cachedColumnNames: null,
+      visualDocumentJson: null,
     };
 
     invoke.mockResolvedValueOnce([tab]);
@@ -353,6 +357,7 @@ describe("createTauriDragonIpc", () => {
         selectedSchemaFilter: null,
         cachedResultsData: null,
         cachedColumnNames: null,
+        visualDocumentJson: null,
       }),
     ).rejects.toMatchObject({ kind: "unknown", message: expect.stringMatching(/no rows/i) });
   });
@@ -363,13 +368,13 @@ describe("createTauriDragonIpc", () => {
     invoke.mockResolvedValueOnce(undefined);
     await ipc.updateRow({
       connectionId: "c1",
-      table: { name: "users", schema: "public" },
+      table: { name: "users", schema: "public", tableType: "regular" },
       primaryKey: { id: 1 },
       patch: { name: "Ada", note: null },
     });
     expect(invoke).toHaveBeenCalledWith("update_row", {
       connectionId: "c1",
-      table: { name: "users", schema: "public" },
+      table: { name: "users", schema: "public", tableType: "regular" },
       primaryKey: { id: 1 },
       patch: { name: "Ada", note: null },
     });
@@ -377,12 +382,12 @@ describe("createTauriDragonIpc", () => {
     invoke.mockResolvedValueOnce(undefined);
     await ipc.deleteRows({
       connectionId: "c1",
-      table: { name: "users", schema: "public" },
+      table: { name: "users", schema: "public", tableType: "regular" },
       primaryKeys: [{ id: 1 }, { id: 2 }],
     });
     expect(invoke).toHaveBeenCalledWith("delete_rows", {
       connectionId: "c1",
-      table: { name: "users", schema: "public" },
+      table: { name: "users", schema: "public", tableType: "regular" },
       primaryKeys: [{ id: 1 }, { id: 2 }],
     });
 
@@ -413,11 +418,70 @@ describe("createTauriDragonIpc", () => {
     await expect(
       ipc.updateRow({
         connectionId: "c1",
-        table: { name: "users" },
+        table: { name: "users", tableType: "regular" },
         primaryKey: {},
         patch: { name: "x" },
       }),
     ).rejects.toEqual({ kind: "noPrimaryKey", message: "table has no PK" });
+  });
+
+  it("maps last-slice catalog and database commands to snake_case invokes", async () => {
+    const ipc = createTauriDragonIpc();
+    invoke.mockResolvedValueOnce(undefined);
+    await ipc.testConnection({
+      host: "127.0.0.1",
+      port: 5432,
+      username: "u",
+      database: "d",
+      sslMode: "prefer",
+      sshEnabled: false,
+    });
+    expect(invoke).toHaveBeenCalledWith("test_connection", expect.any(Object));
+
+    invoke.mockResolvedValueOnce(undefined);
+    await ipc.cancelQuery("c-uuid", 3);
+    expect(invoke).toHaveBeenCalledWith("cancel_query", { connectionId: "c-uuid", runId: 3 });
+
+    invoke.mockResolvedValueOnce(["postgres", "shop"]);
+    expect(await ipc.listDatabases("c-uuid")).toEqual(["postgres", "shop"]);
+    expect(invoke).toHaveBeenCalledWith("list_databases", { connectionId: "c-uuid" });
+
+    invoke.mockResolvedValueOnce(undefined);
+    await ipc.switchDatabase("c-uuid", "shop");
+    expect(invoke).toHaveBeenCalledWith("switch_database", {
+      connectionId: "c-uuid",
+      name: "shop",
+    });
+
+    invoke.mockResolvedValueOnce(undefined);
+    await ipc.createDatabase("shop");
+    expect(invoke).toHaveBeenCalledWith("create_database", { name: "shop" });
+
+    invoke.mockResolvedValueOnce(undefined);
+    await ipc.deleteDatabase("shop");
+    expect(invoke).toHaveBeenCalledWith("delete_database", { name: "shop" });
+
+    const table = { schema: "public", name: "temp", tableType: "regular" as const };
+    const connectionId = "c-uuid";
+    invoke.mockResolvedValueOnce(undefined);
+    await ipc.truncateTable(connectionId, table);
+    expect(invoke).toHaveBeenCalledWith("truncate_table", { connectionId, table });
+
+    invoke.mockResolvedValueOnce(undefined);
+    await ipc.dropTable(connectionId, table);
+    expect(invoke).toHaveBeenCalledWith("drop_table", { connectionId, table });
+
+    invoke.mockResolvedValueOnce("CREATE TABLE public.temp ();");
+    expect(await ipc.generateTableDdl(connectionId, table)).toContain("CREATE TABLE");
+    expect(invoke).toHaveBeenCalledWith("generate_table_ddl", { connectionId, table });
+
+    invoke.mockResolvedValueOnce(undefined);
+    await ipc.setSearchPath(connectionId, "audit");
+    expect(invoke).toHaveBeenCalledWith("set_search_path", { connectionId, schema: "audit" });
+
+    invoke.mockResolvedValueOnce(undefined);
+    await ipc.clearAllHistory();
+    expect(invoke).toHaveBeenCalledWith("clear_all_history");
   });
 
   it("tauri-client has zero phaseBStub and zero empty SP-3 stub resolves", async () => {

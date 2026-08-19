@@ -1,0 +1,154 @@
+/* Tab strip.
+   Pills on a recessed strip, not folder tabs with hairline shoulders: the
+   old treatment drew three borders per tab and a fake seam into the content
+   below it, which is the single most dated pattern in desktop web chrome.
+   The active tab is the same raised white plane the content uses, so the
+   strip reads as "this pane belongs to that tab". */
+
+.tab-bar {
+  align-items: center;
+  display: flex;
+  flex-shrink: 0;
+  gap: 2px;
+  min-height: 38px;
+  min-width: 0;
+  padding: 4px 6px;
+}
+
+.tab-bar__strip {
+  align-items: center;
+  display: flex;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.tab-bar__item {
+  align-items: center;
+  border-radius: var(--radius);
+  display: flex;
+  flex-shrink: 0;
+  gap: 0;
+  padding-right: 2px;
+  transition: background-color var(--duration-fast) var(--ease-standard);
+}
+
+.tab-bar__item:hover {
+  background: var(--neutral-200);
+}
+
+.tab-bar__tab {
+  background: transparent;
+  border: none;
+  border-radius: var(--radius);
+  color: var(--neutral-700);
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  max-width: 22rem;
+  overflow: hidden;
+  padding: 5px 8px;
+  text-overflow: ellipsis;
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard);
+  white-space: nowrap;
+}
+
+.tab-bar__tab:hover {
+  color: var(--neutral-900);
+}
+
+.tab-bar__item:has(.tab-bar__tab--active) {
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-sm);
+}
+
+.tab-bar__tab--active {
+  color: var(--neutral-900);
+  font-weight: 600;
+}
+
+.tab-bar__item--solo {
+  align-items: center;
+  background: var(--surface-raised);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  padding-right: 2px;
+}
+
+.tab-bar__tab--solo {
+  cursor: default;
+}
+
+/* Close stays quiet until the tab is hovered or focused — a persistent × on
+   every tab is visual noise that also invites misclicks. */
+.tab-bar__close {
+  align-items: center;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--neutral-600);
+  cursor: pointer;
+  display: inline-flex;
+  flex-shrink: 0;
+  height: 18px;
+  justify-content: center;
+  opacity: 0;
+  padding: 0;
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard),
+    opacity var(--duration-fast) var(--ease-standard);
+  width: 18px;
+}
+
+.tab-bar__item:hover .tab-bar__close,
+.tab-bar__item--solo:hover .tab-bar__close,
+.tab-bar__item:focus-within .tab-bar__close,
+.tab-bar__item--solo:focus-within .tab-bar__close,
+.tab-bar__item:has(.tab-bar__tab--active) .tab-bar__close {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .tab-bar__close {
+    opacity: 1;
+  }
+}
+
+.tab-bar__close:hover {
+  background: var(--row-hover);
+  color: var(--neutral-900);
+}
+
+.tab-bar__new {
+  align-items: center;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius);
+  color: var(--neutral-600);
+  cursor: pointer;
+  display: inline-flex;
+  height: 24px;
+  justify-content: center;
+  margin-left: auto;
+  padding: 0;
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard),
+    transform var(--duration-fast) var(--ease-out);
+  width: 24px;
+}
+
+.tab-bar__new:hover {
+  background: var(--neutral-200);
+  color: var(--neutral-900);
+}
+
+.tab-bar__new:active {
+  transform: scale(0.92);
+}

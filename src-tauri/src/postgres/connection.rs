@@ -3,6 +3,7 @@
 //! Session owns lifecycle / one-shot reconnect later — this module does not
 //! invent continuous keep-alive or pooling.
 
+use tokio::task::AbortHandle;
 use tokio_postgres::config::SslMode;
 use tokio_postgres::{Client, Config, NoTls};
 
@@ -98,7 +99,7 @@ fn to_tokio_config(cfg: &ConnectConfig) -> Config {
 /// Open a single Postgres client. Caller (session) owns reconnect policy.
 ///
 /// Does **not** pool or keep-alive reconnect.
-pub async fn connect(params: ConnectParams<'_>) -> Result<Client, MappedIpcError> {
+pub async fn connect(params: ConnectParams<'_>) -> Result<(Client, AbortHandle), MappedIpcError> {
     let cfg = build_connect_config(params)?;
     let pg = to_tokio_config(&cfg);
 
@@ -108,10 +109,10 @@ pub async fn connect(params: ConnectParams<'_>) -> Result<Client, MappedIpcError
                 .connect(NoTls)
                 .await
                 .map_err(|e| map_tokio_postgres_error(&e))?;
-            tokio::spawn(async move {
+            let handle = tokio::spawn(async move {
                 let _ = connection.await;
             });
-            Ok(client)
+            Ok((client, handle.abort_handle()))
         }
         EffectiveTls::TlsNoVerify | EffectiveTls::TlsVerify => {
             let connector = make_tls_connector(cfg.tls).map_err(|e| MappedIpcError {
@@ -124,10 +125,10 @@ pub async fn connect(params: ConnectParams<'_>) -> Result<Client, MappedIpcError
                 .connect(connector)
                 .await
                 .map_err(|e| map_tokio_postgres_error(&e))?;
-            tokio::spawn(async move {
+            let handle = tokio::spawn(async move {
                 let _ = connection.await;
             });
-            Ok(client)
+            Ok((client, handle.abort_handle()))
         }
     }
 }
@@ -157,7 +158,7 @@ mod tests {
     #[tokio::test]
     #[ignore = "requires Postgres"]
     async fn live_connect_optional() {
-        let client = connect(ConnectParams {
+        let (client, _abort) = connect(ConnectParams {
             host: "127.0.0.1",
             port: 5432,
             user: "postgres",
@@ -167,10 +168,7 @@ mod tests {
         })
         .await
         .expect("live connect");
-        let row = client
-            .query_one("SELECT 1", &[])
-            .await
-            .expect("select 1");
+        let row = client.query_one("SELECT 1", &[]).await.expect("select 1");
         let one: i32 = row.get(0);
         assert_eq!(one, 1);
     }

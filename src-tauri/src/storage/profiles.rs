@@ -106,10 +106,7 @@ pub fn list_profiles(conn: &Connection) -> SqliteResult<Vec<ProfileRow>> {
 
 /// Delete a profile by id.
 pub fn delete_profile(conn: &Connection, id: &str) -> SqliteResult<()> {
-    conn.execute(
-        "DELETE FROM connection_profiles WHERE id = ?1",
-        params![id],
-    )?;
+    conn.execute("DELETE FROM connection_profiles WHERE id = ?1", params![id])?;
     Ok(())
 }
 

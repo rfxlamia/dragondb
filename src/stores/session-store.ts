@@ -8,6 +8,7 @@ export type SessionState = {
   databaseName: string | null;
   connect: (profileId: ProfileId) => Promise<ConnectResult>;
   disconnect: () => Promise<void>;
+  switchDatabase: (name: string) => Promise<void>;
   /** Disconnect then connect to `profileId` (SP-2 switch success path). */
   switchSuccess: (profileId: ProfileId) => Promise<void>;
   /** Teardown then connect; connect failure leaves disconnected (SP-2 switch fail). */
@@ -17,6 +18,7 @@ export type SessionState = {
 export type SessionStoreOptions = {
   onConnected?: (result: ConnectResult) => void | Promise<void>;
   onDisconnected?: () => void | Promise<void>;
+  onDatabaseSwitched?: (connectionId: ConnectionId, name: string) => void | Promise<void>;
 };
 
 /**
@@ -90,6 +92,14 @@ export function createSessionStore(
         databaseName: null,
       });
       await options.onDisconnected?.();
+    },
+
+    async switchDatabase(name) {
+      const connectionId = get().connectionId;
+      if (connectionId === null) throw new Error("Not connected");
+      await ipc.switchDatabase(connectionId, name);
+      set({ databaseName: name });
+      await options.onDatabaseSwitched?.(connectionId, name);
     },
 
     async switchSuccess(profileId) {

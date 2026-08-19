@@ -3,6 +3,9 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createMockDragonIpc, fixtureProfileFields } from "../../../src/ipc/mock";
+import { TABLES_LOAD_FAILED } from "../../../src/stores/schema-store";
+import { ConnectionAccessibility } from "../../../src/ui/connection/connection-accessibility";
+import { ConnectionCopy } from "../../../src/ui/connection/connection-copy";
 import { ConnectionPanel } from "../../../src/ui/connection/connection-panel";
 
 afterEach(() => cleanup());
@@ -18,6 +21,188 @@ function sessionPropsFromIpc(ipc: ReturnType<typeof createMockDragonIpc>) {
   };
 }
 
+function formGateProps(
+  overrides: {
+    formVisible?: boolean;
+    onFormVisibleChange?: (next: boolean) => void;
+    onProfilesLoaded?: (count: number) => void;
+  } = {},
+) {
+  return {
+    formVisible: true,
+    onFormVisibleChange: vi.fn(),
+    onProfilesLoaded: vi.fn(),
+    ...overrides,
+  };
+}
+
+describe("ConnectionPanel sheet dismissal", () => {
+  it("Escape closes the connection sheet", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    const onFormVisibleChange = vi.fn();
+    render(
+      <ConnectionPanel
+        ipc={ipc}
+        {...formGateProps({ onFormVisibleChange })}
+        isConnected={false}
+        {...sessionPropsFromIpc(ipc)}
+        onConnected={vi.fn()}
+        onDisconnected={vi.fn()}
+        onSwitchSuccess={vi.fn()}
+        onSwitchFailure={vi.fn()}
+      />,
+    );
+    await screen.findByRole("dialog", { name: ConnectionCopy.formTitleNew });
+    await user.keyboard("{Escape}");
+    expect(onFormVisibleChange).toHaveBeenCalledWith(false);
+  });
+
+  it("Escape belongs to the confirm stacked on the sheet, not to the sheet", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    const saved = await ipc.saveProfile({
+      profile: baseProfileFields(),
+      secrets: { password: "pw" },
+    });
+    const onFormVisibleChange = vi.fn();
+    render(
+      <ConnectionPanel
+        ipc={ipc}
+        {...formGateProps({ onFormVisibleChange })}
+        isConnected={false}
+        activeProfileId={saved.id}
+        {...sessionPropsFromIpc(ipc)}
+        onConnected={vi.fn()}
+        onDisconnected={vi.fn()}
+        onSwitchSuccess={vi.fn()}
+        onSwitchFailure={vi.fn()}
+      />,
+    );
+    await user.click(await screen.findByRole("button", { name: ConnectionCopy.delete }));
+    expect(screen.getByRole("button", { name: ConnectionCopy.confirmDelete })).toBeInTheDocument();
+    await user.keyboard("{Escape}");
+    // The confirm is the topmost surface, so it takes the key and closes.
+    // The sheet stays: closing it under a live confirm would leave the confirm
+    // floating with its pending delete still armed.
+    expect(onFormVisibleChange).not.toHaveBeenCalledWith(false);
+    expect(
+      screen.queryByRole("button", { name: ConnectionCopy.confirmDelete }),
+    ).not.toBeInTheDocument();
+
+    // Second Escape reaches the sheet, proving it re-arms once nothing is
+    // stacked on it.
+    await user.keyboard("{Escape}");
+    expect(onFormVisibleChange).toHaveBeenCalledWith(false);
+  });
+
+  it("keeps Escape off the sheet while the confirmed delete is in flight", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    const saved = await ipc.saveProfile({
+      profile: baseProfileFields(),
+      secrets: { password: "pw" },
+    });
+    // The mock resolves in a microtask, so the in-flight window only exists if
+    // the request is held open deliberately.
+    const heldIpc = { ...ipc, deleteProfile: () => new Promise<void>(() => {}) };
+    const onFormVisibleChange = vi.fn();
+    render(
+      <ConnectionPanel
+        ipc={heldIpc}
+        {...formGateProps({ onFormVisibleChange })}
+        isConnected={false}
+        activeProfileId={saved.id}
+        {...sessionPropsFromIpc(ipc)}
+        onConnected={vi.fn()}
+        onDisconnected={vi.fn()}
+        onSwitchSuccess={vi.fn()}
+        onSwitchFailure={vi.fn()}
+      />,
+    );
+    await user.click(await screen.findByRole("button", { name: ConnectionCopy.delete }));
+    await user.click(screen.getByRole("button", { name: ConnectionCopy.confirmDelete }));
+
+    // Busy must not hand the key back to the sheet: the delete is already sent,
+    // so closing the sheet would strand the confirm over a live request.
+    await user.keyboard("{Escape}");
+    expect(onFormVisibleChange).not.toHaveBeenCalledWith(false);
+  });
+});
+
+/**
+ * The brief's rule is that a session action never exists twice at once: the
+ * sheet footer owns Connect and Delete while it is open, the sidebar owns them
+ * while it is closed. That guarantee is spread across three separate
+ * conditionals in three files (the sheet footer's `sessionClaimed`, the header
+ * Connect's `!formVisible`, the profile row's `!formVisible`) with nothing but
+ * prose holding them in sync — so it is asserted here as one fact.
+ */
+describe("ConnectionPanel session-action ownership", () => {
+  it("offers exactly one Connect and one Delete, whichever surface owns them", async () => {
+    const ipc = createMockDragonIpc("happy");
+    const saved = await ipc.saveProfile({
+      profile: baseProfileFields(),
+      secrets: { password: "pw" },
+    });
+
+    const panelProps = {
+      ipc,
+      isConnected: false,
+      activeProfileId: saved.id,
+      ...sessionPropsFromIpc(ipc),
+      onConnected: vi.fn(),
+      onDisconnected: vi.fn(),
+      onSwitchSuccess: vi.fn(),
+      onSwitchFailure: vi.fn(),
+    };
+
+    const { rerender } = render(
+      <ConnectionPanel {...panelProps} {...formGateProps({ formVisible: true })} />,
+    );
+
+    // Sheet open: its footer owns both.
+    await screen.findByRole("dialog", { name: ConnectionCopy.formTitleEdit });
+    await waitFor(() => {
+      expect(screen.getAllByRole("button", { name: ConnectionCopy.connect })).toHaveLength(1);
+    });
+    expect(screen.getAllByRole("button", { name: ConnectionCopy.delete })).toHaveLength(1);
+
+    // Sheet closed: the sidebar picks both up, and still only once each.
+    rerender(<ConnectionPanel {...panelProps} {...formGateProps({ formVisible: false })} />);
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("dialog", { name: ConnectionCopy.formTitleEdit }),
+      ).not.toBeInTheDocument();
+    });
+    expect(screen.getAllByRole("button", { name: ConnectionCopy.connect })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: ConnectionCopy.delete })).toHaveLength(1);
+  });
+
+  // Collapsing unmounts the panel, and the sheet lives inside it — so an
+  // enabled collapse button behind the scrim silently discards a half-typed
+  // profile.
+  it("cannot be collapsed while the sheet holds an unsaved draft", async () => {
+    const ipc = createMockDragonIpc("happy");
+    const onCollapse = vi.fn();
+    render(
+      <ConnectionPanel
+        ipc={ipc}
+        {...formGateProps({ formVisible: true })}
+        isConnected={false}
+        onCollapse={onCollapse}
+        {...sessionPropsFromIpc(ipc)}
+        onConnected={vi.fn()}
+        onDisconnected={vi.fn()}
+        onSwitchSuccess={vi.fn()}
+        onSwitchFailure={vi.fn()}
+      />,
+    );
+    await screen.findByRole("dialog", { name: ConnectionCopy.formTitleNew });
+    expect(screen.getByTestId(ConnectionAccessibility.collapseConnection)).toBeDisabled();
+  });
+});
+
 describe("ConnectionPanel Save-then-Connect", () => {
   it("keeps Connect unavailable until the profile is saved", async () => {
     const user = userEvent.setup();
@@ -26,6 +211,7 @@ describe("ConnectionPanel Save-then-Connect", () => {
     render(
       <ConnectionPanel
         ipc={ipc}
+        {...formGateProps()}
         isConnected={false}
         {...sessionPropsFromIpc(ipc)}
         onConnected={onConnected}
@@ -52,6 +238,7 @@ describe("ConnectionPanel Save-then-Connect", () => {
     render(
       <ConnectionPanel
         ipc={ipc}
+        {...formGateProps()}
         isConnected={false}
         {...sessionPropsFromIpc(ipc)}
         onConnected={onConnected}
@@ -82,6 +269,7 @@ describe("ConnectionPanel Save-then-Connect", () => {
     render(
       <ConnectionPanel
         ipc={ipc}
+        {...formGateProps()}
         isConnected={false}
         connectProfile={connectProfile}
         disconnectSession={disconnectSession}
@@ -107,6 +295,7 @@ describe("ConnectionPanel Save-then-Connect", () => {
     render(
       <ConnectionPanel
         ipc={ipc}
+        {...formGateProps()}
         isConnected={false}
         {...sessionPropsFromIpc(ipc)}
         onConnected={vi.fn()}
@@ -137,6 +326,7 @@ describe("ConnectionPanel Save-then-Connect", () => {
     render(
       <ConnectionPanel
         ipc={ipc}
+        {...formGateProps()}
         isConnected={true}
         activeProfileId={saved.id}
         connectProfile={(id) => ipc.connectProfile(id)}
@@ -164,6 +354,7 @@ describe("ConnectionPanel Save-then-Connect", () => {
     render(
       <ConnectionPanel
         ipc={ipc}
+        {...formGateProps()}
         isConnected={true}
         activeProfileId={saved.id}
         {...sessionPropsFromIpc(ipc)}
@@ -205,6 +396,7 @@ describe("ConnectionPanel Save-then-Connect", () => {
     render(
       <ConnectionPanel
         ipc={ipc}
+        {...formGateProps()}
         isConnected={true}
         activeProfileId={a.id}
         {...sessionPropsFromIpc(ipc)}
@@ -244,6 +436,7 @@ describe("ConnectionPanel Save-then-Connect", () => {
     const { rerender } = render(
       <ConnectionPanel
         ipc={ipc}
+        {...formGateProps()}
         isConnected={true}
         activeProfileId={a.id}
         {...sessionPropsFromIpc(ipc)}
@@ -268,6 +461,7 @@ describe("ConnectionPanel Save-then-Connect", () => {
     rerender(
       <ConnectionPanel
         ipc={ipc}
+        {...formGateProps()}
         isConnected={true}
         activeProfileId={a.id}
         {...sessionPropsFromIpc(ipc)}
@@ -310,6 +504,7 @@ describe("ConnectionPanel Save-then-Connect", () => {
     render(
       <ConnectionPanel
         ipc={ipc}
+        {...formGateProps()}
         isConnected={true}
         activeProfileId={a.id}
         {...sessionPropsFromIpc(ipc)}
@@ -343,6 +538,7 @@ describe("ConnectionPanel Save-then-Connect", () => {
     render(
       <ConnectionPanel
         ipc={ipc}
+        {...formGateProps()}
         isConnected={false}
         activeProfileId={saved.id}
         {...sessionPropsFromIpc(ipc)}
@@ -373,6 +569,7 @@ describe("ConnectionPanel Save-then-Connect", () => {
     render(
       <ConnectionPanel
         ipc={ipc}
+        {...formGateProps()}
         isConnected={true}
         activeProfileId={saved.id}
         connectProfile={(id) => ipc.connectProfile(id)}
@@ -407,6 +604,7 @@ describe("ConnectionPanel Save-then-Connect", () => {
     render(
       <ConnectionPanel
         ipc={ipc}
+        {...formGateProps()}
         isConnected={false}
         {...sessionPropsFromIpc(ipc)}
         onConnected={vi.fn()}
@@ -418,5 +616,360 @@ describe("ConnectionPanel Save-then-Connect", () => {
     await waitFor(() => {
       expect(screen.getByRole("status")).toHaveTextContent(/Storage boom/);
     });
+  });
+
+  it("shows No connections when the profile list is empty and the form is showing", async () => {
+    const ipc = createMockDragonIpc("happy");
+    render(
+      <ConnectionPanel
+        ipc={ipc}
+        isConnected={false}
+        formVisible={true}
+        onFormVisibleChange={vi.fn()}
+        onProfilesLoaded={vi.fn()}
+        {...sessionPropsFromIpc(ipc)}
+        onConnected={vi.fn()}
+        onDisconnected={vi.fn()}
+        onSwitchSuccess={vi.fn()}
+        onSwitchFailure={vi.fn()}
+      />,
+    );
+    expect(await screen.findByText(ConnectionCopy.noConnections)).toBeInTheDocument();
+  });
+
+  it("form-level Cancel hides the form without calling saveProfile", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    const saveSpy = vi.spyOn(ipc, "saveProfile");
+    const onFormVisibleChange = vi.fn();
+    render(
+      <ConnectionPanel
+        ipc={ipc}
+        isConnected={false}
+        formVisible={true}
+        onFormVisibleChange={onFormVisibleChange}
+        onProfilesLoaded={vi.fn()}
+        {...sessionPropsFromIpc(ipc)}
+        onConnected={vi.fn()}
+        onDisconnected={vi.fn()}
+        onSwitchSuccess={vi.fn()}
+        onSwitchFailure={vi.fn()}
+      />,
+    );
+    await user.type(screen.getByLabelText(/host/i), "127.0.0.1");
+    await user.click(screen.getByRole("button", { name: ConnectionCopy.cancel }));
+    expect(onFormVisibleChange).toHaveBeenCalledWith(false);
+    expect(saveSpy).not.toHaveBeenCalled();
+  });
+
+  it("delete last profile hides the form and reports 0 profiles", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    await ipc.saveProfile({
+      profile: baseProfileFields(),
+      secrets: { password: "pw" },
+    });
+    const onFormVisibleChange = vi.fn();
+    const onProfilesLoaded = vi.fn();
+    render(
+      <ConnectionPanel
+        ipc={ipc}
+        isConnected={false}
+        formVisible={true}
+        onFormVisibleChange={onFormVisibleChange}
+        onProfilesLoaded={onProfilesLoaded}
+        {...sessionPropsFromIpc(ipc)}
+        onConnected={vi.fn()}
+        onDisconnected={vi.fn()}
+        onSwitchSuccess={vi.fn()}
+        onSwitchFailure={vi.fn()}
+      />,
+    );
+    await user.click(await screen.findByRole("button", { name: /^dev$/i }));
+    await user.click(screen.getByRole("button", { name: ConnectionCopy.delete }));
+    await user.click(screen.getByRole("button", { name: ConnectionCopy.confirmDelete }));
+    await waitFor(() => expect(onFormVisibleChange).toHaveBeenCalledWith(false));
+    expect(onProfilesLoaded).toHaveBeenCalledWith(0);
+  });
+
+  it("does not show table names or fail copy while disconnected", async () => {
+    const ipc = createMockDragonIpc("happy");
+    render(
+      <ConnectionPanel
+        ipc={ipc}
+        isConnected={false}
+        formVisible={true}
+        onFormVisibleChange={vi.fn()}
+        onProfilesLoaded={vi.fn()}
+        tables={[{ schema: "public", name: "users", tableType: "regular" }]}
+        tablesLoading={false}
+        tablesErrorMessage={TABLES_LOAD_FAILED}
+        {...sessionPropsFromIpc(ipc)}
+        onConnected={vi.fn()}
+        onDisconnected={vi.fn()}
+        onSwitchSuccess={vi.fn()}
+        onSwitchFailure={vi.fn()}
+      />,
+    );
+    expect(screen.queryByRole("button", { name: "users" })).toBeNull();
+    expect(screen.queryByText(ConnectionCopy.tablesLoadError)).toBeNull();
+  });
+
+  it("Save in Connection String mode parses URI into host/user/database and keeps password in secrets", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    const saveSpy = vi.spyOn(ipc, "saveProfile");
+    render(
+      <ConnectionPanel
+        ipc={ipc}
+        isConnected={false}
+        formVisible={true}
+        onFormVisibleChange={vi.fn()}
+        onProfilesLoaded={vi.fn()}
+        {...sessionPropsFromIpc(ipc)}
+        onConnected={vi.fn()}
+        onDisconnected={vi.fn()}
+        onSwitchSuccess={vi.fn()}
+        onSwitchFailure={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByLabelText(ConnectionCopy.connectionStringMode));
+    await user.type(
+      screen.getByTestId(ConnectionAccessibility.connectionStringField),
+      "postgres://alice:s3cret@localhost:5432/app",
+    );
+    await user.click(screen.getByRole("button", { name: ConnectionCopy.save }));
+    await waitFor(() => expect(saveSpy).toHaveBeenCalled());
+    const input = saveSpy.mock.calls[0]?.[0];
+    expect(input?.profile.host).toBe("localhost");
+    expect(input?.profile.username).toBe("alice");
+    expect(input?.profile.database).toBe("app");
+    expect(input?.profile).not.toHaveProperty("password");
+    expect(input?.secrets.password).toBe("s3cret");
+  });
+
+  it("Test in Connection String mode probes the parsed URI, not the empty field form", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    const testSpy = vi.spyOn(ipc, "testConnection");
+    render(
+      <ConnectionPanel
+        ipc={ipc}
+        isConnected={false}
+        formVisible={true}
+        onFormVisibleChange={vi.fn()}
+        onProfilesLoaded={vi.fn()}
+        {...sessionPropsFromIpc(ipc)}
+        onConnected={vi.fn()}
+        onDisconnected={vi.fn()}
+        onSwitchSuccess={vi.fn()}
+        onSwitchFailure={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByLabelText(ConnectionCopy.connectionStringMode));
+    await user.type(
+      screen.getByTestId(ConnectionAccessibility.connectionStringField),
+      "postgres://alice:s3cret@localhost:5432/app",
+    );
+    await user.click(screen.getByRole("button", { name: ConnectionCopy.test }));
+    await waitFor(() => expect(testSpy).toHaveBeenCalled());
+    expect(testSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        host: "localhost",
+        username: "alice",
+        database: "app",
+        password: "s3cret",
+      }),
+    );
+  });
+
+  it("Save of a malformed URI shows a parser error and does not call saveProfile", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    const saveSpy = vi.spyOn(ipc, "saveProfile");
+    render(
+      <ConnectionPanel
+        ipc={ipc}
+        isConnected={false}
+        formVisible={true}
+        onFormVisibleChange={vi.fn()}
+        onProfilesLoaded={vi.fn()}
+        {...sessionPropsFromIpc(ipc)}
+        onConnected={vi.fn()}
+        onDisconnected={vi.fn()}
+        onSwitchSuccess={vi.fn()}
+        onSwitchFailure={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByLabelText(ConnectionCopy.connectionStringMode));
+    await user.type(screen.getByTestId(ConnectionAccessibility.connectionStringField), "not-a-url");
+    await user.click(screen.getByRole("button", { name: ConnectionCopy.save }));
+    expect(await screen.findByRole("status")).toBeInTheDocument();
+    expect(saveSpy).not.toHaveBeenCalled();
+  });
+
+  it("toggling back to individual fields before Save does not fill host/user/database from the URI", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    render(
+      <ConnectionPanel
+        ipc={ipc}
+        isConnected={false}
+        formVisible={true}
+        onFormVisibleChange={vi.fn()}
+        onProfilesLoaded={vi.fn()}
+        {...sessionPropsFromIpc(ipc)}
+        onConnected={vi.fn()}
+        onDisconnected={vi.fn()}
+        onSwitchSuccess={vi.fn()}
+        onSwitchFailure={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByLabelText(ConnectionCopy.connectionStringMode));
+    await user.type(
+      screen.getByTestId(ConnectionAccessibility.connectionStringField),
+      "postgres://alice@localhost:5432/app",
+    );
+    await user.click(screen.getByLabelText(ConnectionCopy.connectionStringMode));
+    expect(screen.getByLabelText(/host/i)).toHaveValue("");
+    expect(screen.getByLabelText(/username/i)).toHaveValue("");
+    expect(screen.getByLabelText(/database/i)).toHaveValue("");
+  });
+
+  it("successful Connect resets the test banner so Connected copy shows after a prior Test", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    const saved = await ipc.saveProfile({
+      profile: baseProfileFields(),
+      secrets: { password: "pw" },
+    });
+    render(
+      <ConnectionPanel
+        ipc={ipc}
+        {...formGateProps()}
+        isConnected={false}
+        activeProfileId={saved.id}
+        {...sessionPropsFromIpc(ipc)}
+        onConnected={vi.fn()}
+        onDisconnected={vi.fn()}
+        onSwitchSuccess={vi.fn()}
+        onSwitchFailure={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: ConnectionCopy.test }));
+    expect(await screen.findByText(ConnectionCopy.testSuccess)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: ConnectionCopy.connect }));
+    await waitFor(() =>
+      expect(screen.getByTestId(ConnectionAccessibility.statusBanner)).toHaveTextContent(
+        ConnectionCopy.connected,
+      ),
+    );
+    expect(screen.queryByText(ConnectionCopy.testSuccess)).toBeNull();
+  });
+
+  it("edit mode Connection String URI is read-only and Copy uses YOUR_PASSWORD", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    await ipc.saveProfile({
+      profile: { ...baseProfileFields(), host: "localhost", username: "alice", database: "app" },
+      secrets: { password: "s3cret" },
+    });
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+    render(
+      <ConnectionPanel
+        ipc={ipc}
+        isConnected={false}
+        formVisible={true}
+        onFormVisibleChange={vi.fn()}
+        onProfilesLoaded={vi.fn()}
+        {...sessionPropsFromIpc(ipc)}
+        onConnected={vi.fn()}
+        onDisconnected={vi.fn()}
+        onSwitchSuccess={vi.fn()}
+        onSwitchFailure={vi.fn()}
+      />,
+    );
+    await user.click(await screen.findByRole("button", { name: /^dev$/i }));
+    await user.click(screen.getByLabelText(ConnectionCopy.connectionStringMode));
+    expect(screen.getByTestId(ConnectionAccessibility.connectionStringField)).toHaveAttribute(
+      "readonly",
+    );
+    await user.click(screen.getByRole("button", { name: ConnectionCopy.copyConnectionString }));
+    expect(writeText).toHaveBeenCalled();
+    expect(String(writeText.mock.calls[0]?.[0])).toContain("YOUR_PASSWORD");
+    expect(String(writeText.mock.calls[0]?.[0])).not.toContain("s3cret");
+  });
+
+  it("submits Create with Enter, then switches only from Connect", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    const createDatabase = vi.spyOn(ipc, "createDatabase");
+    const switchDatabase = vi.fn().mockResolvedValue(undefined);
+    const panel = render(
+      <ConnectionPanel
+        ipc={ipc}
+        {...formGateProps({ formVisible: false })}
+        isConnected
+        activeProfileId="P"
+        connectionId="c1"
+        databaseName="app"
+        connectProfile={vi.fn()}
+        disconnectSession={vi.fn()}
+        onConnected={vi.fn()}
+        onDisconnected={vi.fn()}
+        onSwitchSuccess={vi.fn()}
+        onSwitchFailure={vi.fn()}
+        onSwitchDatabase={switchDatabase}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: ConnectionCopy.createDatabase }));
+    const name = screen.getByTestId(ConnectionAccessibility.createDatabaseName);
+    await user.type(name, "   {Enter}");
+    expect(createDatabase).not.toHaveBeenCalled();
+    await user.clear(name);
+    await user.type(name, "shop{Enter}");
+    await waitFor(() => expect(createDatabase).toHaveBeenCalledTimes(1));
+    expect(switchDatabase).not.toHaveBeenCalled();
+    expect(screen.getByText(ConnectionCopy.databaseCreated)).toBeInTheDocument();
+
+    await user.keyboard("{Enter}");
+    expect(createDatabase).toHaveBeenCalledTimes(1);
+    await user.click(screen.getByRole("button", { name: ConnectionCopy.connect }));
+    await waitFor(() => expect(switchDatabase).toHaveBeenCalledTimes(1));
+    expect(switchDatabase).toHaveBeenCalledWith("shop");
+    expect(panel.queryByRole("dialog", { name: ConnectionCopy.createDatabase })).toBeNull();
+  });
+
+  it("keeps Connect available when the post-create catalog refresh fails", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    vi.spyOn(ipc, "listDatabases").mockRejectedValue(new Error("catalog offline"));
+    const switchDatabase = vi.fn().mockResolvedValue(undefined);
+    render(
+      <ConnectionPanel
+        ipc={ipc}
+        {...formGateProps({ formVisible: false })}
+        isConnected
+        activeProfileId="P"
+        connectionId="c1"
+        databaseName="app"
+        connectProfile={vi.fn()}
+        disconnectSession={vi.fn()}
+        onConnected={vi.fn()}
+        onDisconnected={vi.fn()}
+        onSwitchSuccess={vi.fn()}
+        onSwitchFailure={vi.fn()}
+        onSwitchDatabase={switchDatabase}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: ConnectionCopy.createDatabase }));
+    await user.type(screen.getByTestId(ConnectionAccessibility.createDatabaseName), "shop{Enter}");
+    expect(await screen.findByText(ConnectionCopy.databaseCreated)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: ConnectionCopy.connect })).toBeEnabled();
   });
 });

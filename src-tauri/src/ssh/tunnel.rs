@@ -65,12 +65,10 @@ pub enum TunnelError {
 impl From<SshAuthError> for TunnelError {
     fn from(err: SshAuthError) -> Self {
         match err {
-            SshAuthError::EmptyPrivateKey => {
-                TunnelError::Auth("SSH private key is empty.".into())
+            SshAuthError::EmptyPrivateKey => TunnelError::Auth("SSH private key is empty.".into()),
+            SshAuthError::InvalidPrivateKey(msg) => {
+                TunnelError::Auth(format!("SSH private key could not be parsed: {msg}"))
             }
-            SshAuthError::InvalidPrivateKey(msg) => TunnelError::Auth(format!(
-                "SSH private key could not be parsed: {msg}"
-            )),
         }
     }
 }
@@ -274,10 +272,7 @@ async fn connect_and_authenticate(
             key_contents,
             passphrase,
         } => {
-            let key = parse_private_key_for_russh(
-                key_contents,
-                passphrase.as_deref(),
-            )?;
+            let key = parse_private_key_for_russh(key_contents, passphrase.as_deref())?;
             let hash_alg = handle
                 .best_supported_rsa_hash()
                 .await

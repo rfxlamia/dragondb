@@ -53,6 +53,31 @@ export interface ConnectResult {
 export interface TableRef {
   schema?: string;
   name: string;
+  /** Catalog kind — `listTables` unions foreign tables like Swift. */
+  tableType: "regular" | "foreign";
+}
+
+/**
+ * Test-connection probe input — host/port/user/database/SSL/SSH fields only.
+ * Temporary probe: never mutates the live session, never persists secrets.
+ */
+export interface TestConnectionInput {
+  host: string;
+  port: number;
+  username: string;
+  database: string;
+  sslMode: SslMode;
+  sshEnabled: boolean;
+  /** Tunnel fields — only meaningful when sshEnabled. */
+  sshHost?: string | null;
+  sshPort?: number | null;
+  sshUsername?: string | null;
+  sshAuthMethod?: SshAuthMethod | null;
+  /** Transient only; never persisted in ConnectionProfile. */
+  password?: string | null;
+  sshPassword?: string | null;
+  sshPrivateKey?: string | null;
+  sshPassphrase?: string | null;
 }
 
 export interface ColumnInfo {
@@ -120,6 +145,8 @@ export interface TabStateDto {
   selectedSchemaFilter: string | null;
   cachedResultsData: string | null;
   cachedColumnNames: string[] | null;
+  /** Visual-canvas IR JSON — dedicated field; NEVER stuffed into queryText. */
+  visualDocumentJson: string | null;
 }
 
 /**
@@ -186,6 +213,13 @@ export interface SaveCsvFileResult {
   path?: string;
 }
 
+export type SaveTextFileResult = SaveCsvFileResult;
+
+export type SaveTextFileFilter = {
+  name: string;
+  extensions: string[];
+};
+
 /**
  * DragonIpc — SP-2 profile/connect/query + SP-3 library/tabs/history/csv/row-ops.
  *
@@ -209,7 +243,7 @@ export interface DragonIpc {
   disconnect(): Promise<void>;
   listTables(c: ConnectionId): Promise<TableRef[]>;
   listColumns(c: ConnectionId, table: TableRef): Promise<ColumnInfo[]>;
-  runQuery(c: ConnectionId, sql: ExecutableSQL): Promise<QueryResult>;
+  runQuery(c: ConnectionId, sql: ExecutableSQL, runId: number): Promise<QueryResult>;
 
   // SP-3 library (locked names — NOT listFolders/createFolder)
   listSavedQueries(): Promise<SavedQueryDto[]>;
@@ -238,7 +272,39 @@ export interface DragonIpc {
   // SP-3 CSV save-file
   saveCsvFile(csvText: string, defaultPath?: string): Promise<SaveCsvFileResult>;
 
+  // SP-4b generic text save (history JSON/CSV/SQL). Keep saveCsvFile unchanged.
+  saveTextFile(
+    text: string,
+    defaultPath?: string,
+    filter?: SaveTextFileFilter,
+  ): Promise<SaveTextFileResult>;
+
   // SP-3 row ops — reject with RowOperationError (not IpcError kind expansion)
   updateRow(input: UpdateRowInput): Promise<void>;
   deleteRows(input: DeleteRowsInput): Promise<void>;
+
+  // SP-4b last slice — dedicated catalog / database / DDL / cancel / global
+  // history commands (Option B; NOT runQuery for app-generated mutations).
+  // Tauri snake_case map (hand-written in tauri-client): test_connection,
+  // cancel_query, list_databases, switch_database, create_database,
+  // delete_database, truncate_table, drop_table, generate_table_ddl,
+  // set_search_path, clear_all_history.
+  /** Temporary SSH+DB probe — no session mutation; maps to Test banner states. */
+  testConnection(input: TestConnectionInput): Promise<void>;
+  /** Interrupt the in-flight or queued run identified by `runId`. */
+  cancelQuery(connectionId: ConnectionId, runId: number): Promise<void>;
+  /** Picker list; switch does NOT rewrite profile.database. */
+  listDatabases(connectionId: ConnectionId): Promise<string[]>;
+  switchDatabase(connectionId: ConnectionId, name: string): Promise<void>;
+  /** CREATE DATABASE via maintenance connection; create-only — explicit `switchDatabase` owns selection. */
+  createDatabase(name: string): Promise<void>;
+  deleteDatabase(name: string): Promise<void>;
+  /** Quoted-identifier mutations + DDL sheet source (Rust-side quoting). */
+  truncateTable(connectionId: ConnectionId, table: TableRef): Promise<void>;
+  dropTable(connectionId: ConnectionId, table: TableRef): Promise<void>;
+  generateTableDdl(connectionId: ConnectionId, table: TableRef): Promise<string>;
+  /** Named schema → `TO schema, public`; null (All Schemas) → `TO public`. */
+  setSearchPath(connectionId: ConnectionId, schema: string | null): Promise<void>;
+  /** Wipe ALL profiles' history rows (clearHistory stays per-profile). */
+  clearAllHistory(): Promise<void>;
 }

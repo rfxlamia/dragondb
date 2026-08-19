@@ -1,0 +1,328 @@
+/* Table browser — light-only creative-brief tokens.
+   Rows are rows: no per-row border, no per-row white plane, and destructive
+   actions live only in the row's overflow menu (they used to be one visible
+   Drop button per table, which turned a 200-table schema into 400 buttons). */
+
+.table-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.table-list__schema {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.table-list__schema-title {
+  color: var(--neutral-600);
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  margin: 0 0 2px 6px;
+}
+
+.table-list__rows {
+  display: flex;
+  flex-direction: column;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.table-list__row {
+  display: flex;
+  flex-direction: column;
+}
+
+.table-list__row-main {
+  align-items: center;
+  border-radius: var(--radius);
+  display: flex;
+  gap: 2px;
+  min-height: var(--row-height);
+  padding: 0 4px 0 0;
+  transition: background-color var(--duration-fast) var(--ease-standard);
+}
+
+.table-list__row-main:hover {
+  background: var(--row-hover);
+}
+
+.table-list__expand {
+  align-items: center;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius);
+  color: var(--neutral-500);
+  cursor: pointer;
+  display: inline-flex;
+  flex-shrink: 0;
+  height: 20px;
+  justify-content: center;
+  padding: 0;
+  transition: color var(--duration-fast) var(--ease-standard);
+  width: 18px;
+}
+
+.table-list__expand:hover:not(:disabled) {
+  color: var(--neutral-900);
+}
+
+.table-list__expand:disabled {
+  color: var(--neutral-400);
+  cursor: not-allowed;
+}
+
+.table-list__name {
+  align-items: center;
+  background: transparent;
+  border: none;
+  color: var(--neutral-900);
+  cursor: pointer;
+  display: flex;
+  flex: 1;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  min-width: 0;
+  overflow: hidden;
+  padding: 4px 2px;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.table-list__glyph,
+.table-list__foreign {
+  align-items: center;
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.table-list__glyph {
+  color: var(--neutral-500);
+}
+
+.table-list__foreign {
+  color: var(--primary-600);
+}
+
+.table-list__row-main:hover .table-list__glyph {
+  color: var(--primary-600);
+}
+
+.table-list__menu {
+  position: relative;
+}
+
+.table-list__menu-panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 20;
+}
+
+.table-list__columns {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  list-style: none;
+  margin: 2px 0 6px;
+  padding: 0 0 0 1.6rem;
+}
+
+.table-list__column {
+  align-items: center;
+  color: var(--neutral-800);
+  display: flex;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  gap: 0.5rem;
+  min-height: 20px;
+}
+
+.table-list__column-type {
+  color: var(--neutral-600);
+}
+
+.table-list__key {
+  align-items: center;
+  color: var(--primary-700);
+  display: inline-flex;
+}
+
+.table-list__error {
+  background: var(--error-tint);
+  border-radius: var(--radius);
+  color: var(--error-text);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.4;
+  margin: 0;
+  padding: 6px 10px;
+}
+
+/* "Load more" is navigation inside a list, not a call to action — a filled
+   primary button here competed with Run query for the eye. */
+.table-list__load-more,
+.table-list__next {
+  align-self: flex-start;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius);
+  color: var(--primary-700);
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  margin: 2px 0 0 4px;
+  padding: 4px 6px;
+  transition: background-color var(--duration-fast) var(--ease-standard);
+}
+
+.table-list__load-more:hover,
+.table-list__next:hover {
+  background: var(--primary-100);
+}
+
+.table-sheet {
+  background: oklch(1 0 0);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow:
+    var(--shadow-lg),
+    0 0 0 100vmax var(--scrim);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  left: 50%;
+  max-height: min(70vh, 480px);
+  max-width: 560px;
+  padding: 16px;
+  position: fixed;
+  top: 50%;
+  transform: translate(-50%, -50%) scale(1);
+  transition:
+    opacity 200ms var(--ease-out),
+    transform 200ms var(--ease-out),
+    box-shadow 200ms var(--ease-out);
+  width: min(calc(100% - 32px), 560px);
+  z-index: 40;
+
+  @starting-style {
+    box-shadow:
+      var(--shadow-lg),
+      0 0 0 100vmax oklch(0.22 0.01 245 / 0);
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.96);
+  }
+}
+
+.table-sheet--confirm {
+  max-width: 420px;
+}
+
+.table-sheet__title {
+  color: var(--neutral-900);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.table-sheet p {
+  color: var(--neutral-800);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.table-sheet__text {
+  background: var(--neutral-100);
+  border: 1px solid var(--neutral-200);
+  border-radius: var(--radius);
+  color: var(--neutral-900);
+  flex: 1;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 0;
+  max-height: 40vh;
+  overflow: auto;
+  padding: 12px;
+  white-space: pre;
+}
+
+.table-sheet__error {
+  background: var(--error-tint);
+  border-radius: var(--radius);
+  color: var(--error-text);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  margin: 0;
+  padding: 8px 10px;
+}
+
+.table-sheet__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.table-sheet__primary,
+.table-sheet__secondary,
+.table-sheet__danger {
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.4;
+  padding: 5px 12px;
+}
+
+.table-sheet__primary {
+  background: var(--primary-600);
+  box-shadow: var(--shadow-sm);
+  color: oklch(1 0 0);
+}
+
+.table-sheet__primary:hover:not(:disabled) {
+  background: var(--primary-700);
+}
+
+.table-sheet__secondary {
+  background: var(--neutral-100);
+  border: 1px solid var(--neutral-300);
+  color: var(--primary-700);
+}
+
+.table-sheet__secondary:hover:not(:disabled) {
+  background: var(--neutral-200);
+}
+
+.table-sheet__danger {
+  background: var(--error-solid);
+  box-shadow: var(--shadow-sm);
+  color: oklch(1 0 0);
+}
+
+.table-sheet__danger:hover:not(:disabled) {
+  background: oklch(0.46 0.111 25);
+}
+
+.table-sheet__primary:disabled,
+.table-sheet__secondary:disabled,
+.table-sheet__danger:disabled {
+  background: var(--neutral-200);
+  box-shadow: none;
+  color: var(--neutral-600);
+  cursor: not-allowed;
+}

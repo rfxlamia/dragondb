@@ -1,0 +1,33 @@
+/* Create-database sheet: created/Connect follow the existing confirm surface. */
+
+.connection-panel__create-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.connection-panel__created {
+  color: var(--success-text);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.connection-panel__confirm-actions button.connection-panel__primary {
+  background: var(--primary-600);
+  border-color: var(--primary-600);
+  color: oklch(1 0 0);
+}
+
+.connection-panel__confirm-actions button.connection-panel__primary:hover:not(:disabled) {
+  background: var(--primary-700);
+  border-color: var(--primary-700);
+}
+
+.connection-panel__confirm-actions button.connection-panel__primary:disabled {
+  background: var(--neutral-200);
+  border-color: var(--neutral-200);
+  color: var(--neutral-600);
+  cursor: not-allowed;
+}

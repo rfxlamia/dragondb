@@ -1,0 +1,116 @@
+.help-dialog {
+  background: oklch(1 0 0);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow:
+    var(--shadow-lg),
+    0 0 0 100vmax var(--scrim);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  left: 50%;
+  max-height: min(80vh, 520px);
+  max-width: 480px;
+  padding: 16px;
+  position: fixed;
+  top: 50%;
+  transform: translate(-50%, -50%) scale(1);
+  transition:
+    opacity 200ms var(--ease-out),
+    transform 200ms var(--ease-out),
+    box-shadow 200ms var(--ease-out);
+  width: min(calc(100% - 32px), 480px);
+  z-index: 50;
+
+  @starting-style {
+    box-shadow:
+      var(--shadow-lg),
+      0 0 0 100vmax oklch(0.22 0.01 245 / 0);
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.96);
+  }
+}
+
+.help-dialog__title {
+  color: var(--neutral-900);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.help-dialog__support {
+  color: var(--primary-700);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.help-dialog__shortcuts {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.help-dialog__shortcuts th,
+.help-dialog__shortcuts td {
+  color: var(--neutral-900);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.4;
+  padding: 4px 0;
+  text-align: left;
+}
+
+.help-dialog__shortcuts td:last-child {
+  font-family: var(--font-mono);
+  text-align: right;
+}
+
+.help-dialog__radios {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.help-dialog__radio {
+  align-items: center;
+  color: var(--neutral-900);
+  display: flex;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  gap: 8px;
+  line-height: 1.4;
+}
+
+.help-dialog__radio input[type="radio"] {
+  accent-color: var(--primary-600);
+  height: 1rem;
+  margin: 0;
+  width: 1rem;
+}
+
+.help-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.help-dialog__done {
+  background: var(--primary-600);
+  border: none;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  color: oklch(1 0 0);
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.4;
+  padding: 5px 12px;
+  transition: background-color var(--duration-fast) var(--ease-standard);
+}
+
+.help-dialog__done:hover {
+  background: var(--primary-700);
+}

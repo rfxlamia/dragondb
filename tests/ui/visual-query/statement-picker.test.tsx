@@ -11,24 +11,19 @@ afterEach(() => {
 });
 
 describe("StatementPicker", () => {
-  it("renders four statement menu items", () => {
+  it("renders only SELECT", () => {
     render(<StatementPicker onChoose={() => {}} />);
     const items = VisualQueryCopy.statementMenuItems();
-    expect(items).toHaveLength(4);
-    for (const item of items) {
-      expect(
-        screen.getByTestId(VisualQueryAccessibility.statementMenuItem(item.kind)),
-      ).toBeInTheDocument();
-    }
-    expect(screen.getByTestId(VisualQueryAccessibility.statementMenu)).toBeInTheDocument();
-  });
-
-  it("shows Coming soon badge on update and delete", () => {
-    render(<StatementPicker onChoose={() => {}} />);
-    const updateButton = screen.getByTestId(VisualQueryAccessibility.statementMenuItem("update"));
-    const deleteButton = screen.getByTestId(VisualQueryAccessibility.statementMenuItem("delete"));
-    expect(updateButton).toHaveTextContent(/coming soon/i);
-    expect(deleteButton).toHaveTextContent(/coming soon/i);
+    expect(items).toHaveLength(1);
+    expect(items[0]?.kind).toBe("select");
+    expect(
+      screen.getByTestId(VisualQueryAccessibility.statementMenuItem("select")),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByTestId(VisualQueryAccessibility.statementMenuItem("createTable")),
+    ).toBeNull();
+    expect(screen.queryByTestId(VisualQueryAccessibility.statementMenuItem("update"))).toBeNull();
+    expect(screen.queryByTestId(VisualQueryAccessibility.statementMenuItem("delete"))).toBeNull();
   });
 
   it("calls onChoose with select when SELECT is clicked", async () => {
@@ -37,13 +32,5 @@ describe("StatementPicker", () => {
     render(<StatementPicker onChoose={onChoose} />);
     await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("select")));
     expect(onChoose).toHaveBeenCalledWith("select");
-  });
-
-  it("calls onChoose with createTable when CREATE is clicked", async () => {
-    const user = userEvent.setup();
-    const onChoose = vi.fn();
-    render(<StatementPicker onChoose={onChoose} />);
-    await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("createTable")));
-    expect(onChoose).toHaveBeenCalledWith("createTable");
   });
 });

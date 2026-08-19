@@ -41,3 +41,22 @@ describe("splitSqlStatements", () => {
     ]);
   });
 });
+
+describe("splitSqlStatements escape-string constants", () => {
+  // PostgreSQL E'…' strings honour backslash escapes, so \' is an escaped quote,
+  // not a terminator. Treating it as a terminator makes the following semicolon
+  // look like a statement boundary and splits one statement into two.
+  it("does not split on a semicolon after an escaped quote inside E'…'", () => {
+    expect(splitSqlStatements("SELECT E'a\\'; b' AS x; SELECT 2")).toEqual([
+      "SELECT E'a\\'; b' AS x",
+      "SELECT 2",
+    ]);
+  });
+
+  it("keeps a trailing backslash-escaped backslash from swallowing the closing quote", () => {
+    expect(splitSqlStatements("SELECT E'a\\\\'; SELECT 2")).toEqual([
+      "SELECT E'a\\\\'",
+      "SELECT 2",
+    ]);
+  });
+});

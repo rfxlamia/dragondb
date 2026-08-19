@@ -33,7 +33,7 @@ describe("session↔schema composition", () => {
     expect(schema.getState().tables).toEqual([]);
 
     // switch-fail path: teardown calls onDisconnected which must clear schema
-    schema.setState({ tables: [{ name: "stale", schema: "public" }] });
+    schema.setState({ tables: [{ name: "stale", schema: "public", tableType: "regular" }] });
     await expect(session.getState().switchFailAfterTeardown("B")).rejects.toEqual(err);
     expect(schema.getState().tables).toEqual([]);
   });

@@ -31,13 +31,88 @@
   --info-solid: oklch(0.55 0.123 245);
   --info-text: oklch(0.35 0.081 245);
   --radius: 4px;
+  --radius-sm: 3px;
+  --radius-lg: 8px;
   --font-sans: "Inter", -apple-system, "Segoe UI Variable Text", "Segoe UI", system-ui, "Cantarell",
     "Ubuntu", sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, sfmono-regular, "Cascadia Mono", "Liberation Mono",
     monospace;
+
+  /* Shadow scale — brief specifies "sm" on button/atom tables but leaves the value open;
+     md/lg complete it for popovers, cards, and modal surfaces. Values are neutral-900 tinted,
+     never pure black, so shadows read as part of the same color system. */
+  --shadow-sm: 0 1px 2px oklch(0.28 0.008 245 / 0.06), 0 1px 1px oklch(0.28 0.008 245 / 0.05);
+  --shadow-md: 0 4px 16px oklch(0.28 0.008 245 / 0.08), 0 1px 2px oklch(0.28 0.008 245 / 0.06);
+  --shadow-lg: 0 12px 32px oklch(0.28 0.008 245 / 0.14), 0 2px 6px oklch(0.28 0.008 245 / 0.08);
+  /* Modal scrim, applied as an oversized box-shadow spread on the dialog surface itself —
+     dims the app behind a fixed-position dialog without adding a backdrop element/handler. */
+  --scrim: oklch(0.22 0.01 245 / 0.36);
+
+  /* Motion — critically damped feel (apple-design default: no bounce, nothing here is a flick/drag). */
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --duration-fast: 120ms;
+  --duration-base: 160ms;
+  /* Stronger ease-out for anything entering/pressing — the built-in CSS easings are too weak
+     to read as intentional (emil-design-eng). Reserve --ease-standard for hover/color-only. */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  /* Panel collapse: an iOS-drawer curve (emil-design-eng) — near-instant departure, long
+     settle — so a whole column changing width reads as sliding away, not as a jump cut.
+     240ms is the top of the drawer band; anything shorter still flickers at this size. */
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  --duration-panel: 240ms;
+
+  /* Surfaces: sidebars recede, content is the raised white plane. */
+  --surface-page: var(--neutral-100);
+  --surface-sidebar: var(--neutral-100);
+  --surface-raised: oklch(1 0 0);
+
+  /* Separators: hairlines between panels, stronger only around inputs. */
+  --border-subtle: var(--neutral-200);
+  --border-field: var(--neutral-300);
+
+  /* List-row states — one vocabulary for tables, queries, profiles. */
+  --row-hover: var(--neutral-200);
+  --row-selected: var(--primary-100);
+  --row-selected-text: var(--primary-800);
+
+  /* Desktop row metrics: tight enough to scan a 200-table schema. */
+  --row-height: 28px;
+  --control-height: 26px;
 }
 
 :focus-visible {
   outline: 2px solid var(--primary-600);
   outline-offset: 2px;
+}
+
+/* Native control normalization — appearance:none alone doesn't strip the WebKit number
+   spinner or give <select> a custom indicator, so both survive as OS chrome inside
+   otherwise brief-styled fields. */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  appearance: none;
+  margin: 0;
+}
+
+input[type="number"] {
+  appearance: textfield;
+}
+
+select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%236D7277' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-position: right 8px center;
+  background-repeat: no-repeat;
+  /* biome-ignore lint/complexity/noImportantStyles: native select chevron padding must override UA stylesheet */
+  padding-right: 28px !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    /* biome-ignore lint/complexity/noImportantStyles: reduced-motion must override token animation durations */
+    animation-duration: 0.001ms !important;
+    /* biome-ignore lint/complexity/noImportantStyles: reduced-motion must override token transition durations */
+    transition-duration: 0.001ms !important;
+  }
 }

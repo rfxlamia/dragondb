@@ -3,6 +3,45 @@ import type { ConnectResult, DragonIpc, IpcError } from "../../src/ipc/contract"
 import { createSessionStore } from "../../src/stores/session-store";
 
 describe("session-store", () => {
+  it("switchDatabase updates databaseName without saveProfile", async () => {
+    const switchDatabase = vi.fn(async () => undefined);
+    const saveProfile = vi.fn();
+    const ipc = {
+      connectProfile: vi.fn(async () => ({
+        connectionId: "c-a",
+        profileId: "P",
+        database: "postgres",
+      })),
+      disconnect: vi.fn(async () => undefined),
+      switchDatabase,
+      saveProfile,
+    } as unknown as DragonIpc;
+    const store = createSessionStore(ipc);
+    await store.getState().connect("P");
+    await store.getState().switchDatabase("shop");
+    expect(switchDatabase).toHaveBeenCalledWith("c-a", "shop");
+    expect(store.getState().databaseName).toBe("shop");
+    expect(store.getState().isConnected).toBe(true);
+    expect(saveProfile).not.toHaveBeenCalled();
+  });
+
+  it("switchDatabase reports the switched connection for schema reload", async () => {
+    const onDatabaseSwitched = vi.fn(async () => undefined);
+    const ipc = {
+      connectProfile: vi.fn(async () => ({
+        connectionId: "c-a",
+        profileId: "P",
+        database: "postgres",
+      })),
+      disconnect: vi.fn(async () => undefined),
+      switchDatabase: vi.fn(async () => undefined),
+    } as unknown as DragonIpc;
+    const store = createSessionStore(ipc, { onDatabaseSwitched });
+    await store.getState().connect("P");
+    await store.getState().switchDatabase("shop");
+    expect(onDatabaseSwitched).toHaveBeenCalledWith("c-a", "shop");
+  });
+
   it("connect success sets isConnected + ids", async () => {
     const connectProfile = vi.fn(async () => ({
       connectionId: "c-a",

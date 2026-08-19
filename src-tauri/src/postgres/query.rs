@@ -1,4 +1,4 @@
-//! Catalog SQL + query result mapping for thin Postgres I/O.
+//! Query execution and result mapping for thin Postgres I/O.
 
 use std::time::{Duration, Instant};
 
@@ -8,12 +8,6 @@ use tokio_postgres::types::{ToSql, Type};
 use tokio_postgres::Client;
 
 use super::error::{map_tokio_postgres_error, IpcErrorKind, MappedIpcError};
-
-/// Locked Swift-parity catalog query for listing user tables.
-pub const LIST_TABLES_SQL: &str = "SELECT table_schema, table_name FROM information_schema.tables WHERE table_type = 'BASE TABLE' AND table_schema NOT IN ('pg_catalog', 'information_schema') ORDER BY table_schema, table_name";
-
-/// Locked Swift-parity catalog query for listing columns of one table.
-pub const LIST_COLUMNS_SQL: &str = "SELECT column_name, data_type, is_nullable::text, column_default::text FROM information_schema.columns WHERE table_schema = $1 AND table_name = $2 ORDER BY ordinal_position";
 
 /// Cell value used by the pure row mapper / QueryResult shaping.
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -43,26 +37,6 @@ pub struct QueryResultData {
     pub duration_ms: u64,
 }
 
-/// TableRef-shaped row from `list_tables`.
-#[derive(Debug, Clone, PartialEq, Serialize)]
-pub struct TableRefRow {
-    pub schema: String,
-    pub name: String,
-}
-
-/// ColumnInfo-shaped row from `list_columns` (PK/unique/FK enrichment deferred).
-#[derive(Debug, Clone, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ColumnInfoRow {
-    pub name: String,
-    pub data_type: String,
-    pub is_nullable: bool,
-    pub default_value: Option<String>,
-    pub is_primary_key: bool,
-    pub is_unique: bool,
-    pub is_foreign_key: bool,
-}
-
 /// Attach durationMs; SELECT row count semantics use `rows.len()` (not rowsAffected).
 pub fn map_query_rows(row_set: MappedRowSet, duration: Duration) -> QueryResultData {
     QueryResultData {
@@ -73,49 +47,6 @@ pub fn map_query_rows(row_set: MappedRowSet, duration: Duration) -> QueryResultD
     }
 }
 
-/// List user BASE TABLEs via locked catalog SQL.
-pub async fn list_tables(client: &Client) -> Result<Vec<TableRefRow>, MappedIpcError> {
-    let rows = client
-        .query(LIST_TABLES_SQL, &[])
-        .await
-        .map_err(|e| map_tokio_postgres_error(&e))?;
-    Ok(rows
-        .iter()
-        .map(|row| TableRefRow {
-            schema: row.get(0),
-            name: row.get(1),
-        })
-        .collect())
-}
-
-/// List columns for one table via locked catalog SQL.
-pub async fn list_columns(
-    client: &Client,
-    schema: &str,
-    table: &str,
-) -> Result<Vec<ColumnInfoRow>, MappedIpcError> {
-    let rows = client
-        .query(LIST_COLUMNS_SQL, &[&schema, &table])
-        .await
-        .map_err(|e| map_tokio_postgres_error(&e))?;
-    Ok(rows
-        .iter()
-        .map(|row| {
-            let is_nullable: String = row.get(2);
-            let default_value: Option<String> = row.get(3);
-            ColumnInfoRow {
-                name: row.get(0),
-                data_type: row.get(1),
-                is_nullable: is_nullable.eq_ignore_ascii_case("YES"),
-                default_value,
-                is_primary_key: false,
-                is_unique: false,
-                is_foreign_key: false,
-            }
-        })
-        .collect())
-}
-
 /// Run a SQL statement with bound parameters; SELECT returns rows, others set rowsAffected.
 pub async fn run_query(
     client: &Client,
@@ -123,6 +54,65 @@ pub async fn run_query(
     params: &[JsonValue],
 ) -> Result<QueryResultData, MappedIpcError> {
     let started = Instant::now();
+    let statements = split_sql_statements(sql);
+    if statements.is_empty() {
+        return Ok(QueryResultData {
+            columns: vec![],
+            rows: vec![],
+            rows_affected: Some(0),
+            duration_ms: 0,
+        });
+    }
+    let wrap = statements.len() > 1
+        && should_wrap_transaction(&statements.iter().map(String::as_str).collect::<Vec<_>>());
+    if wrap {
+        client
+            .batch_execute("BEGIN")
+            .await
+            .map_err(|e| map_tokio_postgres_error(&e))?;
+    }
+    let mut last = QueryResultData {
+        columns: vec![],
+        rows: vec![],
+        rows_affected: Some(0),
+        duration_ms: 0,
+    };
+    let mut saw_row_result = false;
+    for (index, statement) in statements.iter().enumerate() {
+        let statement_params = if statements.len() == 1 { params } else { &[] };
+        match run_single_query(client, statement, statement_params, started).await {
+            Ok(result) => {
+                if !result.columns.is_empty() {
+                    saw_row_result = true;
+                    last = result;
+                } else if !saw_row_result && index + 1 == statements.len() {
+                    last = result;
+                }
+            }
+            Err(error) => {
+                if wrap {
+                    let _ = client.batch_execute("ROLLBACK").await;
+                }
+                return Err(error);
+            }
+        }
+    }
+    if wrap {
+        client
+            .batch_execute("COMMIT")
+            .await
+            .map_err(|e| map_tokio_postgres_error(&e))?;
+    }
+    last.duration_ms = started.elapsed().as_millis() as u64;
+    Ok(last)
+}
+
+async fn run_single_query(
+    client: &Client,
+    sql: &str,
+    params: &[JsonValue],
+    started: Instant,
+) -> Result<QueryResultData, MappedIpcError> {
     let owned = json_params_to_owned(params)?;
     let binds: Vec<&(dyn ToSql + Sync)> = owned
         .iter()
@@ -147,11 +137,7 @@ pub async fn run_query(
         let duration = started.elapsed();
         let mapped_rows: Vec<Vec<Value>> = rows
             .iter()
-            .map(|row| {
-                (0..row.len())
-                    .map(|i| cell_value(row, i))
-                    .collect()
-            })
+            .map(|row| (0..row.len()).map(|i| cell_value(row, i)).collect())
             .collect();
         Ok(map_query_rows(
             MappedRowSet {
@@ -172,6 +158,195 @@ pub async fn run_query(
             duration_ms: started.elapsed().as_millis() as u64,
         })
     }
+}
+
+/// Mirrors `src/lib/sql-statement-splitter.ts`.
+pub fn split_sql_statements(sql: &str) -> Vec<String> {
+    let chars: Vec<char> = sql.chars().collect();
+    let mut result = Vec::new();
+    let mut current = String::new();
+    let mut i = 0;
+    while i < chars.len() {
+        let c = chars[i];
+        if c == '$' {
+            if let Some(end) = dollar_tag_end(&chars, i) {
+                let tag: String = chars[i..=end].iter().collect();
+                current.push_str(&tag);
+                i = end + 1;
+                while i < chars.len() {
+                    if chars[i] == '$' {
+                        if let Some(close) = dollar_tag_end(&chars, i) {
+                            let candidate: String = chars[i..=close].iter().collect();
+                            if candidate == tag {
+                                current.push_str(&tag);
+                                i = close + 1;
+                                break;
+                            }
+                        }
+                    }
+                    current.push(chars[i]);
+                    i += 1;
+                }
+                continue;
+            }
+        }
+        if c == '\'' || c == '"' {
+            let quote = c;
+            let escape_aware = quote == '\'' && is_escape_string_quote(&chars, i);
+            current.push(c);
+            i += 1;
+            while i < chars.len() {
+                if escape_aware && chars[i] == '\\' && i + 1 < chars.len() {
+                    current.push(chars[i]);
+                    current.push(chars[i + 1]);
+                    i += 2;
+                    continue;
+                }
+                current.push(chars[i]);
+                if chars[i] == quote {
+                    if i + 1 < chars.len() && chars[i + 1] == quote {
+                        current.push(quote);
+                        i += 2;
+                        continue;
+                    }
+                    i += 1;
+                    break;
+                }
+                i += 1;
+            }
+            continue;
+        }
+        if c == '-' && chars.get(i + 1) == Some(&'-') {
+            current.push_str("--");
+            i += 2;
+            while i < chars.len() && chars[i] != '\n' {
+                current.push(chars[i]);
+                i += 1;
+            }
+            continue;
+        }
+        if c == '/' && chars.get(i + 1) == Some(&'*') {
+            let mut depth = 1;
+            current.push_str("/*");
+            i += 2;
+            while i < chars.len() && depth > 0 {
+                if chars[i] == '/' && chars.get(i + 1) == Some(&'*') {
+                    current.push_str("/*");
+                    depth += 1;
+                    i += 2;
+                } else if chars[i] == '*' && chars.get(i + 1) == Some(&'/') {
+                    current.push_str("*/");
+                    depth -= 1;
+                    i += 2;
+                } else {
+                    current.push(chars[i]);
+                    i += 1;
+                }
+            }
+            continue;
+        }
+        if c == ';' {
+            push_statement(&mut result, &mut current);
+            i += 1;
+            continue;
+        }
+        current.push(c);
+        i += 1;
+    }
+    push_statement(&mut result, &mut current);
+    result
+}
+
+pub fn should_wrap_transaction(statements: &[&str]) -> bool {
+    !statements.iter().any(|sql| {
+        let s = normalize_for_keyword_match(sql);
+        let user_txn = ["begin", "start transaction", "commit", "rollback"]
+            .iter()
+            .any(|k| s.starts_with(k));
+        // REINDEX and VACUUM are matched on the bare verb: their object-type
+        // keyword is mandatory and varies (REINDEX TABLE / INDEX / SCHEMA /
+        // DATABASE / SYSTEM), and neither belongs in an implicit transaction.
+        let illegal_in_txn = s.starts_with("vacuum")
+            || s.starts_with("reindex")
+            || s.starts_with("create database")
+            || s.starts_with("drop database")
+            || s.starts_with("create index concurrently")
+            || s.starts_with("create unique index concurrently")
+            || s.starts_with("drop index concurrently")
+            || s.starts_with("alter system")
+            || s.starts_with("create tablespace")
+            || s.starts_with("drop tablespace")
+            || s.starts_with("create subscription")
+            || s.starts_with("drop subscription")
+            || s.starts_with("refresh materialized view concurrently");
+        user_txn || illegal_in_txn
+    })
+}
+
+/// Lowercase a statement for keyword matching: drop leading comments, drop a
+/// leading parenthesised option list (`REINDEX (VERBOSE) DATABASE …`), and
+/// collapse whitespace runs so newlines between keywords still match.
+fn normalize_for_keyword_match(sql: &str) -> String {
+    let stripped = strip_leading_sql_noise(sql).to_ascii_lowercase();
+    let mut rest = stripped.trim_start();
+    if let Some(after) = strip_leading_option_list(rest) {
+        rest = after.trim_start();
+    }
+    rest.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// `(a, b) tail` → `tail`; `None` when there is no balanced leading group.
+fn strip_leading_option_list(s: &str) -> Option<&str> {
+    if !s.starts_with('(') {
+        return None;
+    }
+    let mut depth = 0usize;
+    for (index, c) in s.char_indices() {
+        match c {
+            '(' => depth += 1,
+            ')' => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(&s[index + c.len_utf8()..]);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+/// True when the quote at `index` opens a PostgreSQL escape string (`E'…'`),
+/// where a backslash escapes the next character. Plain `'…'` literals do not
+/// honour backslashes under the default `standard_conforming_strings = on`.
+fn is_escape_string_quote(chars: &[char], index: usize) -> bool {
+    if index == 0 {
+        return false;
+    }
+    if !matches!(chars[index - 1], 'E' | 'e') {
+        return false;
+    }
+    // A trailing E of a longer word (e.g. `VALUE'…'`) is not the escape prefix.
+    match index.checked_sub(2).and_then(|prev| chars.get(prev)) {
+        None => true,
+        Some(c) => !(c.is_ascii_alphanumeric() || *c == '_' || *c == '$'),
+    }
+}
+
+fn dollar_tag_end(chars: &[char], start: usize) -> Option<usize> {
+    let mut j = start + 1;
+    while j < chars.len() && (chars[j].is_ascii_alphanumeric() || chars[j] == '_') {
+        j += 1;
+    }
+    (j < chars.len() && chars[j] == '$').then_some(j)
+}
+
+fn push_statement(result: &mut Vec<String>, current: &mut String) {
+    let cleaned = strip_leading_sql_noise(current).trim().to_string();
+    if !cleaned.is_empty() {
+        result.push(cleaned);
+    }
+    current.clear();
 }
 
 /// Convert JSON IPC params into owned `ToSql` values for tokio-postgres.
@@ -357,29 +532,12 @@ mod tests {
         assert!(looks_like_select("  select id from t"));
         assert!(looks_like_select("-- comment\nSELECT 1"));
         assert!(looks_like_select("/* block */\nSELECT 1"));
-        assert!(looks_like_select("WITH cte AS (SELECT 1) SELECT * FROM cte"));
+        assert!(looks_like_select(
+            "WITH cte AS (SELECT 1) SELECT * FROM cte"
+        ));
         assert!(!looks_like_select("INSERT INTO t VALUES (1)"));
         assert!(!looks_like_select("UPDATE t SET x = 1"));
         assert!(!looks_like_select("SELECTIVE_NAME"));
-    }
-
-    #[test]
-    fn list_tables_sql_is_locked_catalog_query() {
-        assert!(LIST_TABLES_SQL.contains("information_schema.tables"));
-        assert!(LIST_TABLES_SQL.contains("table_schema"));
-        assert!(LIST_TABLES_SQL.contains("table_name"));
-        assert!(LIST_TABLES_SQL.contains("BASE TABLE"));
-        assert!(LIST_TABLES_SQL.contains("pg_catalog"));
-        assert!(LIST_TABLES_SQL.contains("information_schema"));
-    }
-
-    #[test]
-    fn list_columns_sql_is_locked_catalog_query() {
-        assert!(LIST_COLUMNS_SQL.contains("information_schema.columns"));
-        assert!(LIST_COLUMNS_SQL.contains("table_schema"));
-        assert!(LIST_COLUMNS_SQL.contains("table_name"));
-        assert!(LIST_COLUMNS_SQL.contains("column_name"));
-        assert!(LIST_COLUMNS_SQL.contains("data_type"));
     }
 
     #[test]
@@ -398,5 +556,139 @@ mod tests {
     fn json_params_to_owned_rejects_object_and_array() {
         assert!(json_params_to_owned(&[JsonValue::Array(vec![])]).is_err());
         assert!(json_params_to_owned(&[JsonValue::Object(Default::default())]).is_err());
+    }
+
+    #[test]
+    fn split_sql_statements_last_select_wins() {
+        let parts = split_sql_statements("SELECT 1 AS a; SELECT 2 AS b");
+        assert_eq!(parts, vec!["SELECT 1 AS a", "SELECT 2 AS b"]);
+    }
+
+    #[test]
+    fn wrap_transaction_unless_user_already_has_begin() {
+        assert!(should_wrap_transaction(&["SELECT 1", "SELECT 2"]));
+        assert!(!should_wrap_transaction(&["BEGIN", "SELECT 1", "COMMIT"]));
+    }
+
+    #[test]
+    fn no_wrap_for_statements_illegal_inside_transaction_block() {
+        // These commands CANNOT run inside a transaction block in PostgreSQL.
+        // should_wrap_transaction must return false when any of them is present.
+        assert!(
+            !should_wrap_transaction(&["VACUUM public.users", "VACUUM public.orders"]),
+            "VACUUM cannot run inside a transaction block"
+        );
+        assert!(
+            !should_wrap_transaction(&["CREATE DATABASE shop", "SELECT 1"]),
+            "CREATE DATABASE cannot run inside a transaction block"
+        );
+        assert!(
+            !should_wrap_transaction(&[
+                "CREATE INDEX CONCURRENTLY idx_name ON users(name)",
+                "SELECT 1"
+            ]),
+            "CREATE INDEX CONCURRENTLY cannot run inside a transaction block"
+        );
+        assert!(
+            !should_wrap_transaction(&["DROP DATABASE old_db", "SELECT 1"]),
+            "DROP DATABASE cannot run inside a transaction block"
+        );
+        assert!(
+            !should_wrap_transaction(&["REINDEX DATABASE mydb", "SELECT 1"]),
+            "REINDEX DATABASE cannot run inside a transaction block"
+        );
+        assert!(
+            !should_wrap_transaction(&[
+                "CREATE UNIQUE INDEX CONCURRENTLY idx ON t(c)",
+                "SELECT 1"
+            ]),
+            "CREATE UNIQUE INDEX CONCURRENTLY cannot run inside a transaction block"
+        );
+        assert!(
+            !should_wrap_transaction(&["REINDEX INDEX CONCURRENTLY idx", "SELECT 1"]),
+            "REINDEX INDEX CONCURRENTLY cannot run inside a transaction block"
+        );
+        assert!(
+            !should_wrap_transaction(&["ALTER SYSTEM SET work_mem = '64MB'", "SELECT 1"]),
+            "ALTER SYSTEM cannot run inside a transaction block"
+        );
+        assert!(
+            !should_wrap_transaction(&[
+                "REFRESH MATERIALIZED VIEW CONCURRENTLY mv_stats",
+                "SELECT 1"
+            ]),
+            "REFRESH MATERIALIZED VIEW CONCURRENTLY cannot run inside a transaction block"
+        );
+        assert!(
+            !should_wrap_transaction(&["CREATE SUBSCRIPTION sub CONNECTION '' PUBLICATION pub", "SELECT 1"]),
+            "CREATE SUBSCRIPTION cannot run inside a transaction block"
+        );
+    }
+
+    #[test]
+    fn no_wrap_for_reindex_object_type_and_option_forms() {
+        // REINDEX grammar (PostgreSQL docs, sql-reindex):
+        //   REINDEX [ ( option [, ...] ) ] { INDEX | TABLE | SCHEMA } [ CONCURRENTLY ] name
+        //   REINDEX [ ( option [, ...] ) ] { DATABASE | SYSTEM } [ CONCURRENTLY ] [ name ]
+        // The object type is mandatory, so `REINDEX CONCURRENTLY name` never
+        // reaches the server — while these real forms all reject a transaction
+        // block and must therefore suppress the BEGIN/COMMIT wrapper.
+        assert!(
+            !should_wrap_transaction(&["VACUUM (FULL, VERBOSE) public.users", "SELECT 1"]),
+            "parenthesised-option VACUUM cannot run inside a transaction block"
+        );
+        assert!(
+            !should_wrap_transaction(&["REINDEX TABLE CONCURRENTLY users", "SELECT 1"]),
+            "REINDEX TABLE CONCURRENTLY cannot run inside a transaction block"
+        );
+        assert!(
+            !should_wrap_transaction(&["REINDEX INDEX CONCURRENTLY idx_users_name", "SELECT 1"]),
+            "REINDEX INDEX CONCURRENTLY cannot run inside a transaction block"
+        );
+        assert!(
+            !should_wrap_transaction(&["REINDEX SCHEMA public", "SELECT 1"]),
+            "REINDEX SCHEMA cannot run inside a transaction block"
+        );
+        assert!(
+            !should_wrap_transaction(&["REINDEX (VERBOSE) DATABASE shop", "SELECT 1"]),
+            "parenthesised-option REINDEX DATABASE cannot run inside a transaction block"
+        );
+        assert!(
+            !should_wrap_transaction(&["CREATE INDEX\n  CONCURRENTLY idx ON t(c)", "SELECT 1"]),
+            "a newline between keywords must not hide CREATE INDEX CONCURRENTLY"
+        );
+        // Statements that merely start with the same letters still wrap.
+        assert!(should_wrap_transaction(&["SELECT 1", "UPDATE t SET c = 1"]));
+    }
+
+    #[test]
+    fn split_sql_statements_keeps_escape_string_constants_whole() {
+        // E'…' honours backslash escapes, so \' is an escaped quote and the
+        // semicolon after it is part of the literal, not a statement boundary.
+        assert_eq!(
+            split_sql_statements(r#"SELECT E'a\'; b' AS x; SELECT 2"#),
+            vec![r#"SELECT E'a\'; b' AS x"#, "SELECT 2"]
+        );
+        // A doubled backslash ends the escape, so this quote really does close.
+        assert_eq!(
+            split_sql_statements(r#"SELECT E'a\\'; SELECT 2"#),
+            vec![r#"SELECT E'a\\'"#, "SELECT 2"]
+        );
+    }
+
+    #[test]
+    fn split_sql_statements_mirrors_ts_quote_and_comment_cases() {
+        assert_eq!(
+            split_sql_statements("SELECT 'a;b'; SELECT 2"),
+            vec!["SELECT 'a;b'", "SELECT 2"]
+        );
+        assert_eq!(
+            split_sql_statements("SELECT $$ a;b $$; SELECT 2"),
+            vec!["SELECT $$ a;b $$", "SELECT 2"]
+        );
+        assert_eq!(
+            split_sql_statements("SELECT 1; -- trailing; still comment\nSELECT 2"),
+            vec!["SELECT 1", "SELECT 2"]
+        );
     }
 }

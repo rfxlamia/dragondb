@@ -5,7 +5,7 @@
  * `createTabsStore(ipc, { getConnectionId, getDatabaseName })` uses zustand/vanilla.
  * Does NOT require `createStoreApi` singleton — ipc is constructor-injected (T1 pattern).
  *
- * No TabBar / App canvas wiring (Phase C).
+ * Hydration sets tabsReady after listTabStates; creates one empty tab if none remain.
  */
 import { createStore, type StoreApi } from "zustand/vanilla";
 import type { ConnectionId, DragonIpc, TabStateDto } from "../ipc/contract";
@@ -20,13 +20,26 @@ export type TabRunStatus =
   | { kind: "idle" }
   | { kind: "running" }
   | { kind: "ok"; rowCount: number; durationMs: number }
-  | { kind: "error"; message: string };
+  | { kind: "error"; message: string }
+  | { kind: "cancelled" };
+
+export type MutationToast = {
+  title: string;
+  tableName: string | null;
+  /** Schema-qualifies tableName (extractTableName) — View Table must not browse unqualified. */
+  tableSchema: string | null;
+  queryType: string;
+  sql: string;
+};
 
 /** In-memory tab = persist DTO fields + dual raw/compact + run status. */
 export type TabState = TabStateDto & {
   raw?: TabResultGrid | null;
   compact?: TabResultGrid | null;
   status?: TabRunStatus;
+  mutationToast?: MutationToast | null;
+  /** Ephemeral browse page (0-based). Never persisted. */
+  browsePage?: number;
 };
 
 export type TabsSessionGetters = {
@@ -43,6 +56,7 @@ export type TabRunResult = {
 export type TabsState = {
   tabs: TabState[];
   activeTabId: string | null;
+  tabsReady: boolean;
   pendingDeletedIds: Set<string>;
   createTab: () => TabState;
   switchTab: (id: string) => void;
@@ -50,11 +64,37 @@ export type TabsState = {
   persistTab: (dto: TabStateDto, opts?: { includeCachedResults?: boolean }) => Promise<void>;
   hydrateFromDto: (dto: TabStateDto) => void;
   refresh: () => Promise<void>;
-  beginRun: (tabId: string) => number | null;
-  applyRunSuccess: (tabId: string, result: TabRunResult, generation?: number) => Promise<void>;
+  beginRun: (tabId: string, options?: { preserveResults?: boolean }) => number | null;
+  /** Current run generation for a tab (used to target cancelQuery). */
+  getRunGeneration: (tabId: string) => number | null;
+  applyRunSuccess: (
+    tabId: string,
+    result: TabRunResult,
+    generation?: number,
+    options?: { displayRowLimit?: number; selectedTable?: { schema?: string; name: string } },
+  ) => Promise<boolean>;
+  applyMutationSuccess: (
+    tabId: string,
+    toast: MutationToast,
+    previousStatus: TabRunStatus | undefined,
+    generation?: number,
+  ) => boolean;
   applyRunFailure: (tabId: string, message: string, generation?: number) => void;
+  applyRunCancelled: (tabId: string) => void;
   clearTabResults: (tabId: string) => void;
+  clearMutationToast: (tabId: string) => void;
   clearInMemoryResults: () => void;
+  /** Clears in-memory browse payloads only (tabs with selected-table metadata). */
+  clearBrowseResults: () => void;
+  setBrowsePage: (tabId: string, page: number) => void;
+  setDatabaseName: (tabId: string, databaseName: string | null) => Promise<void>;
+  setQueryText: (tabId: string, text: string) => void;
+  setVisualDocumentJson: (tabId: string, json: string) => Promise<void>;
+  setSavedQueryId: (tabId: string, queryId: string | null) => void;
+  restoreSavedQueryResult: (
+    tabId: string,
+    cached: { compact: TabResultGrid; status: Extract<TabRunStatus, { kind: "ok" }> } | null,
+  ) => void;
 };
 
 function nowMillis(): string {
@@ -72,9 +112,12 @@ function toTabState(
 ): TabState {
   return {
     ...dto,
+    // Hydrate default — persisted rows from before the visual-IR column land as null.
+    visualDocumentJson: dto.visualDocumentJson ?? null,
     raw,
     compact,
     status: { kind: "idle" },
+    browsePage: 0,
   };
 }
 
@@ -99,6 +142,7 @@ function emptyTab(
     selectedSchemaFilter: null,
     cachedResultsData: null,
     cachedColumnNames: null,
+    visualDocumentJson: null,
   });
 }
 
@@ -107,22 +151,36 @@ function parseCachedResults(data: string | null): TabResultGrid | null {
   try {
     const parsed = JSON.parse(data) as { columns?: unknown; rows?: unknown };
     if (!Array.isArray(parsed.columns) || !Array.isArray(parsed.rows)) return null;
+    const rows: unknown[][] = [];
+    for (const row of parsed.rows) {
+      if (!Array.isArray(row)) return null;
+      rows.push(row);
+    }
     return {
       columns: parsed.columns.map(String),
-      rows: parsed.rows as unknown[][],
+      rows,
     };
   } catch {
     return null;
   }
 }
 
+function compactCells(row: unknown): unknown[] {
+  const cells = Array.isArray(row) ? row : [];
+  return cells.map((cell) => (typeof cell === "string" ? compactCell(cell) : cell));
+}
+
 function compactGrid(raw: TabResultGrid): TabResultGrid {
+  const rows = Array.isArray(raw.rows) ? raw.rows : [];
   return {
     columns: raw.columns,
-    rows: raw.rows.map((row) =>
-      row.map((cell) => (typeof cell === "string" ? compactCell(cell) : cell)),
-    ),
+    rows: rows.map(compactCells),
   };
+}
+
+function isThisSessionResultStatus(status: TabRunStatus | undefined): boolean {
+  const kind = status?.kind ?? "idle";
+  return kind === "ok" || kind === "running" || kind === "error" || kind === "cancelled";
 }
 
 function maxOrder(tabs: TabState[]): number {
@@ -148,18 +206,32 @@ function mruId(tabs: TabState[]): string | null {
 }
 
 function toTabStateDto(tab: TabState): TabStateDto {
-  const { raw: _raw, compact: _compact, status: _status, ...dto } = tab;
+  const {
+    raw: _raw,
+    compact: _compact,
+    status: _status,
+    mutationToast: _toast,
+    browsePage: _browsePage,
+    ...dto
+  } = tab;
   return dto;
 }
 
 export function createTabsStore(ipc: DragonIpc, getters: TabsSessionGetters): StoreApi<TabsState> {
   /** Per-tab run generation — module-private; never on TabState / never persisted. */
   const runGenerations = new Map<string, number>();
+  /**
+   * Generations double as the run id sent to Rust, where `CancelRegistry` keys
+   * cancelled / active runs per CONNECTION. A per-tab counter would hand every
+   * tab's first run the same id, so cancelling one tab would cancel another's
+   * query. Draw from one monotonic counter so live runs never share an id.
+   */
+  let lastRunGeneration = 0;
 
   function bumpRunGeneration(tabId: string): number {
-    const next = (runGenerations.get(tabId) ?? 0) + 1;
-    runGenerations.set(tabId, next);
-    return next;
+    lastRunGeneration += 1;
+    runGenerations.set(tabId, lastRunGeneration);
+    return lastRunGeneration;
   }
 
   return createStore<TabsState>((set, get) => {
@@ -194,6 +266,7 @@ export function createTabsStore(ipc: DragonIpc, getters: TabsSessionGetters): St
     return {
       tabs: [],
       activeTabId: null,
+      tabsReady: false,
       pendingDeletedIds: new Set(),
 
       createTab() {
@@ -206,6 +279,17 @@ export function createTabsStore(ipc: DragonIpc, getters: TabsSessionGetters): St
         // Persist new active + deactivated siblings (isActive must not stay true in sqlite).
         syncMetadataForCurrentTabs();
         return created;
+      },
+
+      setQueryText(tabId, text) {
+        patchTab(tabId, { queryText: text });
+      },
+
+      async setVisualDocumentJson(tabId, json) {
+        patchTab(tabId, { visualDocumentJson: json });
+        const tab = get().tabs.find((candidate) => candidate.id === tabId);
+        if (tab === undefined) return;
+        await get().persistTab(toTabStateDto(tab), { includeCachedResults: false });
       },
 
       switchTab(id) {
@@ -222,44 +306,61 @@ export function createTabsStore(ipc: DragonIpc, getters: TabsSessionGetters): St
       },
 
       closeTab(id) {
-        const { tabs, activeTabId } = get();
+        const { tabs, activeTabId, pendingDeletedIds } = get();
+        if (pendingDeletedIds.has(id) || !tabs.some((tab) => tab.id === id)) return;
         const remaining = tabs.filter((t) => t.id !== id);
         runGenerations.delete(id);
 
         set((state) => {
           const pending = new Set(state.pendingDeletedIds);
           pending.add(id);
-          return { pendingDeletedIds: pending };
-        });
-
-        void ipc.deleteTabState(id).catch(() => {
-          /* keep pendingDeletedIds so refresh cannot resurrect the tab */
+          return {
+            tabs: state.tabs.map((tab) => (tab.id === id ? { ...tab, isActive: false } : tab)),
+            pendingDeletedIds: pending,
+          };
         });
 
         if (remaining.length === 0) {
           const next = emptyTab(getters.getConnectionId(), getters.getDatabaseName(), 0);
-          set({ tabs: [next], activeTabId: next.id });
+          set((state) => ({ tabs: [...state.tabs, next], activeTabId: next.id }));
           queueMetadataPersist(next);
-          return;
+        } else {
+          let nextActive = activeTabId;
+          if (activeTabId === id) {
+            nextActive = mruId(remaining);
+          }
+          set((state) => ({
+            tabs: state.tabs.map((t) => ({
+              ...t,
+              isActive: t.id === nextActive,
+            })),
+            activeTabId: nextActive,
+          }));
+          syncMetadataForCurrentTabs();
         }
 
-        let nextActive = activeTabId;
-        if (activeTabId === id) {
-          nextActive = mruId(remaining);
-        }
-        set({
-          tabs: remaining.map((t) => ({
-            ...t,
-            isActive: t.id === nextActive,
-          })),
-          activeTabId: nextActive,
-        });
-        syncMetadataForCurrentTabs();
+        void ipc.deleteTabState(id).then(
+          () => {
+            // Keep the tombstone so an in-flight persist still compensates its raced save.
+            set((state) => ({ tabs: state.tabs.filter((tab) => tab.id !== id) }));
+          },
+          () => {
+            // Keep the id pending so a later refresh cannot resurrect a failed deletion.
+            set((state) => ({ tabs: state.tabs.filter((tab) => tab.id !== id) }));
+          },
+        );
       },
 
       async persistTab(dto, opts) {
         if (get().pendingDeletedIds.has(dto.id)) return;
-        await ipc.saveTabState(dto, opts);
+        await ipc.saveTabState(
+          {
+            ...dto,
+            queryText: dto.queryText,
+            visualDocumentJson: dto.visualDocumentJson ?? null,
+          },
+          opts,
+        );
         // Compensating delete if close raced past the pre-check.
         if (get().pendingDeletedIds.has(dto.id)) {
           await ipc.deleteTabState(dto.id).catch(() => {
@@ -276,8 +377,19 @@ export function createTabsStore(ipc: DragonIpc, getters: TabsSessionGetters): St
         set((state) => {
           const idx = state.tabs.findIndex((t) => t.id === dto.id);
           if (idx >= 0) {
+            const existing = state.tabs[idx];
             const tabs = state.tabs.slice();
-            tabs[idx] = { ...hydrated, status: tabs[idx]?.status };
+            if (existing && isThisSessionResultStatus(existing.status)) {
+              tabs[idx] = {
+                ...hydrated,
+                raw: existing.raw,
+                compact: existing.compact,
+                status: existing.status,
+                browsePage: existing.browsePage,
+              };
+            } else {
+              tabs[idx] = { ...hydrated, status: existing?.status };
+            }
             return { tabs };
           }
           return {
@@ -288,37 +400,58 @@ export function createTabsStore(ipc: DragonIpc, getters: TabsSessionGetters): St
       },
 
       async refresh() {
-        const dtos = await ipc.listTabStates();
-        for (const dto of dtos) {
-          get().hydrateFromDto(dto);
+        try {
+          const dtos = await ipc.listTabStates();
+          for (const dto of dtos) {
+            try {
+              get().hydrateFromDto(dto);
+            } catch {
+              /* malformed cache must not abort remaining tabs */
+            }
+          }
+          const { tabs, activeTabId } = get();
+          if (activeTabId === null || !tabs.some((t) => t.id === activeTabId)) {
+            const active = tabs.find((t) => t.isActive) ?? tabs[0];
+            if (active) {
+              set({ activeTabId: active.id });
+            }
+          }
+        } catch {
+          /* retain empty in-memory fallback below */
         }
-        const { tabs, activeTabId } = get();
-        if (activeTabId !== null && tabs.some((t) => t.id === activeTabId)) {
-          return;
+
+        if (get().tabs.length === 0) {
+          get().createTab();
         }
-        const active = tabs.find((t) => t.isActive) ?? tabs[0];
-        if (active) {
-          set({ activeTabId: active.id });
-        }
+        set({ tabsReady: true });
       },
 
-      beginRun(tabId) {
+      beginRun(tabId, options) {
         const { tabs, pendingDeletedIds } = get();
         if (pendingDeletedIds.has(tabId)) return null;
         if (!tabs.some((t) => t.id === tabId)) return null;
         const generation = bumpRunGeneration(tabId);
-        patchTab(tabId, {
-          raw: null,
-          compact: null,
-          status: { kind: "running" },
-        });
+        patchTab(
+          tabId,
+          options?.preserveResults
+            ? { status: { kind: "running" } }
+            : { raw: null, compact: null, status: { kind: "running" } },
+        );
         return generation;
       },
 
-      async applyRunSuccess(tabId, result, generation) {
-        if (!canApplyRun(tabId, generation)) return;
+      getRunGeneration(tabId) {
+        return runGenerations.get(tabId) ?? null;
+      },
+
+      async applyRunSuccess(tabId, result, generation, options) {
+        if (!canApplyRun(tabId, generation)) return false;
         const raw: TabResultGrid = { columns: result.columns, rows: result.rows };
-        const compact = compactGrid(raw);
+        const displayRows =
+          options?.displayRowLimit === undefined
+            ? raw.rows
+            : raw.rows.slice(0, options.displayRowLimit);
+        const compact = compactGrid({ columns: raw.columns, rows: displayRows });
         patchTab(tabId, {
           raw,
           compact,
@@ -329,10 +462,25 @@ export function createTabsStore(ipc: DragonIpc, getters: TabsSessionGetters): St
           },
           cachedResultsData: JSON.stringify(raw),
           cachedColumnNames: result.columns,
+          // Always resolve (not merge-preserve): a plain SELECT/canvas run must
+          // clear a stale selectedTable from a prior browse, or QueryResultsPane
+          // would keep treating unrelated results as editable via the old table.
+          selectedTableSchema: options?.selectedTable?.schema ?? null,
+          selectedTableName: options?.selectedTable?.name ?? null,
         });
         const tab = get().tabs.find((t) => t.id === tabId);
-        if (!tab) return;
+        if (!tab) return false;
         await get().persistTab(toTabStateDto(tab), { includeCachedResults: true });
+        return true;
+      },
+
+      applyMutationSuccess(tabId, toast, previousStatus, generation) {
+        if (!canApplyRun(tabId, generation)) return false;
+        patchTab(tabId, {
+          mutationToast: toast,
+          status: previousStatus ?? { kind: "idle" },
+        });
+        return true;
       },
 
       applyRunFailure(tabId, message, generation) {
@@ -344,6 +492,16 @@ export function createTabsStore(ipc: DragonIpc, getters: TabsSessionGetters): St
         });
       },
 
+      applyRunCancelled(tabId) {
+        if (!get().tabs.some((t) => t.id === tabId)) return;
+        bumpRunGeneration(tabId);
+        patchTab(tabId, {
+          raw: null,
+          compact: null,
+          status: { kind: "cancelled" },
+        });
+      },
+
       clearTabResults(tabId) {
         if (!get().tabs.some((t) => t.id === tabId)) return;
         bumpRunGeneration(tabId);
@@ -352,6 +510,11 @@ export function createTabsStore(ipc: DragonIpc, getters: TabsSessionGetters): St
           compact: null,
           status: { kind: "idle" },
         });
+      },
+
+      clearMutationToast(tabId) {
+        if (!get().tabs.some((t) => t.id === tabId)) return;
+        patchTab(tabId, { mutationToast: null });
       },
 
       clearInMemoryResults() {
@@ -366,6 +529,72 @@ export function createTabsStore(ipc: DragonIpc, getters: TabsSessionGetters): St
             status: { kind: "idle" as const },
           })),
         }));
+      },
+
+      clearBrowseResults() {
+        const browseTabIds = get()
+          .tabs.filter((tab) => tab.selectedTableName !== null || tab.selectedTableSchema !== null)
+          .map((tab) => tab.id);
+        for (const tabId of browseTabIds) {
+          bumpRunGeneration(tabId);
+        }
+        set((state) => ({
+          tabs: state.tabs.map((tab) => {
+            if (tab.selectedTableName === null && tab.selectedTableSchema === null) {
+              return tab;
+            }
+            return {
+              ...tab,
+              selectedTableSchema: null,
+              selectedTableName: null,
+              raw: null,
+              compact: null,
+              status: { kind: "idle" as const },
+              cachedResultsData: null,
+              cachedColumnNames: null,
+              browsePage: 0,
+            };
+          }),
+        }));
+      },
+
+      setBrowsePage(tabId, page) {
+        if (!get().tabs.some((t) => t.id === tabId)) return;
+        patchTab(tabId, { browsePage: Math.max(0, Math.trunc(page)) });
+      },
+
+      async setDatabaseName(tabId, databaseName) {
+        if (!get().tabs.some((t) => t.id === tabId)) return;
+        patchTab(tabId, { databaseName });
+        const tab = get().tabs.find((t) => t.id === tabId);
+        if (tab) {
+          await get().persistTab(toTabStateDto(tab), { includeCachedResults: false });
+        }
+      },
+
+      setSavedQueryId(tabId, queryId) {
+        if (!get().tabs.some((t) => t.id === tabId)) return;
+        patchTab(tabId, { savedQueryId: queryId });
+        const tab = get().tabs.find((t) => t.id === tabId);
+        if (tab) queueMetadataPersist(tab);
+      },
+
+      restoreSavedQueryResult(tabId, cached) {
+        if (!get().tabs.some((t) => t.id === tabId)) return;
+        bumpRunGeneration(tabId);
+        if (cached === null) {
+          patchTab(tabId, {
+            raw: null,
+            compact: null,
+            status: { kind: "idle" },
+          });
+          return;
+        }
+        patchTab(tabId, {
+          raw: null,
+          compact: cached.compact,
+          status: cached.status,
+        });
       },
     };
   });

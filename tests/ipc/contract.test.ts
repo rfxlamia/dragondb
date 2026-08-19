@@ -2,6 +2,7 @@
 // `bun run typecheck` (step 2/4). Runtime asserts below catch missing symbols.
 import { describe, expect, expectTypeOf, it } from "vitest";
 import type {
+  ConnectionId,
   ConnectionProfileDto,
   ConnectResult,
   DeleteRowsInput,
@@ -19,8 +20,10 @@ import type {
   SaveProfileInput,
   SshAuthMethod,
   SslMode,
+  // SP-4b last slice — FAIL until contract exports them
   TableRef,
   TabStateDto,
+  TestConnectionInput,
   UpdateRowInput,
 } from "../../src/ipc/contract";
 import * as contract from "../../src/ipc/contract";
@@ -154,6 +157,7 @@ describe("DragonIpc contract delta (SP-3 library/tab/history/row/csv)", () => {
       selectedSchemaFilter: null,
       cachedResultsData: null,
       cachedColumnNames: null,
+      visualDocumentJson: null,
     };
     expect(tab.order).toBe(0);
     expect(tab.cachedResultsData).toBeNull();
@@ -208,7 +212,7 @@ describe("DragonIpc contract delta (SP-3 library/tab/history/row/csv)", () => {
     ];
     expect(kinds).toHaveLength(6);
 
-    const table: TableRef = { schema: "public", name: "users" };
+    const table: TableRef = { schema: "public", name: "users", tableType: "regular" };
     const update: UpdateRowInput = {
       connectionId: "c1",
       table,
@@ -280,16 +284,37 @@ describe("DragonIpc contract delta (SP-3 library/tab/history/row/csv)", () => {
       // SP-3 CSV
       saveCsvFile: async (_csvText: string, _defaultPath?: string) =>
         ({ canceled: true }) satisfies SaveCsvFileResult,
+      saveTextFile: async (
+        _text: string,
+        _defaultPath?: string,
+        _filter?: { name: string; extensions: string[] },
+      ) => ({ canceled: true }) satisfies SaveCsvFileResult,
       // SP-3 row ops — reject with RowOperationError (NOT IpcError kind expansion)
       updateRow: async (_input: UpdateRowInput) => {},
       deleteRows: async (_input: DeleteRowsInput) => {},
+      // SP-4b last slice — catalog / database / cancel / DDL / global history clear
+      testConnection: async (_input: TestConnectionInput) => {},
+      cancelQuery: async (_connectionId: ConnectionId, _runId: number) => {},
+      listDatabases: async (_connectionId: ConnectionId) => [],
+      switchDatabase: async (_connectionId: ConnectionId, _name: string) => {},
+      createDatabase: async (_name: string) => {},
+      deleteDatabase: async (_name: string) => {},
+      truncateTable: async (_connectionId: ConnectionId, _table: TableRef) => {},
+      dropTable: async (_connectionId: ConnectionId, _table: TableRef) => {},
+      generateTableDdl: async (_connectionId: ConnectionId, _table: TableRef) => "",
+      setSearchPath: async (_connectionId: ConnectionId, _schema: string | null) => {},
+      clearAllHistory: async () => {},
     };
     expectTypeOf(stub).toMatchTypeOf<DragonIpc>();
     expect(Object.keys(stub).sort()).toEqual(
       [
+        "cancelQuery",
+        "clearAllHistory",
         "clearHistory",
         "connectProfile",
+        "createDatabase",
         "createQueryFolder",
+        "deleteDatabase",
         "deleteFolder",
         "deleteHistory",
         "deleteProfile",
@@ -297,10 +322,13 @@ describe("DragonIpc contract delta (SP-3 library/tab/history/row/csv)", () => {
         "deleteSavedQueries",
         "deleteTabState",
         "disconnect",
+        "dropTable",
         "duplicateSavedQuery",
+        "generateTableDdl",
         "getProfile",
         "getSavedQuery",
         "listColumns",
+        "listDatabases",
         "listHistory",
         "listProfiles",
         "listQueryFolders",
@@ -311,9 +339,14 @@ describe("DragonIpc contract delta (SP-3 library/tab/history/row/csv)", () => {
         "renameQueryFolder",
         "runQuery",
         "saveCsvFile",
+        "saveTextFile",
         "saveProfile",
         "saveSavedQuery",
         "saveTabState",
+        "setSearchPath",
+        "switchDatabase",
+        "testConnection",
+        "truncateTable",
         "updateRow",
       ].sort(),
     );
@@ -324,6 +357,76 @@ describe("DragonIpc contract delta (SP-3 library/tab/history/row/csv)", () => {
     expectTypeOf<DragonIpc["listHistory"]>().parameters.toEqualTypeOf<[opts: HistoryListOptions]>();
     expectTypeOf<DragonIpc["updateRow"]>().returns.toEqualTypeOf<Promise<void>>();
     expectTypeOf<DragonIpc["deleteRows"]>().returns.toEqualTypeOf<Promise<void>>();
+    expect(contract).toBeTruthy();
+  });
+});
+
+describe("DragonIpc contract delta (SP-4b last slice)", () => {
+  it("TableRef requires tableType regular | foreign", () => {
+    const regular: TableRef = { schema: "public", name: "orders", tableType: "regular" };
+    const foreign: TableRef = { schema: "public", name: "remote_orders", tableType: "foreign" };
+    expect(regular.tableType).toBe("regular");
+    expect(foreign.tableType).toBe("foreign");
+    expectTypeOf<TableRef>().toHaveProperty("tableType");
+    expectTypeOf<TableRef["tableType"]>().toEqualTypeOf<"regular" | "foreign">();
+  });
+
+  it("TabStateDto includes visualDocumentJson null without stuffing IR into queryText", () => {
+    const tab: TabStateDto = {
+      id: "t1",
+      connectionId: "c1",
+      databaseName: "app",
+      queryText: "SELECT 1",
+      savedQueryId: null,
+      isActive: true,
+      order: 0,
+      createdAt: "1",
+      lastAccessedAt: "2",
+      selectedTableSchema: "public",
+      selectedTableName: "users",
+      selectedSchemaFilter: null,
+      cachedResultsData: null,
+      cachedColumnNames: null,
+      visualDocumentJson: null,
+    };
+    expect(tab.visualDocumentJson).toBeNull();
+    expect(tab.queryText).toBe("SELECT 1");
+    expectTypeOf<TabStateDto>().toHaveProperty("visualDocumentJson");
+  });
+
+  it("ConnectionProfileDto still has no password fields", () => {
+    const profile: ConnectionProfileDto = {
+      id: "p1",
+      name: "local",
+      host: "127.0.0.1",
+      port: 5432,
+      username: "postgres",
+      database: "app",
+      isFavorite: false,
+      sslMode: "prefer",
+      sshEnabled: false,
+      sshHost: null,
+      sshPort: null,
+      sshUsername: null,
+      sshAuthMethod: null,
+      sshPrivateKeyPath: null,
+    };
+    expect(profile).not.toHaveProperty("password");
+    expect(profile).not.toHaveProperty("sshPrivateKey");
+  });
+
+  it("DragonIpc type requires last-slice catalog and database methods", () => {
+    expectTypeOf<DragonIpc>().toHaveProperty("testConnection");
+    expectTypeOf<DragonIpc>().toHaveProperty("cancelQuery");
+    expectTypeOf<DragonIpc>().toHaveProperty("listDatabases");
+    expectTypeOf<DragonIpc>().toHaveProperty("switchDatabase");
+    expectTypeOf<DragonIpc>().toHaveProperty("createDatabase");
+    expectTypeOf<DragonIpc>().toHaveProperty("deleteDatabase");
+    expectTypeOf<DragonIpc>().toHaveProperty("truncateTable");
+    expectTypeOf<DragonIpc>().toHaveProperty("dropTable");
+    expectTypeOf<DragonIpc>().toHaveProperty("generateTableDdl");
+    expectTypeOf<DragonIpc>().toHaveProperty("setSearchPath");
+    expectTypeOf<DragonIpc>().toHaveProperty("clearAllHistory");
     expect(contract).toBeTruthy();
   });
 });
