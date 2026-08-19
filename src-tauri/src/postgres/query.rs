@@ -252,10 +252,18 @@ pub fn split_sql_statements(sql: &str) -> Vec<String> {
 
 pub fn should_wrap_transaction(statements: &[&str]) -> bool {
     !statements.iter().any(|sql| {
-        let s = strip_leading_sql_noise(sql);
-        ["begin", "start transaction", "commit", "rollback"]
+        let s = strip_leading_sql_noise(sql).to_ascii_lowercase();
+        let user_txn = ["begin", "start transaction", "commit", "rollback"]
             .iter()
-            .any(|k| s.to_ascii_lowercase().starts_with(k))
+            .any(|k| s.starts_with(k));
+        let illegal_in_txn = s.starts_with("vacuum")
+            || s.starts_with("create database")
+            || s.starts_with("drop database")
+            || s.starts_with("create index concurrently")
+            || s.starts_with("drop index concurrently")
+            || s.starts_with("reindex database")
+            || s.starts_with("reindex system");
+        user_txn || illegal_in_txn
     })
 }
 
@@ -494,6 +502,35 @@ mod tests {
     fn wrap_transaction_unless_user_already_has_begin() {
         assert!(should_wrap_transaction(&["SELECT 1", "SELECT 2"]));
         assert!(!should_wrap_transaction(&["BEGIN", "SELECT 1", "COMMIT"]));
+    }
+
+    #[test]
+    fn no_wrap_for_statements_illegal_inside_transaction_block() {
+        // These commands CANNOT run inside a transaction block in PostgreSQL.
+        // should_wrap_transaction must return false when any of them is present.
+        assert!(
+            !should_wrap_transaction(&["VACUUM public.users", "VACUUM public.orders"]),
+            "VACUUM cannot run inside a transaction block"
+        );
+        assert!(
+            !should_wrap_transaction(&["CREATE DATABASE shop", "SELECT 1"]),
+            "CREATE DATABASE cannot run inside a transaction block"
+        );
+        assert!(
+            !should_wrap_transaction(&[
+                "CREATE INDEX CONCURRENTLY idx_name ON users(name)",
+                "SELECT 1"
+            ]),
+            "CREATE INDEX CONCURRENTLY cannot run inside a transaction block"
+        );
+        assert!(
+            !should_wrap_transaction(&["DROP DATABASE old_db", "SELECT 1"]),
+            "DROP DATABASE cannot run inside a transaction block"
+        );
+        assert!(
+            !should_wrap_transaction(&["REINDEX DATABASE mydb", "SELECT 1"]),
+            "REINDEX DATABASE cannot run inside a transaction block"
+        );
     }
 
     #[test]

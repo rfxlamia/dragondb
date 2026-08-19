@@ -150,8 +150,8 @@
     "semantic_hash": "0bffdbae52b8ed9e4c9215ccf78036a4"
   },
   "src/App.tsx": {
-    "mtime": 1787124306.7264106,
-    "ast_hash": "dc92e5ef4ea48179d75e77f2bc271e42",
+    "mtime": 1787125976.058504,
+    "ast_hash": "663a3c64d5b22871726d5c6830defa6b",
     "semantic_hash": ""
   },
   "src/core/canvas-presentation.ts": {
@@ -1477,6 +1477,11 @@
   "tests/stores/cancel-cross-tab-bug.test.ts": {
     "mtime": 1787124582.1556597,
     "ast_hash": "855a0b0fce0572ee2764d8e3ce6d63d2",
+    "semantic_hash": ""
+  },
+  "tests/stores/tab-database-mismatch-bug.test.ts": {
+    "mtime": 1787125961.375168,
+    "ast_hash": "c0827c8c4360d8d2c30117b6fbd73b22",
     "semantic_hash": ""
   }
 }
