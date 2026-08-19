@@ -129,6 +129,70 @@ Placeholder text: neutral-600 on white (4.84:1 ✅ AA). Helper error text: error
 
 Semantic badge variants may use success/warning/error tints with matching text-on-tint colors.
 
+### Icon Button
+Chrome action with no text label (row overflow, panel collapse, refresh, new, catalog
+create/delete, result-row actions, tab close/new). 26×26, borderless, glyph inherits
+`currentColor`; the accessible name comes from `aria-label` set to the same copy constant a
+text button would have shown. Never the only affordance for a destructive action that has no
+confirm step.
+
+| State | Background | Icon | Border | Shadow | Cursor | Focus ring |
+|-------|------------|------|--------|--------|--------|------------|
+| Default | transparent | neutral-600 | none | none | pointer | — |
+| Hover | neutral-200 | neutral-900 | none | none | pointer | — |
+| Hover (accent) | primary-100 | primary-700 | none | none | pointer | — |
+| Hover (danger) | error-tint | error-text | none | none | pointer | — |
+| Active | neutral-200 + `scale(0.92)` | neutral-900 | none | none | pointer | — |
+| Disabled | transparent | neutral-400 | none | none | not-allowed | — |
+
+### Segmented Control
+Two-to-three-way view switch on a toolbar (Visual / SQL). Track is neutral-200, the selected
+segment is the raised white plane. Implemented as `<label>` + visually hidden native
+`<input type="radio">` — the browser keeps roving focus and arrow keys; only the OS dot is
+replaced. Focus ring is drawn on the segment, never on the 1px input.
+
+| Part | Background | Text | Radius | Shadow |
+|------|------------|------|--------|--------|
+| Track | neutral-200 | — | 4px, 2px padding | none |
+| Segment (idle) | transparent | neutral-700 (hover neutral-900) | 3px | none |
+| Segment (selected) | white | neutral-900, 600 weight | 3px | sm |
+
+### List Row
+Every sidebar/library list (tables, saved queries, profiles, folders). A row is a row: no
+per-row border, no per-row white plane. Min height 28px, radius 4px, 13px label — mono for
+database identifiers (table names), sans for human-authored names (saved queries, profiles).
+Row-level actions are hover-reveal via opacity (never `display: none`, so assistive tech and
+keyboard focus still reach them).
+
+A destructive row action needs one of two guards, never neither:
+
+| Row kind | Destructive action lives in | Because |
+|----------|-----------------------------|---------|
+| Sparse list, action is confirmed (profiles, folders) | hover-reveal icon on the row | the confirm step is the guard; a menu would add a click to every delete to protect a click that already can't fire |
+| Dense list, or the list already has an overflow menu (tables) | the row's overflow menu | at schema density a hover-revealed trash sits one row-height from the wrong table |
+
+Deleting without a confirm step is never a bare row icon under either rule.
+
+| State | Background | Text | Glyph |
+|-------|------------|------|-------|
+| Default | transparent | neutral-900 | neutral-500 |
+| Hover | neutral-200 | neutral-900 | primary-600 |
+| Selected | primary-100 | primary-800 | primary-600 |
+
+### Surface Roles
+Sidebars recede, content is the raised plane — the inverse reads as chrome in front of data.
+
+| Role | Value | Used by |
+|------|-------|---------|
+| page / sidebar | neutral-100 | app shell, Connection panel, Queries column, tab strip |
+| raised content | white | canvas, results grid, active tab, popovers, dialogs |
+| hairline | neutral-200 | panel separators, toolbar/chrome underlines, dialog borders |
+| field border | neutral-300 | inputs, search fields, secondary buttons |
+
+Canvas carries a `radial-gradient` dot grid (neutral-300, 18px pitch) on white — the n8n
+"workspace" cue, no new hue. Dialog/popover surfaces use the 8px badge-class radius; every
+other radius stays 4px.
+
 ### Link
 | State | Background | Text | Border | Shadow | Cursor | Focus ring |
 |-------|------------|------|--------|--------|--------|------------|
@@ -169,13 +233,21 @@ Do not implement the ring as an inset `box-shadow` — on a primary button that 
 - Language: product UI strings in **English** (repo convention); keep calm and precise — visual builder sits on defined SQL, not a new dynamic language.
 
 ## Molecules (examples)
-- **Connection Form** = Label + Input (+ Error helper) + Button Primary (“Connect database”) + Button Secondary (“Cancel”)
+- **Connection Form** = Label + Input (+ Error helper) + Button Primary (“Connect database”) + Button Secondary (“Cancel”), presented in a **Sheet** (see below), never inline in the sidebar
+- **Sheet** = centered fixed surface, white, 8px radius, `--shadow-lg` + `0 0 0 100vmax var(--scrim)` for the dim, `@starting-style` scale-in from 0.96. Sticky title (15px/600, hairline under) and sticky footer (hairline over) with the body scrolling between them. Dismissed by its own Cancel/Done **and** Escape. Used for: connection form (z 50), confirm/created/create-database (z 60, so a confirm always sits above the sheet it answers), DDL, export, generated SQL, history, help.
+  - A session action (Connect / Disconnect / Delete profile) never exists twice at once: while the sheet is open its footer owns Connect and Delete; while it is closed the sidebar owns them (header icon for Connect/Disconnect, hover-reveal trash on the profile row — see List Row). Collapsing a panel that hosts an open sheet is disabled rather than allowed to discard the draft inside it.
+  - Escape goes to the topmost surface only, never to the whole stack: a confirm over a sheet takes the key, and the sheet gets it back when the confirm closes. Since a dialog cannot know what is above it, this is a shared LIFO registry (`src/ui/use-escape-dismiss.ts`), not a listener per dialog.
+  - A confirm stays mounted and disabled until its action settles, rather than closing on click. Unmounting at click would drop it off that registry mid-request and hand Escape to the sheet underneath, and it is also what the confirm's busy state is for.
+  - A sheet that is not a focus trap still owes focus: into its first field on open, back to the opener on close.
 - **Query Canvas Toolbar** = Button Ghost (“Add block”) + Button Primary (“Run query”) + Link (“View generated SQL”)
 - **Engine Filter Row** = Badge ×N (PostgreSQL, MySQL, …) + Link (“Clear filters”)
 
 ## Implementation Notes — CSS / Tauri (primary target)
 - Emit every value above as CSS custom properties on `:root`. `oklch()` is native CSS; use the values verbatim rather than converting to hex at call sites. Hex codes in this brief are reference only.
 - Name tokens `--primary-600`, `--neutral-900`, `--error-solid`, matching this brief's shade names, so a review can diff brief against stylesheet by name.
+- Shared control primitives live in `src/ui/controls.css` (`.ui-icon-btn`, `.ui-segment`, `.ui-search`, `.ui-row`, `.ui-menu`, `.ui-quiet-select`, `.ui-section-label`) and the icon set in `src/ui/icons.tsx`. Add a component's chrome there rather than re-drawing a bordered box per stylesheet. Role aliases (`--surface-page`, `--surface-sidebar`, `--surface-raised`, `--border-subtle`, `--border-field`, `--row-hover`, `--row-selected`, `--row-selected-text`, `--row-height`, `--control-height`) sit in `tokens.css` beside the shades they alias and resolve to brief shades only — they name roles, they do not add colors.
+- Micro-labels are sentence case, 11px/600 neutral-600. No ALL-CAPS section headers.
+- Icons are inline SVG on a 16×16 grid, 1.4px stroke, `currentColor`, `aria-hidden="true"`. No icon fonts, no text glyphs (`▸`, `×`, `+`, `↑`, `↓`) as UI chrome — including via `::after` `content`, which cannot be hidden from the accessibility tree and so double-announces whatever ARIA state the element already carries.
 - Corner radius: `--radius: 4px` base; badges may use 8px.
 - Focus: follow the single focus-ring rule above. Never rely on the browser default outline — it differs across WebKit (macOS), WebView2 (Windows), and WebKitGTK (Linux).
 - Fonts: bundle Inter and JetBrains Mono as local assets and declare them with `@font-face`. No CDN reference — a strict-CSP or offline Tauri artifact would silently fall back to the OS font and break the type metrics.

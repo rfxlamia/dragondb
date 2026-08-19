@@ -1,0 +1,34 @@
+# Graphify knowledge graph: keep visible for codebase queries (see AGENTS.md)
+!graphify-out
+
+# Dependencies
+node_modules/
+
+# Frontend build (Vite)
+dist/
+dist-ssr/
+
+# Rust / Tauri build artifacts
+target/
+src-tauri/target/
+src-tauri/gen/schemas/
+
+# Tests / coverage
+coverage/
+*.lcov
+.nyc_output/
+
+# Logs
+logs/
+*.log
+
+# TypeScript build info
+*.tsbuildinfo
+
+# Bun
+.bun/
+
+# Editor / OS noise
+.DS_Store
+Thumbs.db
+
