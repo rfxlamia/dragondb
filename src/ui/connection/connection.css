@@ -442,6 +442,10 @@
   min-width: 0;
 }
 
+.connection-tables__search {
+  margin-bottom: 0.25rem;
+}
+
 .connection-tables__schema-error {
   background: var(--error-tint);
   border-radius: var(--radius);

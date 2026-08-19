@@ -134,7 +134,12 @@ export function ConnectionPanel(props: ConnectionPanelProps): React.JSX.Element 
   const blocking = formVisible || confirm.hasPending || pickerBlocking;
   useEffect(() => {
     onBlockingChange?.(blocking);
+    return () => onBlockingChange?.(false);
   }, [blocking, onBlockingChange]);
+
+  useEffect(() => {
+    if (!sessionClaimed) setPickerBlocking(false);
+  }, [sessionClaimed]);
 
   const canConnect = selectedId !== null && !dirty && !sessionClaimed && !busy;
 

@@ -456,6 +456,13 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
 
   const welcome = profilesReady && profileCount === 0 && !formVisible;
 
+  useEffect(() => {
+    if (!welcome) return;
+    setConnectionBlocking(false);
+    setQueriesBlocking(false);
+    setTablesBlocking(false);
+  }, [welcome]);
+
   function handleNewTab(): void {
     const created = stores.tabs.getState().createTab();
     tabDocumentsRef.current.getOrCreate(created.id);

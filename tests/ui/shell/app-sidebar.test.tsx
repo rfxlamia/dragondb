@@ -34,7 +34,7 @@ describe("AppSidebar", () => {
     expect(screen.getByText("connections block")).toBeTruthy();
   });
 
-  it("renders only the active tab's body", () => {
+  it("keeps inactive tab panels mounted but hidden", () => {
     render(
       <AppSidebar
         tab="schema"
@@ -46,7 +46,8 @@ describe("AppSidebar", () => {
     );
 
     expect(screen.getByText("schema body")).toBeTruthy();
-    expect(screen.queryByText("queries body")).toBeNull();
+    expect(document.getElementById("sidebar-tabpanel-queries")?.hidden).toBe(true);
+    expect(document.getElementById("sidebar-tabpanel-schema")?.hidden).toBe(false);
   });
 
   it("reports the selected tab when the other segment is chosen", async () => {

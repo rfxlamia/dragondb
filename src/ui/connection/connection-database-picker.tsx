@@ -38,7 +38,15 @@ export function ConnectionDatabasePicker(props: {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
+    if (!isConnected) {
+      setCreateOpen(false);
+      setDeleteOpen(false);
+    }
+  }, [isConnected]);
+
+  useEffect(() => {
     onBlockingChange?.(createOpen || deleteOpen);
+    return () => onBlockingChange?.(false);
   }, [createOpen, deleteOpen, onBlockingChange]);
 
   const empty = databases.length === 0;

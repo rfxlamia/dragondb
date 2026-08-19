@@ -1,5 +1,7 @@
+import { useEffect, useState } from "react";
 import type { ColumnInfo, DragonIpc, TableRef } from "../../ipc/contract";
 import { TABLES_LOAD_FAILED } from "../../stores/schema-store";
+import { SearchIcon } from "../icons";
 import { TableList } from "../tables/table-list";
 import { TablesAccessibility } from "../tables/tables-accessibility";
 import { TablesCopy } from "../tables/tables-copy";
@@ -55,6 +57,17 @@ export function ConnectionTablesList(props: {
     onDismissSchemaError,
   } = props;
 
+  const [filter, setFilter] = useState("");
+
+  const showTableList =
+    !tablesLoading && tablesErrorMessage !== TABLES_LOAD_FAILED && tables.length > 0;
+
+  useEffect(() => {
+    if (!showTableList) {
+      onBlockingChange?.(false);
+    }
+  }, [showTableList, onBlockingChange]);
+
   let body: React.ReactNode;
   if (tablesLoading) {
     body = <p className="connection-panel__hint">{ConnectionCopy.tablesLoading}</p>;
@@ -83,12 +96,30 @@ export function ConnectionTablesList(props: {
         saveCsvFile={saveCsvFile}
         saveTextFile={saveTextFile}
         onBlockingChange={onBlockingChange}
+        filter={filter}
+        onFilterChange={setFilter}
       />
     );
   }
 
   return (
     <div className="connection-tables" data-testid={ConnectionAccessibility.tablesRegion}>
+      {!tablesLoading ? (
+        <div className="ui-search connection-tables__search">
+          <span className="ui-search__icon">
+            <SearchIcon />
+          </span>
+          <input
+            type="search"
+            className="ui-search__input"
+            aria-label={TablesCopy.searchTables}
+            placeholder={TablesCopy.searchTables}
+            data-testid={TablesAccessibility.search}
+            value={filter}
+            onChange={(event) => setFilter(event.target.value)}
+          />
+        </div>
+      ) : null}
       {schemas !== undefined && schemas.length > 1 && onSelectSchema ? (
         <label className="connection-tables__schema">
           <span className="ui-visually-hidden">{TablesCopy.filterBySchema}</span>

@@ -38,6 +38,81 @@ describe("ConnectionDatabasePicker", () => {
     expect(screen.getByText("postgres")).toBeInTheDocument();
   });
 
+  it("reports a blocking surface while the create dialog is open", async () => {
+    const user = userEvent.setup();
+    const onBlockingChange = vi.fn();
+    render(
+      <ConnectionDatabasePicker
+        isConnected={true}
+        databases={["postgres"]}
+        selected="postgres"
+        onSelect={vi.fn()}
+        profileDatabase="postgres"
+        onCreateDatabase={vi.fn()}
+        onBlockingChange={onBlockingChange}
+      />,
+    );
+
+    expect(onBlockingChange).toHaveBeenLastCalledWith(false);
+
+    await user.click(screen.getByRole("button", { name: ConnectionCopy.createDatabase }));
+
+    expect(onBlockingChange).toHaveBeenLastCalledWith(true);
+  });
+
+  it("reports no blocking surface after the create dialog closes", async () => {
+    const user = userEvent.setup();
+    const onBlockingChange = vi.fn();
+    render(
+      <ConnectionDatabasePicker
+        isConnected={true}
+        databases={["postgres"]}
+        selected="postgres"
+        onSelect={vi.fn()}
+        profileDatabase="postgres"
+        onCreateDatabase={vi.fn()}
+        onBlockingChange={onBlockingChange}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: ConnectionCopy.createDatabase }));
+    await user.click(screen.getByRole("button", { name: ConnectionCopy.cancel }));
+
+    expect(onBlockingChange).toHaveBeenLastCalledWith(false);
+  });
+
+  it("clears blocking when disconnected unmounts the picker", async () => {
+    const user = userEvent.setup();
+    const onBlockingChange = vi.fn();
+    const { rerender } = render(
+      <ConnectionDatabasePicker
+        isConnected={true}
+        databases={["postgres"]}
+        selected="postgres"
+        onSelect={vi.fn()}
+        profileDatabase="postgres"
+        onCreateDatabase={vi.fn()}
+        onBlockingChange={onBlockingChange}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: ConnectionCopy.createDatabase }));
+    expect(onBlockingChange).toHaveBeenLastCalledWith(true);
+
+    rerender(
+      <ConnectionDatabasePicker
+        isConnected={false}
+        databases={[]}
+        selected={null}
+        onSelect={vi.fn()}
+        profileDatabase="postgres"
+        onBlockingChange={onBlockingChange}
+      />,
+    );
+
+    expect(onBlockingChange).toHaveBeenLastCalledWith(false);
+  });
+
   it("surfaces a failed switch and keeps the previous selection", async () => {
     // The parent starts an async switchDatabase; a rejection must reach the
     // picker rather than escaping as an unhandled rejection with no UI change.

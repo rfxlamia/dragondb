@@ -104,4 +104,27 @@ describe("ConnectionTablesList", () => {
 
     expect(screen.queryByTestId(TablesAccessibility.schemaPicker)).toBeNull();
   });
+
+  it("renders search above the schema picker", () => {
+    render(
+      <ConnectionTablesList
+        tables={[{ schema: "public", name: "activity", tableType: "regular" }]}
+        tablesLoading={false}
+        tablesErrorMessage={null}
+        schemas={["public", "audit"]}
+        selectedSchema={null}
+        onSelectSchema={vi.fn()}
+      />,
+    );
+
+    const region = screen.getByTestId(ConnectionAccessibility.tablesRegion);
+    const search = screen.getByTestId(TablesAccessibility.search);
+    const picker = screen.getByTestId(TablesAccessibility.schemaPicker);
+    const searchRow = search.closest(".connection-tables__search");
+    const pickerRow = picker.closest("label");
+    expect(searchRow).not.toBeNull();
+    expect(pickerRow).not.toBeNull();
+    const children = Array.from(region.children);
+    expect(children.indexOf(searchRow!)).toBeLessThan(children.indexOf(pickerRow!));
+  });
 });

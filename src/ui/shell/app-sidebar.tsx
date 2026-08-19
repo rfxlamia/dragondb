@@ -36,7 +36,7 @@ export function AppSidebar(props: AppSidebarProps): React.JSX.Element {
 
       <div
         className="ui-segment app-sidebar__switcher"
-        role="radiogroup"
+        role="tablist"
         aria-label={SidebarCopy.views}
         data-testid={SidebarAccessibility.switcher}
       >
@@ -45,19 +45,40 @@ export function AppSidebar(props: AppSidebarProps): React.JSX.Element {
             <input
               type="radio"
               className="ui-visually-hidden"
+              id={`sidebar-tab-${value}`}
               name="app-sidebar-tab"
               value={value}
               checked={tab === value}
               disabled={switcherDisabled}
               onChange={() => onTabChange(value)}
+              role="tab"
+              aria-selected={tab === value}
             />
             {TAB_LABELS[value]}
           </label>
         ))}
       </div>
 
-      <div className="app-sidebar__tabpanel" data-testid={SidebarAccessibility.tabPanel}>
-        {tab === "schema" ? schema : queries}
+      <div
+        className="app-sidebar__tabpanel"
+        id="sidebar-tabpanel-schema"
+        role="tabpanel"
+        aria-labelledby="sidebar-tab-schema"
+        data-testid={SidebarAccessibility.tabPanel}
+        hidden={tab !== "schema"}
+        inert={tab !== "schema" ? true : undefined}
+      >
+        {schema}
+      </div>
+      <div
+        className="app-sidebar__tabpanel"
+        id="sidebar-tabpanel-queries"
+        role="tabpanel"
+        aria-labelledby="sidebar-tab-queries"
+        hidden={tab !== "queries"}
+        inert={tab !== "queries" ? true : undefined}
+      >
+        {queries}
       </div>
     </div>
   );

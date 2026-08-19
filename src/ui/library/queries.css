@@ -14,7 +14,7 @@
   align-items: center;
   display: flex;
   gap: 0.5rem;
-  justify-content: space-between;
+  justify-content: flex-end;
   min-height: 28px;
   padding-left: 6px;
 }

@@ -127,6 +127,10 @@
   overflow: auto;
 }
 
+.app-sidebar__tabpanel[hidden] {
+  display: none;
+}
+
 .app-main-column {
   display: flex;
   flex-direction: column;

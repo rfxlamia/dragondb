@@ -30,6 +30,9 @@ export type TableListProps = {
   saveTextFile?: DragonIpc["saveTextFile"];
   /** True while a sheet or confirm owns this list — see ConnectionPanel. */
   onBlockingChange?: (blocking: boolean) => void;
+  /** When set, search is rendered by the parent and filter state is controlled externally. */
+  filter?: string;
+  onFilterChange?: (value: string) => void;
 };
 
 type PendingAdmin = { table: TableRef; kind: "drop" | "truncate" };
@@ -49,7 +52,13 @@ export function TableList(props: TableListProps): React.JSX.Element {
     saveCsvFile,
     saveTextFile,
     onBlockingChange,
+    filter: filterProp,
+    onFilterChange,
   } = props;
+  const [internalFilter, setInternalFilter] = useState("");
+  const filterControlled = onFilterChange !== undefined;
+  const filter = filterControlled ? (filterProp ?? "") : internalFilter;
+  const setFilter = filterControlled ? onFilterChange : setInternalFilter;
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
   const [pending, setPending] = useState<PendingAdmin | null>(null);
   const [adminError, setAdminError] = useState<string | null>(null);
@@ -59,19 +68,19 @@ export function TableList(props: TableListProps): React.JSX.Element {
   const [displayedBySchema, setDisplayedBySchema] = useState<Readonly<Record<string, number>>>(
     () => ({}),
   );
-  const [filter, setFilter] = useState("");
   const [collapsedSchemas, setCollapsedSchemas] = useState<ReadonlySet<string>>(() => new Set());
 
   const blocking = pending !== null || ddl !== null || exportTable !== null;
   useEffect(() => {
     onBlockingChange?.(blocking);
+    return () => onBlockingChange?.(false);
   }, [blocking, onBlockingChange]);
 
   const needle = filter.trim().toLowerCase();
   const matchedTables =
     needle === "" ? tables : tables.filter((table) => table.name.toLowerCase().includes(needle));
   const groups = groupTables(matchedTables);
-  const firstKey = tables[0] ? catalogKey(tables[0]) : null;
+  const firstKey = matchedTables[0] ? catalogKey(matchedTables[0]) : null;
   const canExport = Boolean(onFetchAll && saveCsvFile && saveTextFile);
 
   async function handleDdl(table: TableRef): Promise<void> {
@@ -134,20 +143,22 @@ export function TableList(props: TableListProps): React.JSX.Element {
 
   return (
     <div className="table-list" data-testid={TablesAccessibility.list}>
-      <div className="ui-search table-list__search">
-        <span className="ui-search__icon">
-          <SearchIcon />
-        </span>
-        <input
-          type="search"
-          className="ui-search__input"
-          aria-label={TablesCopy.searchTables}
-          placeholder={TablesCopy.searchTables}
-          data-testid={TablesAccessibility.search}
-          value={filter}
-          onChange={(event) => setFilter(event.target.value)}
-        />
-      </div>
+      {!filterControlled ? (
+        <div className="ui-search table-list__search">
+          <span className="ui-search__icon">
+            <SearchIcon />
+          </span>
+          <input
+            type="search"
+            className="ui-search__input"
+            aria-label={TablesCopy.searchTables}
+            placeholder={TablesCopy.searchTables}
+            data-testid={TablesAccessibility.search}
+            value={filter}
+            onChange={(event) => setFilter(event.target.value)}
+          />
+        </div>
+      ) : null}
       {groups.length === 0 ? (
         <p className="table-list__empty">{TablesCopy.noMatchingTables}</p>
       ) : null}

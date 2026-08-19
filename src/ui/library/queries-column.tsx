@@ -119,6 +119,7 @@ export function QueriesColumn(props: QueriesColumnProps): React.JSX.Element {
 
   useEffect(() => {
     onBlockingChange?.(sheet !== null);
+    return () => onBlockingChange?.(false);
   }, [sheet, onBlockingChange]);
 
   useEffect(() => {
