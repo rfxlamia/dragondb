@@ -33,6 +33,7 @@
 | `src/ui/tables/tables-copy.ts` | new copy constants | 1, 5 |
 | `src/ui/tables/tables-accessibility.ts` | new testids | 1, 5 |
 | `src/ui/tables/tables.css` | search + section-header chrome | 1 |
+| `src/ui/tables/table-list.tsx` (sheets) | reports blocking while a sheet or confirm is open | 4 |
 | `src/ui/icons.tsx` | `SettingsIcon`, `HelpIcon` | 2 |
 | `src/ui/help/help-copy.ts` | rail button labels | 2 |
 | `src/ui/shell/activity-rail.tsx` | **new** — permanent rail, presentational | 2 |
@@ -45,10 +46,18 @@
 | `src/ui/shell/app-workspace.tsx` | loses the queries panel and its props | 3 |
 | `src/ui/library/queries-column.tsx` | reports blocking (4), loses schema-picker props (5) | 4, 5 |
 | `src/ui/library/queries-column-toolbar.tsx` | loses the schema picker | 5 |
-| `src/ui/connection/connection-tables-list.tsx` | gains the schema picker | 5 |
+| `src/ui/connection/connection-tables-list.tsx` | forwards blocking (4), gains the schema picker (5) | 4, 5 |
+| `src/ui/connection/connection-database-picker.tsx` | reports blocking | 4 |
 | `src/App.tsx` | wires rail, sidebar, `sidebarTab`, blocking state | 2, 3, 4, 5 |
 
-Task order is dependency order. The app builds, passes tests, and runs after every task.
+Task order is dependency order. The app builds, passes tests, and runs after
+every task — including the collapse guard, which Task 2 carries over from the
+button it deletes rather than leaving to Task 4.
+
+One behavior changes that the spec's trade-off list does not name: collapsing the
+sidebar now hides saved queries as well as the schema, because both live in the
+column that closes. Today `QueriesColumn` survives a collapse — `app-wiring.test.tsx:2264`
+asserts exactly that, and Task 3 Step 12 retires the assertion.
 
 ---
 
@@ -136,11 +145,15 @@ builds props inline, copy the shape of the nearest existing test in the file.
       />,
     );
 
-    const toggle = screen.getByTestId(TablesAccessibility.schemaToggle("public"));
-    expect(toggle.textContent).toContain("2");
+    expect(screen.getByTestId(TablesAccessibility.schemaToggle("public")).textContent).toContain(
+      "2",
+    );
 
     await user.type(screen.getByTestId(TablesAccessibility.search), "activity");
-    expect(toggle.textContent).toContain("1");
+
+    expect(screen.getByTestId(TablesAccessibility.schemaToggle("public")).textContent).toContain(
+      "1",
+    );
   });
 
   it("collapses a schema section and hides its rows", async () => {
@@ -418,7 +431,9 @@ Settings and Help — until now only menu events and keyboard accelerators set
   export function ActivityRail(props: ActivityRailProps): React.JSX.Element;
   ```
   Also `SettingsIcon`, `HelpIcon` in `icons.tsx`; `HelpCopy.openSettings`, `HelpCopy.openHelp`.
-  Task 4 uses `toggleDisabled`.
+  Step 9 passes `toggleDisabled={formVisible}` so the guard the old button carried
+  (`connection-panel.tsx:480`) survives this task intact; Task 4 widens that one
+  expression to every blocking surface in the sidebar.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -650,7 +665,10 @@ Create `src/ui/shell/activity-rail.css`:
   display: flex;
   flex-direction: column;
   gap: 2px;
-  height: 100vh;
+  /* Row height, not viewport height: at =48rem the rail shares a grid row with
+     the sidebar band and the workspace sits on the row below, so a 100vh rail
+     would push the whole workspace off-screen. */
+  height: 100%;
   max-height: 100vh;
   padding: 0.5rem 5px;
   position: sticky;
@@ -771,12 +789,20 @@ line, and the whole `<div className="app-sidebar__rail"> ... </div>` — with:
 ```tsx
           <ActivityRail
             collapsed={connectionCollapsed}
+            toggleDisabled={formVisible}
             onToggle={() => setConnectionCollapsed(!connectionCollapsed)}
             onOpenSettings={() => setSettingsOpen(true)}
             onOpenHelp={() => setHelpOpen(true)}
           />
           <div className="app-sidebar">
 ```
+
+`toggleDisabled={formVisible}` is not a placeholder for Task 4 — it is the guard
+the deleted button carried on the line above its `onClick`. The brief is explicit
+that "collapsing a panel that hosts an open sheet is disabled rather than allowed
+to discard the draft inside it", so the rule cannot lapse for the two commits
+between this task and Task 4. `formVisible` is already in scope here; Task 4
+replaces the single expression with `sidebarBlocked`.
 
 The `<div className="app-sidebar__panel">` wrapper and everything inside it stay
 exactly as they are, as does the closing `</div>` of `.app-sidebar`.
@@ -1156,7 +1182,39 @@ vertical canvas/results handle:
 Keep `.app-workspace-main` — Step 7.2 still renders that class. Confirm nothing
 else survives: `grep -rn "app-workspace-split" src` must return no hits.
 
-- [ ] **Step 8: Wire it in `App.tsx`**
+- [ ] **Step 8: Write the failing wiring test**
+
+Step 9 is the largest edit in this plan — three components' worth of props moved
+across one JSX tree — and the suite that covers it (`app-wiring.test.tsx`) is
+rewritten in the same commit, so without this step nothing fails first.
+
+Append to `tests/ui/app-wiring.test.tsx`, inside the `describe` that already
+renders `App` with `connectFirst`:
+
+```tsx
+  it("reaches the saved-queries list through the sidebar's Queries tab", async () => {
+    const ipc = createMockDragonIpc("happy");
+    const user = userEvent.setup();
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
+
+    expect(screen.getByTestId(ConnectionAccessibility.tablesRegion)).toBeInTheDocument();
+    expect(screen.queryByTestId(QueriesAccessibility.column)).toBeNull();
+
+    await user.click(screen.getByLabelText(SidebarCopy.queriesTab));
+
+    expect(screen.getByTestId(QueriesAccessibility.column)).toBeInTheDocument();
+    expect(screen.queryByTestId(ConnectionAccessibility.tablesRegion)).toBeNull();
+  });
+```
+
+Add `import { SidebarCopy } from "../../src/ui/shell/sidebar-copy";`.
+
+Run: `bun run test tests/ui/app-wiring.test.tsx`
+Expected: FAIL — no element carries `SidebarCopy.queriesTab`, so the click throws
+before the assertions run.
+
+- [ ] **Step 9: Wire it in `App.tsx`**
 
 Add the imports:
 
@@ -1272,7 +1330,35 @@ there, since the tab-title mapping still needs them. `libraryQueries` is now
 passed to both `AppWorkspace` (for titles) and `QueriesColumn` (for the list). Compare the exact prop names `QueriesColumn` declares
 before pasting: `grep -n "^  [a-zA-Z]*[?]*:" src/ui/library/queries-column.tsx`.
 
-- [ ] **Step 9: Add the sidebar chrome**
+- [ ] **Step 10: Drop the heading the tab now carries**
+
+The switcher segment reads "Queries" directly above
+`queries-column-toolbar.tsx:38`, which renders `<h2>{QueriesCopy.title}</h2>` —
+the same word twice in 40px of vertical space. The heading was the column's only
+name when it lived in the workspace; the tab is its name now.
+
+In `src/ui/library/queries-column-toolbar.tsx`, delete the `<h2>` line. The
+`.queries-column__header` div stays — it still lays out the action buttons.
+
+In `src/ui/library/queries-column.tsx`, move the accessible name onto the
+section so the region keeps one:
+
+```tsx
+    <section
+      className="queries-column"
+      aria-label={QueriesCopy.title}
+      data-testid={QueriesAccessibility.column}
+    >
+```
+
+Import `QueriesCopy` there if the file does not already. `QueriesCopy.title` had
+no other reader (`grep -rn "QueriesCopy.title" src tests`), so the constant stays
+and only its rendering moves.
+
+`ConnectionPanel`'s own "Connection" title stays exactly as it is: no tab is
+labeled "Connection", and `app-wiring.test.tsx` names that region by it.
+
+- [ ] **Step 11: Add the sidebar chrome**
 
 In `src/App.css`, replace the `.app-shell .connection-panel` rule with the block
 below — the border and scroll now belong to the sidebar's inner column, not to
@@ -1330,25 +1416,36 @@ In the `@media (max-width: 48rem)` block, replace the
   }
 ```
 
-- [ ] **Step 10: Update the workspace and wiring tests**
+- [ ] **Step 12: Update the workspace and wiring tests**
 
-In `tests/ui/shell/app-workspace.test.tsx`, delete every assertion that queries
-`QueriesAccessibility.*` and remove the deleted props from `stubProps`.
+In `tests/ui/shell/app-workspace.test.tsx`, delete the two assertions at `:90-107`
+that query `QueriesAccessibility.column` — including the `workspaceReady: false`
+case, which asserted the column renders before the workspace is ready — and
+remove the deleted props from `stubProps`.
 
-In `tests/ui/app-wiring.test.tsx`, re-point any assertion that reached the
-queries column through the workspace so it renders `App` and finds the column in
-the sidebar; where a test selects the Queries view first, click
-`screen.getByLabelText(SidebarCopy.queriesTab)` before asserting.
+In `tests/ui/app-wiring.test.tsx` the default tab is `"schema"`, so `QueriesColumn`
+is unmounted until the tab is switched. Every site:
+
+| Line | What breaks | Change |
+|------|-------------|--------|
+| `:1751` | title says "shows Queries left of the canvas in the workspace" | retitle: the column is in the sidebar's Queries tab |
+| `:1757`, `:1770` | `getByTestId(QueriesAccessibility.column)` — unmounted | click `screen.getByLabelText(SidebarCopy.queriesTab)` first |
+| `:1763` | "does not persist the Queries split layout" — the horizontal split is gone, so the test asserts nothing | delete it |
+| `:2002`, `:2037` | `getByTestId(QueriesAccessibility.newQuery)` — unmounted | click the Queries tab first |
+| `:2264` | asserts collapse "keeps Queries \| canvas"; the column now collapses with the sidebar | drop that assertion and say so in the test name — the canvas assertion below it still holds |
+
+The `queryByTestId(...).toBeNull()` assertions at `:1755` and `:1760` are about
+the welcome screen, which renders no shell at all, and stay as they are.
 
 Run: `bun run test tests/ui/shell tests/ui/app-wiring.test.tsx`
 Expected: PASS.
 
-- [ ] **Step 11: Run the full gate**
+- [ ] **Step 13: Run the full gate**
 
 Run: `bun run check`
 Expected: PASS.
 
-- [ ] **Step 12: Commit**
+- [ ] **Step 14: Commit**
 
 ```bash
 git add src tests
@@ -1360,42 +1457,127 @@ git commit -m "feat(shell): merge connection and queries columns into one sideba
 ### Task 4: Blocking surfaces disable the switcher and the toggle
 
 `ConnectionPanel` already treats its `position: fixed` sheet as a reason not to
-collapse the column. Switching tabs is the same failure mode. Both panels report
-whether they own a blocking surface; the shell disables the switcher and the rail
-toggle while either does. Sheets stay mounted where they are, so the shared
+collapse the column. Switching tabs is the same failure mode, and the brief is
+categorical: "collapsing a panel that hosts an open sheet is disabled rather than
+allowed to discard the draft inside it."
+
+The sidebar hosts more fixed surfaces than the connection form. Every one of them
+has to report, or the guard has a hole exactly where the brief points:
+
+| Owner | State | Surface |
+|-------|-------|---------|
+| `connection-panel.tsx` | `formVisible` | connection form sheet (`.connection-sheet`) |
+| `connection-panel.tsx` | `confirm.hasPending` | switch / delete confirms |
+| `connection-database-picker.tsx:30,32` | `createOpen`, `deleteOpen` | create-database dialog, delete confirm |
+| `queries-column.tsx:82` | `sheet` | rename / delete / move sheets |
+| `table-list.tsx:51,53,55` | `pending`, `ddl`, `exportTable` | drop/truncate confirm, DDL sheet, export sheet |
+
+The last two rows are the ones the Schema tab gained in Task 3, and
+`.table-sheet` is `position: fixed; z-index: 40` (`tables.css:205`) like the rest.
+Each owner reports upward; the shell disables the switcher and the rail toggle
+while any of them is true. Sheets stay mounted where they are, so the shared
 Escape LIFO registry is untouched.
 
 **Files:**
+- Modify: `src/ui/connection/connection-database-picker.tsx`
 - Modify: `src/ui/connection/connection-panel.tsx`
 - Modify: `src/ui/library/queries-column.tsx`
+- Modify: `src/ui/tables/table-list.tsx`
+- Modify: `src/ui/connection/connection-tables-list.tsx`
 - Modify: `src/App.tsx`
 - Test: `tests/ui/connection/connection-panel.test.tsx`
 - Test: `tests/ui/library/queries-column.test.tsx`
+- Test: `tests/ui/tables/table-list.test.tsx`
 
 **Interfaces:**
-- Consumes: `AppSidebar.switcherDisabled` and `ActivityRail.toggleDisabled` from Tasks 2–3.
-- Produces: `onBlockingChange?: (blocking: boolean) => void` on both `ConnectionPanelProps` and `QueriesColumnProps`.
+- Consumes: `AppSidebar.switcherDisabled` from Task 3, and `ActivityRail.toggleDisabled`, which Task 2 already drives from `formVisible`.
+- Produces: `onBlockingChange?: (blocking: boolean) => void` on `ConnectionPanelProps`,
+  `QueriesColumnProps`, `TableListProps`, and `ConnectionTablesList`'s props, plus
+  the same prop on `ConnectionDatabasePicker` so the panel can fold its two
+  dialogs into what it reports.
 
 - [ ] **Step 1: Write the failing tests**
 
-Append to `tests/ui/connection/connection-panel.test.tsx`, matching the render
-helper that file already uses for a panel with a visible form:
+Append to `tests/ui/connection/connection-panel.test.tsx`. That file has no shared
+render helper — every test renders inline — but it does define two prop builders,
+`formGateProps` and `sessionPropsFromIpc`. Use them the way the surviving tests
+in the file do (the collapse test that paired them with `onCollapse` is gone by
+now, deleted in Task 2 Step 10):
 
 ```tsx
   it("reports a blocking surface while the connection form is visible", () => {
+    const ipc = createMockDragonIpc("happy");
     const onBlockingChange = vi.fn();
-    renderPanel({ formVisible: true, onBlockingChange });
+    render(
+      <ConnectionPanel
+        ipc={ipc}
+        {...formGateProps({ formVisible: true })}
+        isConnected={false}
+        onBlockingChange={onBlockingChange}
+        {...sessionPropsFromIpc(ipc)}
+        onConnected={vi.fn()}
+        onDisconnected={vi.fn()}
+        onSwitchSuccess={vi.fn()}
+        onSwitchFailure={vi.fn()}
+      />,
+    );
 
-    expect(onBlockingChange).toHaveBeenCalledWith(true);
+    expect(onBlockingChange).toHaveBeenLastCalledWith(true);
   });
 
   it("reports no blocking surface while the form is closed", () => {
+    const ipc = createMockDragonIpc("happy");
     const onBlockingChange = vi.fn();
-    renderPanel({ formVisible: false, onBlockingChange });
+    render(
+      <ConnectionPanel
+        ipc={ipc}
+        {...formGateProps({ formVisible: false })}
+        isConnected={false}
+        onBlockingChange={onBlockingChange}
+        {...sessionPropsFromIpc(ipc)}
+        onConnected={vi.fn()}
+        onDisconnected={vi.fn()}
+        onSwitchSuccess={vi.fn()}
+        onSwitchFailure={vi.fn()}
+      />,
+    );
 
     expect(onBlockingChange).toHaveBeenLastCalledWith(false);
   });
 ```
+
+Append to `tests/ui/tables/table-list.test.tsx`, reusing the prop shape the tests
+from Task 1 already use:
+
+```tsx
+  it("reports a blocking surface while the drop confirm is open", async () => {
+    const user = userEvent.setup();
+    const onBlockingChange = vi.fn();
+    render(
+      <TableList
+        tables={[{ schema: "public", name: "activity" }]}
+        columnsByTable={{}}
+        executing={false}
+        onBrowse={vi.fn()}
+        onDrop={vi.fn()}
+        onTruncate={vi.fn()}
+        onGenerateDdl={vi.fn()}
+        onBlockingChange={onBlockingChange}
+      />,
+    );
+
+    expect(onBlockingChange).toHaveBeenLastCalledWith(false);
+
+    await user.click(screen.getByRole("button", { name: TablesCopy.menu }));
+    await user.click(screen.getByRole("menuitem", { name: TablesCopy.drop }));
+
+    expect(onBlockingChange).toHaveBeenLastCalledWith(true);
+  });
+```
+
+That is the same two clicks the existing drop test in this file already makes
+(`:118-119`); the confirm it opens is `pending`, one of the three surfaces
+Step 5 reports.
 
 Append to `tests/ui/library/queries-column.test.tsx`:
 
@@ -1428,7 +1610,7 @@ Append to `tests/ui/library/queries-column.test.tsx`:
 
 - [ ] **Step 2: Run the tests to verify they fail**
 
-Run: `bun run test tests/ui/connection/connection-panel.test.tsx tests/ui/library/queries-column.test.tsx`
+Run: `bun run test tests/ui/connection/connection-panel.test.tsx tests/ui/library/queries-column.test.tsx tests/ui/tables/table-list.test.tsx`
 Expected: FAIL — `onBlockingChange` is never called (the prop does not exist).
 
 - [ ] **Step 3: Report blocking from `ConnectionPanel`**
@@ -1442,16 +1624,46 @@ In `src/ui/connection/connection-panel.tsx`, add to `ConnectionPanelProps`:
   onBlockingChange?: (blocking: boolean) => void;
 ```
 
-Destructure `onBlockingChange` in the component body, then add this effect below
-the existing effects (`confirm` is the value returned by
+Destructure `onBlockingChange` in the component body.
+
+The panel hosts one more pair of fixed dialogs than it owns state for:
+`ConnectionDatabasePicker` (`connection-panel.tsx:506`) keeps `createOpen` and
+`deleteOpen` privately, and both render `.connection-panel__confirm`, which is
+`position: fixed`. Neither is implied by `formVisible` — the picker is only
+reachable once the form is closed and a session is claimed. Give the picker the
+same prop:
+
+```tsx
+  /** True while this picker's create or delete dialog is open — see ConnectionPanel. */
+  onBlockingChange?: (blocking: boolean) => void;
+```
+
+and, in `connection-database-picker.tsx`, beside its existing state:
+
+```tsx
+  useEffect(() => {
+    onBlockingChange?.(createOpen || deleteOpen);
+  }, [createOpen, deleteOpen, onBlockingChange]);
+```
+
+Then in `connection-panel.tsx`, hold what the picker reports and fold it in
+alongside the panel's own surfaces (`confirm` is the value returned by
 `useConnectionConfirmations`):
 
 ```tsx
-  const blocking = formVisible || confirm.hasPending;
+  const [pickerBlocking, setPickerBlocking] = useState(false);
+
+  const blocking = formVisible || confirm.hasPending || pickerBlocking;
   useEffect(() => {
     onBlockingChange?.(blocking);
   }, [blocking, onBlockingChange]);
 ```
+
+Pass `onBlockingChange={setPickerBlocking}` to `<ConnectionDatabasePicker>`.
+
+`createdDialogOpen` needs no entry: `handleSave` never closes the form before
+setting it (`connection-panel.tsx:295-307`), so the created dialog only ever
+appears over a sheet `formVisible` already covers.
 
 - [ ] **Step 4: Report blocking from `QueriesColumn`**
 
@@ -1472,37 +1684,69 @@ Destructure it, and add beside the existing `sheetOpen` derivation:
 
 Add `useEffect` to the `react` import in both files if it is not already there.
 
-- [ ] **Step 5: Freeze the switcher and toggle in `App.tsx`**
+- [ ] **Step 5: Report blocking from `TableList`**
+
+In `src/ui/tables/table-list.tsx`, add to `TableListProps`:
+
+```tsx
+  /** True while a sheet or confirm owns this list — see ConnectionPanel. */
+  onBlockingChange?: (blocking: boolean) => void;
+```
+
+Destructure it, and add beside the existing sheet state:
+
+```tsx
+  const blocking = pending !== null || ddl !== null || exportTable !== null;
+  useEffect(() => {
+    onBlockingChange?.(blocking);
+  }, [blocking, onBlockingChange]);
+```
+
+`ddlError` and `adminError` are not blocking: both render inside a surface one of
+the three above already accounts for.
+
+In `src/ui/connection/connection-tables-list.tsx`, add the same prop to the props
+type and destructuring and forward it to `<TableList>` unchanged. The list is the
+slot the sidebar renders, so it is the boundary `App` wires to.
+
+Both files need `useEffect` on their `react` import.
+
+- [ ] **Step 6: Freeze the switcher and toggle in `App.tsx`**
 
 Add the state:
 
 ```tsx
   const [connectionBlocking, setConnectionBlocking] = useState(false);
   const [queriesBlocking, setQueriesBlocking] = useState(false);
-  const sidebarBlocked = connectionBlocking || queriesBlocking;
+  const [tablesBlocking, setTablesBlocking] = useState(false);
+  const sidebarBlocked = connectionBlocking || queriesBlocking || tablesBlocking;
 ```
 
-Pass `onBlockingChange={setConnectionBlocking}` to `<ConnectionPanel>` and
-`onBlockingChange={setQueriesBlocking}` to `<QueriesColumn>`, then
-`switcherDisabled={sidebarBlocked}` to `<AppSidebar>` and
-`toggleDisabled={sidebarBlocked}` to `<ActivityRail>`.
+Pass `onBlockingChange={setConnectionBlocking}` to `<ConnectionPanel>`,
+`onBlockingChange={setQueriesBlocking}` to `<QueriesColumn>`, and
+`onBlockingChange={setTablesBlocking}` to `<ConnectionTablesList>`, then
+`switcherDisabled={sidebarBlocked}` to `<AppSidebar>`.
+
+On `<ActivityRail>`, widen the `toggleDisabled={formVisible}` Task 2 set to
+`toggleDisabled={sidebarBlocked}` — `formVisible` is one of the three terms
+`connectionBlocking` now reports, so this loosens nothing.
 
 Pass the setters directly — never an inline arrow. `onBlockingChange` sits in the
-dependency array of the effects from Steps 3–4, so a fresh function identity on
+dependency array of the effects from Steps 3–5, so a fresh function identity on
 every render would turn them into a render loop. A `useState` setter's identity
 is stable, which is the whole reason this wiring is safe.
 
-- [ ] **Step 6: Run the tests to verify they pass**
+- [ ] **Step 7: Run the tests to verify they pass**
 
-Run: `bun run test tests/ui/connection/connection-panel.test.tsx tests/ui/library/queries-column.test.tsx`
+Run: `bun run test tests/ui/connection/connection-panel.test.tsx tests/ui/library/queries-column.test.tsx tests/ui/tables/table-list.test.tsx`
 Expected: PASS.
 
-- [ ] **Step 7: Run the full gate**
+- [ ] **Step 8: Run the full gate**
 
 Run: `bun run check`
 Expected: PASS.
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 9: Commit**
 
 ```bash
 git add src tests
@@ -1530,7 +1774,7 @@ The state stays in `App.tsx`; only the render site moves.
 
 **Interfaces:**
 - Consumes: the sidebar from Task 3.
-- Produces: `ConnectionTablesList` gains `schemas?: string[]`, `selectedSchema?: string | null`, `onSelectSchema?: (schema: string | null) => void`, `schemaError?: string | null`, `onDismissSchemaError?: () => void`. `TablesAccessibility.schemaPicker`, `TablesCopy.schema`, `TablesCopy.allSchemas`, `TablesCopy.ok`. `QueriesColumn` and `QueriesColumnToolbar` lose the same five props, and `QueriesAccessibility.schemaPicker` is deleted.
+- Produces: `ConnectionTablesList` gains `schemas?: string[]`, `selectedSchema?: string | null`, `onSelectSchema?: (schema: string | null) => void`, `schemaError?: string | null`, `onDismissSchemaError?: () => void`. `TablesAccessibility.schemaPicker`, `TablesCopy.filterBySchema`, `TablesCopy.allSchemas`, `TablesCopy.ok`, `TablesCopy.schemaError`. `QueriesColumn` and `QueriesColumnToolbar` lose the same five props; `QueriesAccessibility.schemaPicker` and the four schema entries in `QueriesCopy` are deleted.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1589,10 +1833,19 @@ Expected: FAIL — no element carries `tables.schemaPicker`.
 In `src/ui/tables/tables-copy.ts`, add:
 
 ```ts
-  schema: "Schema",
+  filterBySchema: "Filter by schema",
   allSchemas: "All schemas",
   ok: "OK",
+  schemaError: "Could not set the schema search path.",
 ```
+
+Not `schema: "Schema"`. `SidebarCopy.schemaTab` is already the string "Schema" on
+the switcher segment directly above this control, and both would sit in the
+Schema tab at once — `getByLabelText("Schema")` would then match two elements and
+throw. The verb-led form is what the copy rule asks for anyway.
+
+`schemaError` comes along because the message now renders in the Schema tab;
+leaving it in `QueriesCopy` would put a tab's copy in another tab's module.
 
 In `src/ui/tables/tables-accessibility.ts`, add:
 
@@ -1610,7 +1863,7 @@ above `{body}` inside the existing `<div className="connection-tables">`:
 ```tsx
       {schemas !== undefined && schemas.length > 1 && onSelectSchema ? (
         <label className="connection-tables__schema">
-          <span className="ui-visually-hidden">{TablesCopy.schema}</span>
+          <span className="ui-visually-hidden">{TablesCopy.filterBySchema}</span>
           <select
             className="ui-quiet-select"
             data-testid={TablesAccessibility.schemaPicker}
@@ -1642,7 +1895,17 @@ Move the `.queries-column__schema` and `.queries-column__schema-error` rules fro
 `src/ui/library/queries.css` into `src/ui/connection/connection.css`, renamed to
 `.connection-tables__schema` and `.connection-tables__schema-error`.
 
-- [ ] **Step 5: Delete the picker from the queries toolbar**
+- [ ] **Step 5: Update the queries tests**
+
+This comes before the deletions, not after them: `queries-column.test.tsx:330`
+and `:334` read `QueriesCopy.schemaError` and `QueriesCopy.ok`, so removing the
+constants first leaves `bun run typecheck` failing mid-task.
+
+In `tests/ui/library/queries-column.test.tsx`, delete every test and prop that
+referenced `QueriesAccessibility.schemaPicker` or the schema props — the schema
+block around `:325-335` included.
+
+- [ ] **Step 6: Delete the picker from the queries toolbar**
 
 In `src/ui/library/queries-column-toolbar.tsx`, delete the `schemas`,
 `selectedSchema`, `onSelectSchema`, `schemaError`, and `onDismissSchemaError`
@@ -1651,20 +1914,24 @@ block and the `{schemaError ? ... : null}` block). In
 `src/ui/library/queries-column.tsx`, delete the same five props and stop
 forwarding them to the toolbar. Delete `schemaPicker` from
 `src/ui/library/queries-accessibility.ts`, and delete the now-unused
-`QueriesCopy.schema`, `QueriesCopy.allSchemas`, and `QueriesCopy.ok` entries —
-confirm each is unused first with `grep -rn "QueriesCopy.allSchemas" src tests`.
+`QueriesCopy.schema`, `QueriesCopy.allSchemas`, `QueriesCopy.ok`, and
+`QueriesCopy.schemaError` entries — confirm each is unused first with
+`grep -rn "QueriesCopy.allSchemas" src tests`.
 
-- [ ] **Step 6: Re-point the props in `App.tsx`**
+`QueriesCopy.schemaError` has one reader outside the toolbar: `App.tsx:1060`
+sets it as the error state. Point that at `TablesCopy.schemaError` in Step 7.
+
+- [ ] **Step 7: Re-point the props in `App.tsx`**
 
 Move `schemas={schemaNames}`, `selectedSchema={selectedSchema}`,
 `onSelectSchema={...}`, `schemaError={schemaError}`, and
 `onDismissSchemaError={...}` off the `<QueriesColumn>` element and onto the
 `<ConnectionTablesList>` element in the sidebar's `schema` slot.
 
-- [ ] **Step 7: Update the queries tests**
-
-In `tests/ui/library/queries-column.test.tsx`, delete every test and prop that
-referenced `QueriesAccessibility.schemaPicker` or the schema props.
+At `App.tsx:1060`, replace `setSchemaError(QueriesCopy.schemaError)` with
+`setSchemaError(TablesCopy.schemaError)`. That is the only reader of `QueriesCopy`
+in the file, so its import at `App.tsx:41` goes with it and `TablesCopy` takes its
+place.
 
 Run: `bun run test tests/ui/library tests/ui/connection`
 Expected: PASS.
@@ -1697,13 +1964,18 @@ bun run tauri dev
 2. Collapsing animates the panel closed without the rail moving.
 3. The Connections block stays visible in both tabs.
 4. With the connection form open, both switcher segments and the rail toggle are
-   disabled; closing the form re-enables them.
+   disabled; closing the form re-enables them. Repeat for each remaining blocking
+   surface — the create-database dialog in the database picker, a rename sheet in
+   Queries, and a table's DDL sheet, export sheet, and drop confirm in Schema.
+   Each one freezes both controls while it is open and releases them on dismiss.
 5. Typing in the table search narrows the list and the schema count follows;
    collapsing a schema hides its rows and its "Load more" button.
 6. The schema dropdown appears in the Schema tab (only with more than one
    schema) and filters the table list.
 7. Narrow the window past 64rem and 48rem: the panel steps to 15rem, then the
-   layout stacks with the rail beside the sidebar band.
+   layout stacks with the rail beside the sidebar band. Below 48rem the workspace
+   must still be on screen under that band — if it has been pushed out of view,
+   the rail is claiming viewport height instead of row height.
 
 The brief requires new chrome to be checked on WebKitGTK, the least consistent of
 the three engines. The rail track and the `.ui-segment` focus ring are what to

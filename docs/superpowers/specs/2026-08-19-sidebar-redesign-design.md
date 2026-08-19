@@ -165,7 +165,15 @@ picker moves into the Schema tab beside the search field. Its state stays in
 `App.tsx` and nothing about `visibleTables` changes; only the render site moves.
 This is a correction, not a feature.
 
-### 4. Settings and help get their first visible trigger
+### 4. The Queries heading goes, because the tab is the heading
+
+`queries-column-toolbar.tsx` renders `<h2>Queries</h2>` directly beneath a
+switcher segment reading "Queries". The heading was the column's only name in the
+workspace; the tab names it now, so the `<h2>` is deleted and `QueriesCopy.title`
+becomes the section's `aria-label`. The Connection panel keeps its own title —
+no tab is labeled "Connection", and it names a region.
+
+### 5. Settings and help get their first visible trigger
 
 `helpOpen`, `shortcutsOpen`, and `settingsOpen` exist in `App.tsx`, but the only
 things that set them are menu events and keyboard accelerators
@@ -180,8 +188,9 @@ rail buttons, not three.
 One new piece of state in the shell: `sidebarTab: "schema" | "queries"` in
 `App.tsx`, defaulting to `"schema"`. It is **not** persisted — date format is
 the only persisted preference today, and a view toggle does not earn a second
-one. The table filter string is local to `ConnectionTablesList`, the way the
-queries filter is local to `QueriesColumn`.
+one. The table filter string is local to `TableList`, which already owns
+`groupTables` and the section headers the filter and the counts act on, the way
+the queries filter is local to `QueriesColumn`.
 
 Both tabs work independently of the session. `library-store.refresh()` calls
 `ipc.listSavedQueries()` with no connection id, so Queries stays usable while
@@ -205,10 +214,25 @@ the same guard. The rule:
 The signal is reported upward rather than inferred:
 
 - `ConnectionPanel` gains `onBlockingChange(boolean)`, emitting
-  `formVisible || confirm.hasPending`. `hasPending` already exists
-  (`use-connection-confirmations.tsx:177`); no new state is introduced.
+  `formVisible || confirm.hasPending || pickerBlocking`. `hasPending` already
+  exists (`use-connection-confirmations.tsx:177`).
+- `ConnectionDatabasePicker` gains the same prop, emitting
+  `createOpen || deleteOpen` (`connection-database-picker.tsx:30,32`). Both render
+  `.connection-panel__confirm`, which is `position: fixed`, and neither is implied
+  by `formVisible` — the picker is only reachable once the form is closed.
 - `QueriesColumn` gains `onBlockingChange(boolean)`, emitting `sheet !== null` —
   the same value its existing `sheetOpen` uses to drive `inert`/`aria-hidden`.
+- `TableList` gains the same prop, emitting
+  `pending !== null || ddl !== null || exportTable !== null`
+  (`table-list.tsx:51,53,55`) — the drop/truncate confirm, the DDL sheet, and the
+  export sheet, all `.table-sheet`, all `position: fixed` (`tables.css:205`).
+  `ConnectionTablesList` forwards it, since the list is the slot the sidebar
+  renders. These are the surfaces the Schema tab gains by hosting the table
+  browser, and they are the largest part of the guard, not a footnote to it.
+
+`createdDialogOpen` needs no entry: `handleSave` never closes the form before
+setting it (`connection-panel.tsx:295-307`), so the created dialog only appears
+over a sheet `formVisible` already covers.
 
 Because sheets stay mounted inside their own panels and tab switching cannot
 unmount them mid-request, the shared Escape LIFO registry
@@ -217,17 +241,21 @@ would achieve the same guarantee through a far larger refactor.
 
 ## Accepted trade-offs
 
-1. **The sidebar is fixed at 20rem and not resizable.** For the schema list this
+1. **Collapsing now hides saved queries too.** `QueriesColumn` currently survives
+   a collapse because it sits in the workspace; in one column it closes with
+   everything else. The rail toggle is one keystroke away and the tab it reopens
+   into is remembered for the session.
+2. **The sidebar is fixed at 20rem and not resizable.** For the schema list this
    matches today's behavior exactly. For saved queries it is a small regression:
    `QueriesColumn` is currently a resizable `Panel` (`defaultSize={220}`,
    `minSize={160}`) and loses its drag handle. Long names continue to ellipsize,
    as they already do in the Connection sidebar. Decided deliberately; a
    resizable sidebar can be refined in later.
-2. **Results narrow by `--sidebar-rail-width` (2.25rem).** Results currently span
+3. **Results narrow by `--sidebar-rail-width` (2.25rem).** Results currently span
    the full main column, flush to the Connection sidebar. The canvas gains the
    ~220px that `QueriesColumn` used to occupy beside it, so the net effect is a
    wider canvas and a marginally narrower results grid.
-3. No panel sizes are persisted (`WorkspaceSplit` declares no `autoSaveId`), so
+4. No panel sizes are persisted (`WorkspaceSplit` declares no `autoSaveId`), so
    removing the queries panel destroys no stored user state.
 
 ## Testing
@@ -241,7 +269,8 @@ Test-first, per the project workflow.
 | `tests/ui/shell/app-workspace.test.tsx` | queries assertions removed — `QueriesColumn` is no longer its child |
 | `tests/ui/app-wiring.test.tsx` | queries wiring re-pointed at the sidebar |
 | `tests/ui/connection/connection-panel.test.tsx` | tables assertions move to the sidebar test; the `collapseConnection` assertion follows that testid onto the rail; adds `onBlockingChange` coverage |
-| `tests/ui/connection/connection-tables-list.test.tsx` | table search filters case-insensitively, empty state on no matches, count follows matches; schema section collapses via `aria-expanded` |
+| `tests/ui/tables/table-list.test.tsx` | table search filters case-insensitively, empty state on no matches, count follows matches; schema section collapses via `aria-expanded`; the sheets report blocking |
+| `tests/ui/connection/connection-tables-list.test.tsx` | the schema picker filters and hides itself at one schema |
 | `tests/ui/library/queries-column.test.tsx` | schema-picker assertions removed (the picker moves to the Schema tab); adds `onBlockingChange` coverage |
 
 Gate: `bun run check` (typecheck + lint + tests).
