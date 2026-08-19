@@ -85,6 +85,31 @@ afterEach(() => {
  * Pass `{ selectDatabase: false }` for tests that need the connected+no-db
  * state (decision 14's alert path) instead.
  */
+function profileListRows(): HTMLElement[] {
+  return Array.from(
+    document.querySelectorAll<HTMLElement>(".connection-panel__profiles button.ui-row"),
+  );
+}
+
+async function openNewConnectionSheet(user: UserEvent): Promise<void> {
+  const newProfile = screen.queryByRole("button", { name: ConnectionCopy.newProfile });
+  if (newProfile) {
+    await user.click(newProfile);
+  }
+  await screen.findByRole("dialog", { name: ConnectionCopy.formTitleNew });
+}
+
+async function drainRestoreLeftovers(user: UserEvent): Promise<void> {
+  await waitFor(() => expect(document.querySelector(".loading-overlay")).toBeNull());
+  const disconnect = screen.queryByRole("button", { name: ConnectionCopy.disconnect });
+  if (disconnect) {
+    await user.click(disconnect);
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: ConnectionCopy.disconnect })).toBeNull(),
+    );
+  }
+}
+
 async function connectFirst(
   user: UserEvent,
   _ipc: DragonIpc,
@@ -99,16 +124,26 @@ async function connectFirst(
   const connectToServer = screen.queryByRole("button", { name: WelcomeCopy.connectToServer });
   if (connectToServer) {
     await user.click(connectToServer);
+  } else {
+    await waitFor(() => expect(profileListRows().length).toBeGreaterThan(0));
   }
-  const disconnect = screen.queryByRole("button", { name: /disconnect/i });
-  if (disconnect) {
-    await user.click(disconnect);
-    await waitFor(() => expect(screen.queryByRole("button", { name: /disconnect/i })).toBeNull());
+
+  if (profileListRows().length > 0) {
+    await openNewConnectionSheet(user);
+    await drainRestoreLeftovers(user);
+    if (screen.queryByRole("dialog", { name: ConnectionCopy.formTitleEdit })) {
+      await openNewConnectionSheet(user);
+    } else {
+      await screen.findByRole("dialog", { name: ConnectionCopy.formTitleNew });
+    }
+  } else {
+    const newProfile = screen.queryByRole("button", { name: ConnectionCopy.newProfile });
+    if (newProfile) {
+      await user.click(newProfile);
+    }
+    await screen.findByRole("dialog", { name: ConnectionCopy.formTitleNew });
   }
-  const newProfile = screen.queryByRole("button", { name: ConnectionCopy.newProfile });
-  if (newProfile) {
-    await user.click(newProfile);
-  }
+
   await user.type(screen.getByLabelText(/host/i), "127.0.0.1");
   await user.type(screen.getByLabelText(/username/i), "postgres");
   const databaseField = screen.getByLabelText(ConnectionCopy.database);
@@ -127,6 +162,10 @@ async function connectFirst(
     if (picker) {
       await user.selectOptions(picker, "app");
     }
+  }
+  const profileB = screen.queryByRole("button", { name: /^B$/i });
+  if (profileB) {
+    expect(profileB).not.toHaveClass("ui-row--selected");
   }
 }
 
@@ -324,7 +363,7 @@ describe("App session connect / disconnect / switch", () => {
     expect(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock)).not.toBeDisabled();
 
     await user.click(screen.getByRole("button", { name: /^B$/i }));
-    await user.click(screen.getByRole("button", { name: /confirm switch/i }));
+    await user.click(await screen.findByRole("button", { name: ConnectionCopy.confirmSwitch }));
     await waitFor(() =>
       expect(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock)).toBeDisabled(),
     );
@@ -365,7 +404,7 @@ describe("App session connect / disconnect / switch", () => {
     expect(screen.getByTestId(VisualQueryAccessibility.clauseCard("select"))).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /^B$/i }));
-    await user.click(screen.getByRole("button", { name: /confirm switch/i }));
+    await user.click(await screen.findByRole("button", { name: ConnectionCopy.confirmSwitch }));
     await waitFor(() =>
       expect(screen.getByText(VisualQueryCopy.emptyCanvasTitle)).toBeInTheDocument(),
     );
@@ -404,7 +443,7 @@ describe("App session connect / disconnect / switch", () => {
     };
 
     await user.click(screen.getByRole("button", { name: /^B$/i }));
-    await user.click(screen.getByRole("button", { name: /confirm switch/i }));
+    await user.click(await screen.findByRole("button", { name: ConnectionCopy.confirmSwitch }));
     // ConnectionPanel already surfaces errorMessage; App locks canvas via onSwitchFailure
     await waitFor(() => expect(screen.getByText(/Authentication failed/i)).toBeInTheDocument());
     expect(screen.getByTestId(VisualQueryAccessibility.clauseCard("select"))).toBeInTheDocument();
@@ -448,7 +487,7 @@ describe("App session connect / disconnect / switch", () => {
     };
 
     await user.click(screen.getByRole("button", { name: /^B$/i }));
-    await user.click(screen.getByRole("button", { name: /confirm switch/i }));
+    await user.click(await screen.findByRole("button", { name: ConnectionCopy.confirmSwitch }));
     await waitFor(() => expect(screen.getByText(/Authentication failed/i)).toBeInTheDocument());
     expect(screen.getByTestId(VisualQueryAccessibility.clauseCard("select"))).toBeInTheDocument();
 
@@ -547,7 +586,7 @@ describe("App session connect / disconnect / switch", () => {
       return realConnect(id);
     };
     await user.click(screen.getByRole("button", { name: /^B$/i }));
-    await user.click(screen.getByRole("button", { name: /confirm switch/i }));
+    await user.click(await screen.findByRole("button", { name: ConnectionCopy.confirmSwitch }));
     await waitFor(() => expect(screen.getByText(/Authentication failed/i)).toBeInTheDocument());
     expect(screen.getByTestId(VisualQueryAccessibility.clauseCard("select"))).toBeInTheDocument();
     expect(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock)).toBeDisabled();
@@ -1369,7 +1408,7 @@ describe("App results pane (SP-4b first slice)", () => {
     await user.click(screen.getByTestId(VisualQueryAccessibility.viewGeneratedSQL));
     expect(screen.getByRole("dialog")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /^B$/i }));
-    await user.click(await screen.findByRole("button", { name: /confirm switch/i }));
+    await user.click(await screen.findByRole("button", { name: ConnectionCopy.confirmSwitch }));
     await waitFor(() =>
       expect(screen.getByText(VisualQueryCopy.emptyCanvasTitle)).toBeInTheDocument(),
     );
