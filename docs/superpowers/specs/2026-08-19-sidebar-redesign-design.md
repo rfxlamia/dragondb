@@ -53,23 +53,44 @@ layered on: the permanent rail is what the collapsed state was already faking.
 The panel keeps today's collapse mechanics — a fixed inner width so contents do
 not reflow mid-animation while the column narrows.
 
-The 60rem media query, which stacks the sidebar as a full-width band above the
-workspace, folds rail and panel into that single band.
+Two media queries touch this. At `max-width: 64rem`, `--sidebar-width` steps to
+`15rem` — a step rather than a range, because a width transition needs two
+definite endpoints; the rail track is unaffected and must not be computed
+against 20rem there. At `max-width: 48rem` the shell stacks to a single column
+with the sidebar as a full-width band above the workspace; rail and panel fold
+into that band, and the collapsed state drops back to `auto minmax(0, 1fr)`.
+
+### Who owns the collapse toggle
+
+Today there are two controls. The rail's expand button (`App.tsx:1174`,
+`ConnectionCopy.showConnection`, no testid) is reachable only while collapsed;
+`ConnectionPanel`'s header holds the collapse button carrying
+`data-testid={ConnectionAccessibility.collapseConnection}` and
+`disabled={formVisible}`.
+
+With a permanent rail, **the rail owns the single toggle.** Its `aria-label` and
+`title` swap between `ConnectionCopy.showConnection` and
+`ConnectionCopy.collapseConnection` with state, and it carries
+`ConnectionAccessibility.collapseConnection` so the existing assertions keep a
+target. The collapse button is removed from the Connections header, which then
+holds only its label and `+`. The blocking rule below applies to this one
+button.
 
 ### Sidebar composition
 
 ```
 ┌──┬──────────────────────┐
-│▣ │ ˅ Connections      + │   persistent block
+│▣ │ ˅ Connections      + │   persistent block; ▣ = the one collapse toggle
 │  │     ▪ fastrack-local │
 │  │     ▪ fastrack-prod  │
 │  │   ▤ fastrack_db    ˅ │   database picker
 │  │ ┌─────────┬────────┐ │
 │  │ │ Schema  │Queries │ │   .ui-segment, two tabs
-│⚙ │ └─────────┴────────┘ │
-│? │ 🔍 Search tables     │   .ui-search
-│  │ ˅ public          42 │   .ui-section-label + count
-│  │     ▤ activity       │
+│  │ └─────────┴────────┘ │
+│  │ 🔍 Search tables     │   .ui-search  ── new
+│  │ All schemas        ˅ │   moved here from the Queries toolbar
+│⚙ │ ˅ public          42 │   .ui-section-label + count, collapsible
+│? │     ▤ activity       │
 └──┴──────────────────────┘
 ```
 
@@ -80,7 +101,7 @@ session is context for everything below it, not one view among several.
 
 | File | Change |
 |------|--------|
-| `src/ui/shell/activity-rail.tsx` | **new** — presentational rail: sidebar toggle (top), settings + help (bottom), all `.ui-icon-btn` with existing copy constants as `aria-label` |
+| `src/ui/shell/activity-rail.tsx` | **new** — presentational rail: sidebar toggle (top), settings and help (bottom), all `.ui-icon-btn` with existing copy constants as `aria-label` |
 | `src/ui/shell/app-sidebar.tsx` | **new** — owns the segmented switcher and slots the active tab's body |
 | `src/ui/connection/connection-panel.tsx` | shrinks to the Connections block (header, profile list, database picker, its sheets and confirms). Stops rendering `ConnectionTablesList` |
 | `src/ui/connection/connection-tables-list.tsx` | gains the table search field (below); otherwise unchanged. Rendered by the sidebar directly from `App` state, removing one layer of prop drilling (its props already originate in `App`) |
@@ -102,19 +123,57 @@ Nothing here is a new atom. `controls.css` already ships every piece:
 - `ChevronRightIcon` / `ChevronDownIcon` in `icons.tsx` for disclosure. No text
   glyphs and no `::after` content, per the brief.
 
-### The one behavior addition: table search
+## What is genuinely new
 
-Everything else here is a relocation. The Schema tab additionally gains a search
-field, which the table list does not have today — only `QueriesColumn` does
-(`queries-column-toolbar.tsx:96`). Without it the tab is still a two-hundred-row
-unbroken scroll, merely a denser one, and the brief already names its
-placeholder ("Search tables") as a copy example.
+Most of this spec is relocation. Four things are not, and each is named here so
+review can price them.
+
+### 1. Table search (approved addition)
+
+The Schema tab gains a search field, which the table list does not have today —
+only `QueriesColumn` does (`queries-column-toolbar.tsx:96`). Without it the tab
+is still a two-hundred-row unbroken scroll, merely a denser one, and the brief
+already names its placeholder ("Search tables") as a copy example.
 
 It is a case-insensitive substring filter over the table name, mirroring the
 Queries filter exactly: `.ui-search` markup, `aria-label` and `placeholder` from
 a copy constant, state local to the list component, no debounce. When the filter
 matches nothing the list shows the same "no matches" empty-state shape the
 Queries column uses. The section count reflects matches, not the total.
+
+### 2. Schema sections gain counts and collapse
+
+`TableList` already groups by schema — `<h3 class="table-list__schema-title">`
+per group, with per-schema batching (`SCHEMA_BATCH_SIZE` plus a "load more"
+button). Grouping is therefore not new. Two things are: the header gains a match
+count, and it becomes a disclosure button with `aria-expanded`, matching the
+folder rows the Queries column already collapses. On a database with several
+schemas this is what keeps the tab short; on a single-schema database it costs
+one chevron.
+
+### 3. The schema picker moves to the tab it controls
+
+`schemas` / `selectedSchema` / `onSelectSchema` are props of
+`QueriesColumnToolbar` today — the "All schemas" dropdown lives in the Queries
+column. It does not filter queries. It filters the **table list**: `App.tsx:211`
+derives `visibleTables` from `selectedSchema` and passes it to
+`ConnectionPanel`. The control and the thing it controls are in different
+columns.
+
+Merging the columns makes that indefensible rather than merely odd, so the
+picker moves into the Schema tab beside the search field. Its state stays in
+`App.tsx` and nothing about `visibleTables` changes; only the render site moves.
+This is a correction, not a feature.
+
+### 4. Settings and help get their first visible trigger
+
+`helpOpen`, `shortcutsOpen`, and `settingsOpen` exist in `App.tsx`, but the only
+things that set them are menu events and keyboard accelerators
+(`App.tsx:539-541`, via `workspace-accelerators`). There is no on-screen control
+today. The rail's bottom buttons are therefore an addition, not a move — and
+because nothing visible is being duplicated, the brief's "a session action never
+exists twice at once" rule is satisfied. Shortcuts stays keyboard/menu-only; two
+rail buttons, not three.
 
 ## State
 
@@ -177,12 +236,13 @@ Test-first, per the project workflow.
 
 | Test file | Change |
 |-----------|--------|
-| `tests/ui/shell/app-sidebar.test.tsx` | **new** — switcher swaps the body; switcher and collapse are disabled while a blocking surface is open; the rail still renders when the panel is collapsed; section counts render |
+| `tests/ui/shell/app-sidebar.test.tsx` | **new** — switcher swaps the body; switcher and the rail toggle are disabled while a blocking surface is open; the rail still renders when the panel is collapsed; the toggle's label swaps with state |
+| `tests/ui/shell/activity-rail.test.tsx` | **new** — settings and help buttons open their dialogs |
 | `tests/ui/shell/app-workspace.test.tsx` | queries assertions removed — `QueriesColumn` is no longer its child |
 | `tests/ui/app-wiring.test.tsx` | queries wiring re-pointed at the sidebar |
-| `tests/ui/connection/connection-panel.test.tsx` | tables assertions move to the sidebar test; adds `onBlockingChange` coverage |
-| `tests/ui/connection/connection-tables-list.test.tsx` | table search: filters case-insensitively, empty state on no matches, count follows matches |
-| `tests/ui/library/queries-column.test.tsx` | unchanged in substance; adds `onBlockingChange` coverage |
+| `tests/ui/connection/connection-panel.test.tsx` | tables assertions move to the sidebar test; the `collapseConnection` assertion follows that testid onto the rail; adds `onBlockingChange` coverage |
+| `tests/ui/connection/connection-tables-list.test.tsx` | table search filters case-insensitively, empty state on no matches, count follows matches; schema section collapses via `aria-expanded` |
+| `tests/ui/library/queries-column.test.tsx` | schema-picker assertions removed (the picker moves to the Schema tab); adds `onBlockingChange` coverage |
 
 Gate: `bun run check` (typecheck + lint + tests).
 
