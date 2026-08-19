@@ -220,11 +220,18 @@ function toTabStateDto(tab: TabState): TabStateDto {
 export function createTabsStore(ipc: DragonIpc, getters: TabsSessionGetters): StoreApi<TabsState> {
   /** Per-tab run generation — module-private; never on TabState / never persisted. */
   const runGenerations = new Map<string, number>();
+  /**
+   * Generations double as the run id sent to Rust, where `CancelRegistry` keys
+   * cancelled / active runs per CONNECTION. A per-tab counter would hand every
+   * tab's first run the same id, so cancelling one tab would cancel another's
+   * query. Draw from one monotonic counter so live runs never share an id.
+   */
+  let lastRunGeneration = 0;
 
   function bumpRunGeneration(tabId: string): number {
-    const next = (runGenerations.get(tabId) ?? 0) + 1;
-    runGenerations.set(tabId, next);
-    return next;
+    lastRunGeneration += 1;
+    runGenerations.set(tabId, lastRunGeneration);
+    return lastRunGeneration;
   }
 
   return createStore<TabsState>((set, get) => {

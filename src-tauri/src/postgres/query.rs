@@ -252,19 +252,20 @@ pub fn split_sql_statements(sql: &str) -> Vec<String> {
 
 pub fn should_wrap_transaction(statements: &[&str]) -> bool {
     !statements.iter().any(|sql| {
-        let s = strip_leading_sql_noise(sql).to_ascii_lowercase();
+        let s = normalize_for_keyword_match(sql);
         let user_txn = ["begin", "start transaction", "commit", "rollback"]
             .iter()
             .any(|k| s.starts_with(k));
+        // REINDEX and VACUUM are matched on the bare verb: their object-type
+        // keyword is mandatory and varies (REINDEX TABLE / INDEX / SCHEMA /
+        // DATABASE / SYSTEM), and neither belongs in an implicit transaction.
         let illegal_in_txn = s.starts_with("vacuum")
+            || s.starts_with("reindex")
             || s.starts_with("create database")
             || s.starts_with("drop database")
             || s.starts_with("create index concurrently")
             || s.starts_with("create unique index concurrently")
             || s.starts_with("drop index concurrently")
-            || s.starts_with("reindex database")
-            || s.starts_with("reindex system")
-            || s.starts_with("reindex concurrently")
             || s.starts_with("alter system")
             || s.starts_with("create tablespace")
             || s.starts_with("drop tablespace")
@@ -273,6 +274,39 @@ pub fn should_wrap_transaction(statements: &[&str]) -> bool {
             || s.starts_with("refresh materialized view concurrently");
         user_txn || illegal_in_txn
     })
+}
+
+/// Lowercase a statement for keyword matching: drop leading comments, drop a
+/// leading parenthesised option list (`REINDEX (VERBOSE) DATABASE …`), and
+/// collapse whitespace runs so newlines between keywords still match.
+fn normalize_for_keyword_match(sql: &str) -> String {
+    let stripped = strip_leading_sql_noise(sql).to_ascii_lowercase();
+    let mut rest = stripped.trim_start();
+    if let Some(after) = strip_leading_option_list(rest) {
+        rest = after.trim_start();
+    }
+    rest.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// `(a, b) tail` → `tail`; `None` when there is no balanced leading group.
+fn strip_leading_option_list(s: &str) -> Option<&str> {
+    if !s.starts_with('(') {
+        return None;
+    }
+    let mut depth = 0usize;
+    for (index, c) in s.char_indices() {
+        match c {
+            '(' => depth += 1,
+            ')' => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(&s[index + c.len_utf8()..]);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
 }
 
 fn dollar_tag_end(chars: &[char], start: usize) -> Option<usize> {
@@ -547,8 +581,8 @@ mod tests {
             "CREATE UNIQUE INDEX CONCURRENTLY cannot run inside a transaction block"
         );
         assert!(
-            !should_wrap_transaction(&["REINDEX CONCURRENTLY t", "SELECT 1"]),
-            "REINDEX CONCURRENTLY cannot run inside a transaction block"
+            !should_wrap_transaction(&["REINDEX INDEX CONCURRENTLY idx", "SELECT 1"]),
+            "REINDEX INDEX CONCURRENTLY cannot run inside a transaction block"
         );
         assert!(
             !should_wrap_transaction(&["ALTER SYSTEM SET work_mem = '64MB'", "SELECT 1"]),
@@ -565,6 +599,42 @@ mod tests {
             !should_wrap_transaction(&["CREATE SUBSCRIPTION sub CONNECTION '' PUBLICATION pub", "SELECT 1"]),
             "CREATE SUBSCRIPTION cannot run inside a transaction block"
         );
+    }
+
+    #[test]
+    fn no_wrap_for_reindex_object_type_and_option_forms() {
+        // REINDEX grammar (PostgreSQL docs, sql-reindex):
+        //   REINDEX [ ( option [, ...] ) ] { INDEX | TABLE | SCHEMA } [ CONCURRENTLY ] name
+        //   REINDEX [ ( option [, ...] ) ] { DATABASE | SYSTEM } [ CONCURRENTLY ] [ name ]
+        // The object type is mandatory, so `REINDEX CONCURRENTLY name` never
+        // reaches the server — while these real forms all reject a transaction
+        // block and must therefore suppress the BEGIN/COMMIT wrapper.
+        assert!(
+            !should_wrap_transaction(&["VACUUM (FULL, VERBOSE) public.users", "SELECT 1"]),
+            "parenthesised-option VACUUM cannot run inside a transaction block"
+        );
+        assert!(
+            !should_wrap_transaction(&["REINDEX TABLE CONCURRENTLY users", "SELECT 1"]),
+            "REINDEX TABLE CONCURRENTLY cannot run inside a transaction block"
+        );
+        assert!(
+            !should_wrap_transaction(&["REINDEX INDEX CONCURRENTLY idx_users_name", "SELECT 1"]),
+            "REINDEX INDEX CONCURRENTLY cannot run inside a transaction block"
+        );
+        assert!(
+            !should_wrap_transaction(&["REINDEX SCHEMA public", "SELECT 1"]),
+            "REINDEX SCHEMA cannot run inside a transaction block"
+        );
+        assert!(
+            !should_wrap_transaction(&["REINDEX (VERBOSE) DATABASE shop", "SELECT 1"]),
+            "parenthesised-option REINDEX DATABASE cannot run inside a transaction block"
+        );
+        assert!(
+            !should_wrap_transaction(&["CREATE INDEX\n  CONCURRENTLY idx ON t(c)", "SELECT 1"]),
+            "a newline between keywords must not hide CREATE INDEX CONCURRENTLY"
+        );
+        // Statements that merely start with the same letters still wrap.
+        assert!(should_wrap_transaction(&["SELECT 1", "UPDATE t SET c = 1"]));
     }
 
     #[test]

@@ -3236,3 +3236,36 @@ describe("App table browser host wiring", () => {
     }
   });
 });
+
+describe("App tab switch reconciles the live database", () => {
+  // Per-tab databaseName is only a projection: SQL runs against whatever
+  // database the Rust session last switched to. Switching tabs must therefore
+  // push the target tab's database back onto the live connection, otherwise the
+  // canvas shows tab 1's database while queries hit tab 2's.
+  it("switching back to tab 1 switches the live database back to tab 1's database", async () => {
+    const ipc = createMockDragonIpc("happy");
+    await ipc.createDatabase("shop");
+    await ipc.createDatabase("warehouse");
+    const switchDatabase = vi.spyOn(ipc, "switchDatabase");
+    const user = userEvent.setup();
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
+
+    await user.selectOptions(screen.getByTestId(ConnectionAccessibility.databasePicker), "shop");
+    await waitFor(() => expect(switchDatabase).toHaveBeenLastCalledWith(expect.anything(), "shop"));
+
+    await user.click(screen.getByTestId(TabBarAccessibility.newTab));
+    await user.selectOptions(
+      screen.getByTestId(ConnectionAccessibility.databasePicker),
+      "warehouse",
+    );
+    await waitFor(() =>
+      expect(switchDatabase).toHaveBeenLastCalledWith(expect.anything(), "warehouse"),
+    );
+
+    switchDatabase.mockClear();
+    await user.click(defined(screen.getAllByRole("tab")[0], "expected first tab"));
+
+    await waitFor(() => expect(switchDatabase).toHaveBeenCalledWith(expect.anything(), "shop"));
+  });
+});

@@ -287,6 +287,9 @@ pub async fn run_query(
     sql: ExecutableSql,
 ) -> Result<QueryResultData, MappedIpcError> {
     if registry.is_run_cancelled(run_id) {
+        // Drop the marker so a long session does not accumulate one entry per
+        // cancelled run; ids are never reused, so nothing can match it again.
+        registry.clear_active_run(run_id);
         return Err(query_cancelled_error());
     }
     let mut session = state.lock().await;
@@ -1053,6 +1056,35 @@ mod tests {
         assert!(
             production.contains(needle),
             "cancel_query must route through cancel_run (PG cancel only for active run)"
+        );
+    }
+
+    #[test]
+    fn run_query_rejects_a_queued_run_cancelled_before_it_takes_the_session_lock() {
+        // run_query is serialized behind Mutex<AppSession>, so a run cancelled
+        // while it waits for the lock must still be refused once it acquires it.
+        // Checking only before the lock lets a "cancelled" mutation execute.
+        let src = include_str!("commands.rs");
+        let production = src.split("#[cfg(test)]").next().expect("has test module");
+        let body = production
+            .split("pub async fn run_query")
+            .nth(1)
+            .expect("run_query command")
+            .split("#[tauri::command")
+            .next()
+            .expect("run_query body");
+        let lock_at = body.find("state.lock()").expect("run_query locks the session");
+        let guard_at = body[lock_at..]
+            .find("is_run_cancelled")
+            .map(|offset| lock_at + offset);
+        assert!(
+            guard_at.is_some(),
+            "run_query must re-check is_run_cancelled AFTER acquiring the session lock"
+        );
+        let run_at = body.find("session.run_query").expect("run_query executes the sql");
+        assert!(
+            guard_at.expect("guard") < run_at,
+            "the post-lock cancellation guard must run before the query executes"
         );
     }
 
