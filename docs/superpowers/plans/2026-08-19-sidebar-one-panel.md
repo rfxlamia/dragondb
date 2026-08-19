@@ -299,6 +299,11 @@ and the `{hasMore ? ... : null}` block so both sit behind the guard:
             )}
 ```
 
+The count is `group.tables.length` — post-filter by construction, since `groups`
+is built from `matchedTables`. A collapsed section keeps showing its count: the
+number is what tells you what is hidden, so it is computed whether or not the
+rows render.
+
 - [ ] **Step 6: Add the chrome**
 
 In `src/ui/tables/tables.css`, replace the existing `.table-list__schema-title`
@@ -1018,7 +1023,6 @@ export function AppSidebar(props: AppSidebarProps): React.JSX.Element {
               className="ui-visually-hidden"
               name="app-sidebar-tab"
               value={value}
-              aria-label={TAB_LABELS[value]}
               checked={tab === value}
               disabled={switcherDisabled}
               onChange={() => onTabChange(value)}
@@ -1069,26 +1073,88 @@ In `src/ui/connection/connection-panel.tsx`:
 
 In `src/ui/shell/app-workspace.tsx`:
 
-1. Delete the `queriesPanel` constant (the `<Panel className="app-workspace-split__queries">` block and the `<QueriesColumn ... />` inside it).
-2. Delete the `Group` / `Panel` / `Separator` wrapper that placed `queriesPanel`
-   beside the tab strip and canvas, leaving the tab strip, canvas, and
-   `WorkspaceSplit` in place. Do not touch `WorkspaceSplit` — the vertical
-   canvas/results split stays.
+1. Delete the `queriesPanel` constant (the `<Panel className="app-workspace-split__queries">` block and the `<QueriesColumn ... />` inside it) **and** the `queriesRow` helper below it.
+2. Replace the early return and the `WorkspaceSplit` call so nothing wraps the
+   canvas horizontally any more. `WorkspaceSplit` itself is untouched — the
+   vertical canvas/results split stays. The result reads exactly:
+
+```tsx
+  if (!workspaceReady) {
+    return <div className="app-workspace-main" />;
+  }
+
+  return (
+    <WorkspaceSplit
+      canvas={
+        <div className="app-workspace-main">
+          <TabBar
+            tabs={tabs.map((tab, index) => {
+              const savedQueryName = libraryQueries.find(
+                (query) => query.id === tab.savedQueryId,
+              )?.name;
+              const profile =
+                profiles.find((candidate) => candidate.id === tab.connectionId) ??
+                profiles.find((candidate) => candidate.id === profileId);
+              const connectionDisplayName = profile ? profile.name?.trim() || profile.host : null;
+              return {
+                id: tab.id,
+                title: formatTabTitle({
+                  databaseName: tab.databaseName,
+                  savedQueryName,
+                  connectionDisplayName,
+                  index: index + 1,
+                }),
+                isActive: tab.id === activeTabId,
+                pendingClose: pendingDeletedIds.has(tab.id),
+              };
+            })}
+            onNewTab={onNewTab}
+            onSwitchTab={onSwitchTab}
+            onCloseTab={onCloseTab}
+          />
+          {canvas}
+        </div>
+      }
+      results={/* ...unchanged: the existing app-results-wrapper block... */}
+    />
+  );
+```
+
+   Note the tab-title mapping still reads `libraryQueries`, `profiles`, and
+   `profileId`, so those three props **stay** on `AppWorkspaceProps` even though
+   the queries column is gone.
 3. Delete the `QueriesColumn` import, and the `react-resizable-panels` import if
    nothing else in the file uses it.
 4. Delete these props from `AppWorkspaceProps` and the destructuring:
-   `libraryQueries`, `libraryFolders`, `savedQueryId`, `executingQueryId`,
-   `schemaNames`, `selectedSchema`, `schemaError`, `onSelectQuery`, `onNewQuery`,
+   `libraryFolders`, `savedQueryId`, `executingQueryId`, `schemaNames`,
+   `selectedSchema`, `schemaError`, `onSelectQuery`, `onNewQuery`,
    `onRenameQuery`, `onDeleteQuery`, `onMoveQuery`, `onDeleteFolder`,
    `onLibraryRefresh`, `onDuplicateQuery`, `onRenameFolder`, `onCreateFolder`,
    `hasCachedResult`, `onSelectSchema`, `onDismissSchemaError`.
-   Keep `profiles` and `profileId` only if something other than the queries panel
-   consumes them; check with `grep -n "profiles\|profileId" src/ui/shell/app-workspace.tsx` and delete them too if not.
+   Keep `libraryQueries`, `profiles`, and `profileId` — the tab-title mapping in
+   Step 7.2 still reads all three.
 
-In `src/App.css`, delete the `.app-workspace-split__queries` rule and the
-`.app-workspace-split`, `.app-workspace-split__main`, and
-`.app-workspace-split__separator` rules that only existed to lay that panel out.
-Verify each is unused first: `grep -rn "app-workspace-split" src`.
+In `src/App.css`, delete these three now-dead rules: `.app-workspace-split`,
+`.app-workspace-split__queries, .app-workspace-split__main` (the shared
+`min-height`/`min-width` rule), and `.app-workspace-split__queries`. In the two
+separator rules, delete only the `.app-workspace-split__separator` selectors and
+keep their `.workspace-split__separator` siblings — those still style the
+vertical canvas/results handle:
+
+```css
+.workspace-split__separator {
+  background: var(--border-subtle);
+  transition: background-color var(--duration-fast) var(--ease-standard);
+}
+
+.workspace-split__separator:hover,
+.workspace-split__separator[data-resize-handle-state="drag"] {
+  background: var(--primary-400);
+}
+```
+
+Keep `.app-workspace-main` — Step 7.2 still renders that class. Confirm nothing
+else survives: `grep -rn "app-workspace-split" src` must return no hits.
 
 - [ ] **Step 8: Wire it in `App.tsx`**
 
@@ -1201,7 +1267,9 @@ props move onto `QueriesColumn` verbatim from the `AppWorkspace` call site:
 ```
 
 Then delete the same props from the `<AppWorkspace ... />` call to match the
-props removed in Step 7. Compare the exact prop names `QueriesColumn` declares
+props removed in Step 7 — but keep `libraryQueries`, `profiles`, and `profileId`
+there, since the tab-title mapping still needs them. `libraryQueries` is now
+passed to both `AppWorkspace` (for titles) and `QueriesColumn` (for the list). Compare the exact prop names `QueriesColumn` declares
 before pasting: `grep -n "^  [a-zA-Z]*[?]*:" src/ui/library/queries-column.tsx`.
 
 - [ ] **Step 9: Add the sidebar chrome**
@@ -1419,8 +1487,10 @@ Pass `onBlockingChange={setConnectionBlocking}` to `<ConnectionPanel>` and
 `switcherDisabled={sidebarBlocked}` to `<AppSidebar>` and
 `toggleDisabled={sidebarBlocked}` to `<ActivityRail>`.
 
-Because both handlers are `useState` setters, their identity is stable and the
-effects in Steps 3–4 cannot loop.
+Pass the setters directly — never an inline arrow. `onBlockingChange` sits in the
+dependency array of the effects from Steps 3–4, so a fresh function identity on
+every render would turn them into a render loop. A `useState` setter's identity
+is stable, which is the whole reason this wiring is safe.
 
 - [ ] **Step 6: Run the tests to verify they pass**
 
