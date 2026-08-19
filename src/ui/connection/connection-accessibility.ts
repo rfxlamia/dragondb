@@ -5,6 +5,8 @@ export const ConnectionAccessibility = {
   tablesRegion: "connection.tablesRegion",
   connectionStringField: "connection.connectionStringField",
   statusBanner: "connection.statusBanner",
+  connectionsToggle: "connection.connectionsToggle",
+  statusDot: "connection.statusDot",
   databasePicker: "connection.databasePicker",
   testButton: "connection.testButton",
   showPassword: "connection.showPassword",

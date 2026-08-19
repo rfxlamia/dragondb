@@ -242,7 +242,7 @@ describe("ConnectionPanel Save-then-Connect", () => {
     await user.type(screen.getByLabelText(/database/i), "app");
     await user.type(screen.getByLabelText(/^password$/i), "pw");
 
-    const connect = screen.getByRole("button", { name: /connect/i });
+    const connect = screen.getByRole("button", { name: ConnectionCopy.connect });
     expect(connect).toBeDisabled();
     expect(onConnected).not.toHaveBeenCalled();
   });
@@ -268,7 +268,7 @@ describe("ConnectionPanel Save-then-Connect", () => {
     await user.type(screen.getByLabelText(/database/i), "app");
     await user.type(screen.getByLabelText(/^password$/i), "pw");
     await user.click(screen.getByRole("button", { name: /save/i }));
-    await user.click(await screen.findByRole("button", { name: /connect/i }));
+    await user.click(await screen.findByRole("button", { name: ConnectionCopy.connectNow }));
     await waitFor(() => expect(onConnected).toHaveBeenCalled());
     const result = onConnected.mock.calls[0]?.[0];
     expect(result.connectionId).toBeTruthy();
@@ -300,7 +300,7 @@ describe("ConnectionPanel Save-then-Connect", () => {
     await user.type(screen.getByLabelText(/database/i), "app");
     await user.type(screen.getByLabelText(/^password$/i), "pw");
     await user.click(screen.getByRole("button", { name: /save/i }));
-    await user.click(await screen.findByRole("button", { name: /connect/i }));
+    await user.click(await screen.findByRole("button", { name: ConnectionCopy.connectNow }));
     await waitFor(() => expect(onConnected).toHaveBeenCalled());
     expect(connectProfile).toHaveBeenCalled();
   });
@@ -564,7 +564,7 @@ describe("ConnectionPanel Save-then-Connect", () => {
         onSwitchFailure={vi.fn()}
       />,
     );
-    await user.click(screen.getByRole("button", { name: /connect/i }));
+    await user.click(screen.getByRole("button", { name: ConnectionCopy.connect }));
     await waitFor(() => expect(screen.getByText(/authentication failed/i)).toBeInTheDocument());
     expect(onConnected).not.toHaveBeenCalled();
     expect(screen.queryByRole("button", { name: /disconnect/i })).toBeNull();
@@ -879,7 +879,7 @@ describe("ConnectionPanel Save-then-Connect", () => {
     expect(screen.getByLabelText(/database/i)).toHaveValue("");
   });
 
-  it("successful Connect resets the test banner so Connected copy shows after a prior Test", async () => {
+  it("successful Connect clears the test banner without showing Connected copy", async () => {
     const user = userEvent.setup();
     const ipc = createMockDragonIpc("happy");
     const saved = await ipc.saveProfile({
@@ -902,12 +902,9 @@ describe("ConnectionPanel Save-then-Connect", () => {
     await user.click(screen.getByRole("button", { name: ConnectionCopy.test }));
     expect(await screen.findByText(ConnectionCopy.testSuccess)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: ConnectionCopy.connect }));
-    await waitFor(() =>
-      expect(screen.getByTestId(ConnectionAccessibility.statusBanner)).toHaveTextContent(
-        ConnectionCopy.connected,
-      ),
-    );
-    expect(screen.queryByText(ConnectionCopy.testSuccess)).toBeNull();
+    await waitFor(() => expect(screen.queryByText(ConnectionCopy.testSuccess)).toBeNull());
+    expect(screen.queryByText(ConnectionCopy.connected)).toBeNull();
+    expect(screen.queryByTestId(ConnectionAccessibility.statusBanner)).toBeNull();
   });
 
   it("edit mode Connection String URI is read-only and Copy uses YOUR_PASSWORD", async () => {

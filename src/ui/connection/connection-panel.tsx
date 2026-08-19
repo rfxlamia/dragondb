@@ -8,7 +8,8 @@ import type {
   ProfileId,
 } from "../../ipc/contract";
 import { ConnectionStringParseError } from "../../lib/connection-string";
-import { ConnectIcon, DisconnectIcon } from "../icons";
+import { ChevronDownIcon, ChevronRightIcon, ConnectIcon, DisconnectIcon, PlusIcon } from "../icons";
+import { ConnectionAccessibility } from "./connection-accessibility";
 import { ConnectionCopy, humanIpcErrorMessage } from "./connection-copy";
 import { ConnectionCreatedDialog } from "./connection-created-dialog";
 import { ConnectionDatabasePicker } from "./connection-database-picker";
@@ -131,7 +132,9 @@ export function ConnectionPanel(props: ConnectionPanelProps): React.JSX.Element 
   });
 
   const [pickerBlocking, setPickerBlocking] = useState(false);
+  const [connectionsExpanded, setConnectionsExpanded] = useState(true);
   const blocking = formVisible || confirm.hasPending || pickerBlocking;
+  const collapseBlocked = blocking || bannerPhase !== "idle";
   useEffect(() => {
     onBlockingChange?.(blocking);
     return () => onBlockingChange?.(false);
@@ -416,73 +419,92 @@ export function ConnectionPanel(props: ConnectionPanelProps): React.JSX.Element 
 
   return (
     <section className="connection-panel" aria-label={ConnectionCopy.panelTitle}>
-      <div className="connection-panel__header">
-        <h2>{ConnectionCopy.panelTitle}</h2>
-        <div className="connection-panel__header-actions">
-          {/* Ending the session belongs to the live connection in the sidebar,
-              not to the edit sheet — the sheet can be closed while connected. */}
-          {sessionClaimed ? (
-            <button
-              type="button"
-              className="ui-icon-btn ui-icon-btn--danger"
-              aria-label={ConnectionCopy.disconnect}
-              title={ConnectionCopy.disconnect}
-              disabled={busy}
-              onClick={() => void handleDisconnect()}
-            >
-              <DisconnectIcon />
-            </button>
-          ) : null}
-          {/* Reconnecting the selected profile without reopening the sheet.
-              Hidden while the sheet is open — its footer owns Connect there,
-              so exactly one Connect control exists at any time. */}
-          {!sessionClaimed && !formVisible && selectedId !== null ? (
+      {!formVisible && bannerPhase !== "idle" ? statusBanner : null}
+      {!formVisible ? errorText : null}
+
+      <div className="connection-panel__connections">
+        <div className="connection-panel__connections-header">
+          <button
+            type="button"
+            className="connection-panel__connections-toggle"
+            data-testid={ConnectionAccessibility.connectionsToggle}
+            aria-expanded={connectionsExpanded}
+            aria-label={ConnectionCopy.toggleConnections}
+            disabled={collapseBlocked}
+            onClick={() => setConnectionsExpanded((open) => !open)}
+          >
+            {connectionsExpanded ? <ChevronDownIcon /> : <ChevronRightIcon />}
+            <span className="connection-panel__connections-label">{ConnectionCopy.panelTitle}</span>
+          </button>
+          <div className="connection-panel__connections-actions">
+            {sessionClaimed ? (
+              <button
+                type="button"
+                className="ui-icon-btn ui-icon-btn--danger"
+                aria-label={ConnectionCopy.disconnect}
+                title={ConnectionCopy.disconnect}
+                disabled={busy}
+                onClick={() => void handleDisconnect()}
+              >
+                <DisconnectIcon />
+              </button>
+            ) : null}
+            {!sessionClaimed && !formVisible && selectedId !== null ? (
+              <button
+                type="button"
+                className="ui-icon-btn ui-icon-btn--accent"
+                aria-label={ConnectionCopy.connect}
+                title={ConnectionCopy.connect}
+                disabled={!canConnect}
+                onClick={() => void handleConnect()}
+              >
+                <ConnectIcon />
+              </button>
+            ) : null}
             <button
               type="button"
               className="ui-icon-btn ui-icon-btn--accent"
-              aria-label={ConnectionCopy.connect}
-              title={ConnectionCopy.connect}
-              disabled={!canConnect}
-              onClick={() => void handleConnect()}
+              aria-label={ConnectionCopy.newProfile}
+              title={ConnectionCopy.newProfile}
+              onClick={startNewProfile}
             >
-              <ConnectIcon />
+              <PlusIcon />
             </button>
-          ) : null}
+          </div>
         </div>
+
+        {connectionsExpanded ? (
+          <div className="connection-panel__connections-body">
+            <ConnectionProfileList
+              profiles={profiles}
+              formVisible={formVisible}
+              onSelect={selectProfile}
+              onNewProfile={startNewProfile}
+              activeId={sessionClaimed ? (connectedProfileId ?? selectedId) : selectedId}
+              onRequestDelete={(profile) => confirm.requestDelete(profile.id)}
+              hideHeader
+            />
+
+            {sessionClaimed && selectedId !== null ? (
+              <ConnectionDatabasePicker
+                isConnected={sessionClaimed}
+                databases={databases}
+                selected={pickerSelected}
+                onSelect={handleSelectDatabase}
+                profileDatabase={form.profile.database}
+                missingFromList={
+                  missingDatabase ||
+                  (pickerSelected !== null && !databases.includes(pickerSelected))
+                }
+                onCreateDatabase={handleCreateDatabase}
+                onConnectDatabase={handleConnectCreatedDatabase}
+                onDeleteDatabase={handleDeleteDatabase}
+                onBlockingChange={setPickerBlocking}
+              />
+            ) : null}
+          </div>
+        ) : null}
       </div>
-
-      {formVisible ? null : (
-        <>
-          {statusBanner}
-          {errorText}
-        </>
-      )}
-
-      <ConnectionProfileList
-        profiles={profiles}
-        formVisible={formVisible}
-        onSelect={selectProfile}
-        onNewProfile={startNewProfile}
-        activeId={sessionClaimed ? (connectedProfileId ?? selectedId) : selectedId}
-        onRequestDelete={(profile) => confirm.requestDelete(profile.id)}
-      />
-
-      {sessionClaimed && selectedId !== null ? (
-        <ConnectionDatabasePicker
-          isConnected={sessionClaimed}
-          databases={databases}
-          selected={pickerSelected}
-          onSelect={handleSelectDatabase}
-          profileDatabase={form.profile.database}
-          missingFromList={
-            missingDatabase || (pickerSelected !== null && !databases.includes(pickerSelected))
-          }
-          onCreateDatabase={handleCreateDatabase}
-          onConnectDatabase={handleConnectCreatedDatabase}
-          onDeleteDatabase={handleDeleteDatabase}
-          onBlockingChange={setPickerBlocking}
-        />
-      ) : null}
 
       {formVisible ? (
         <ConnectionFormSheet

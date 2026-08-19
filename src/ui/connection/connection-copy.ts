@@ -3,7 +3,8 @@ import { unknownErrorMessage } from "../../lib/unknown-error-message";
 
 /** Human-facing copy for the rough connection panel (creative-brief tone). */
 export const ConnectionCopy = {
-  panelTitle: "Connection",
+  panelTitle: "Connections",
+  toggleConnections: "Toggle connections section",
   save: "Save",
   connect: "Connect",
   disconnect: "Disconnect",

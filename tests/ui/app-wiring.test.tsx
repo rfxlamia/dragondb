@@ -381,7 +381,7 @@ describe("App session connect / disconnect / switch", () => {
     expect(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock)).toBeDisabled();
 
     await user.click(screen.getByRole("button", { name: /^B$/i }));
-    await user.click(await screen.findByRole("button", { name: /connect/i }));
+    await user.click(await screen.findByRole("button", { name: ConnectionCopy.connect }));
     await waitFor(() =>
       expect(screen.getByText(VisualQueryCopy.emptyCanvasTitle)).toBeInTheDocument(),
     );
@@ -397,7 +397,7 @@ describe("App session connect / disconnect / switch", () => {
     expect(screen.getByTestId(VisualQueryAccessibility.clauseCard("select"))).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /disconnect/i }));
-    await user.click(await screen.findByRole("button", { name: /connect/i }));
+    await user.click(await screen.findByRole("button", { name: ConnectionCopy.connect }));
     await waitFor(() =>
       expect(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock)).not.toBeDisabled(),
     );
@@ -576,7 +576,7 @@ describe("App session connect / disconnect / switch", () => {
 
     failB = false;
     await user.click(screen.getByRole("button", { name: /^B$/i }));
-    await user.click(await screen.findByRole("button", { name: /connect/i }));
+    await user.click(await screen.findByRole("button", { name: ConnectionCopy.connect }));
     await waitFor(() =>
       expect(screen.getByText(VisualQueryCopy.emptyCanvasTitle)).toBeInTheDocument(),
     );
@@ -1424,7 +1424,7 @@ describe("App results pane (SP-4b first slice)", () => {
     expect(screen.getByTestId(ResultsAccessibility.empty)).toHaveTextContent(
       ResultsCopy.runQueryEmpty,
     );
-    await user.click(await screen.findByRole("button", { name: /connect/i }));
+    await user.click(await screen.findByRole("button", { name: ConnectionCopy.connect }));
     await waitFor(() =>
       expect(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock)).not.toBeDisabled(),
     );
@@ -1746,7 +1746,7 @@ describe("App tab bar and in-session documents", () => {
     await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("select")));
     await user.click(screen.getByRole("button", { name: /disconnect/i }));
     await user.click(screen.getByRole("button", { name: /^B$/i }));
-    await user.click(await screen.findByRole("button", { name: /connect/i }));
+    await user.click(await screen.findByRole("button", { name: ConnectionCopy.connect }));
     await waitFor(() =>
       expect(screen.getByText(VisualQueryCopy.emptyCanvasTitle)).toBeInTheDocument(),
     );
@@ -1942,7 +1942,7 @@ describe("App Queries column (SP-4b)", () => {
     await waitFor(() => expect(screen.getByText("from-a")).toBeInTheDocument());
     await user.click(screen.getByRole("button", { name: /disconnect/i }));
     await user.click(screen.getByRole("button", { name: /^B$/i }));
-    await user.click(await screen.findByRole("button", { name: /connect/i }));
+    await user.click(await screen.findByRole("button", { name: ConnectionCopy.connect }));
     await user.click(await screen.findByRole("button", { name: "Q1" }));
     expect(screen.queryByText("from-a")).toBeNull();
     expect(screen.getByTestId(ResultsAccessibility.empty)).toHaveTextContent(
@@ -1988,7 +1988,7 @@ describe("App Queries column (SP-4b)", () => {
     await user.click(screen.getByRole("button", { name: "Q1" }));
     expect(screen.getByText("from-a")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /^B$/i }));
-    await user.click(await screen.findByRole("button", { name: /connect/i }));
+    await user.click(await screen.findByRole("button", { name: ConnectionCopy.connect }));
     await waitFor(() =>
       expect(screen.getByText(VisualQueryCopy.emptyCanvasTitle)).toBeInTheDocument(),
     );

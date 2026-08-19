@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { DatabaseIcon, PlusIcon, TrashIcon } from "../icons";
+import { PlusIcon, TrashIcon } from "../icons";
 import { ConnectionAccessibility } from "./connection-accessibility";
 import { ConnectionConfirmDialog } from "./connection-confirm-dialog";
 import { ConnectionCopy } from "./connection-copy";
@@ -51,6 +51,7 @@ export function ConnectionDatabasePicker(props: {
 
   const empty = databases.length === 0;
   const showPulse = isConnected && (missingFromList || selected === null);
+  const live = isConnected && selected !== null;
 
   /**
    * The parent's switch is asynchronous, so the select cannot fire and forget:
@@ -121,9 +122,16 @@ export function ConnectionDatabasePicker(props: {
           icons. It used to be a stacked label + full-width select + two text
           buttons, i.e. a form for something you change once a session. */}
       <div className="connection-database-picker__row">
-        <span className="connection-database-picker__glyph">
-          <DatabaseIcon size={14} />
-        </span>
+        <span
+          className={
+            live
+              ? "connection-status-dot connection-status-dot--live"
+              : "connection-status-dot connection-status-dot--idle"
+          }
+          data-testid={ConnectionAccessibility.statusDot}
+          title={live ? ConnectionCopy.connected : undefined}
+          aria-hidden="true"
+        />
         <label className="connection-database-picker__label">
           <span className="ui-visually-hidden">{ConnectionCopy.catalog}</span>
           <select
@@ -132,6 +140,11 @@ export function ConnectionDatabasePicker(props: {
             data-testid={ConnectionAccessibility.databasePicker}
             disabled={!isConnected || empty || busy}
             value={selected ?? ""}
+            aria-label={
+              live && selected !== null
+                ? `${selected}, ${ConnectionCopy.connected}`
+                : ConnectionCopy.catalog
+            }
             onChange={(event) => void handleSelect(event.target.value)}
           >
             {empty ? <option value="">{ConnectionCopy.noDatabases}</option> : null}

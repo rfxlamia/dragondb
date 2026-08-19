@@ -2,6 +2,7 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { ConnectionAccessibility } from "../../../src/ui/connection/connection-accessibility";
 import { ConnectionCopy } from "../../../src/ui/connection/connection-copy";
 import { ConnectionDatabasePicker } from "../../../src/ui/connection/connection-database-picker";
 
@@ -19,6 +20,38 @@ describe("ConnectionDatabasePicker", () => {
       />,
     );
     expect(screen.getByRole("combobox")).toBeDisabled();
+  });
+
+  it("shows a grey status dot when connected without a selected database", () => {
+    render(
+      <ConnectionDatabasePicker
+        isConnected={true}
+        databases={["postgres"]}
+        selected={null}
+        onSelect={vi.fn()}
+        profileDatabase="postgres"
+      />,
+    );
+    expect(screen.getByTestId(ConnectionAccessibility.statusDot)).toHaveClass(
+      "connection-status-dot--idle",
+    );
+    expect(screen.queryByText(ConnectionCopy.connected)).toBeNull();
+  });
+
+  it("shows a green status dot when connected with a selected database", () => {
+    render(
+      <ConnectionDatabasePicker
+        isConnected={true}
+        databases={["fastrack_db"]}
+        selected="fastrack_db"
+        onSelect={vi.fn()}
+        profileDatabase="fastrack_db"
+      />,
+    );
+    expect(screen.getByTestId(ConnectionAccessibility.statusDot)).toHaveClass(
+      "connection-status-dot--live",
+    );
+    expect(screen.queryByText(ConnectionCopy.connected)).toBeNull();
   });
 
   it("switch calls onSelect(shop) without rewriting profileDatabase", async () => {

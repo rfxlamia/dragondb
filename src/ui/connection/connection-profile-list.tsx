@@ -10,6 +10,8 @@ export function ConnectionProfileList(props: {
   onNewProfile: () => void;
   /** Profile backing the live session (or the current edit target). */
   activeId?: ProfileId | null;
+  /** When true, the parent renders the section header and new-profile control. */
+  hideHeader?: boolean;
   /**
    * Row-level delete is offered only while the connection sheet is closed —
    * the sheet's footer owns Delete when it is open, so exactly one Delete
@@ -17,22 +19,32 @@ export function ConnectionProfileList(props: {
    */
   onRequestDelete?: (profile: ConnectionProfileDto) => void;
 }): React.JSX.Element {
-  const { profiles, formVisible, onSelect, onNewProfile, activeId = null, onRequestDelete } = props;
+  const {
+    profiles,
+    formVisible,
+    onSelect,
+    onNewProfile,
+    activeId = null,
+    onRequestDelete,
+    hideHeader = false,
+  } = props;
   const rowActions = onRequestDelete !== undefined && !formVisible;
   return (
     <div className="connection-panel__profiles">
-      <div className="connection-panel__profiles-header">
-        <h3>{ConnectionCopy.profilesHeading}</h3>
-        <button
-          type="button"
-          className="ui-icon-btn ui-icon-btn--accent"
-          aria-label={ConnectionCopy.newProfile}
-          title={ConnectionCopy.newProfile}
-          onClick={onNewProfile}
-        >
-          <PlusIcon />
-        </button>
-      </div>
+      {hideHeader ? null : (
+        <div className="connection-panel__profiles-header">
+          <h3>{ConnectionCopy.profilesHeading}</h3>
+          <button
+            type="button"
+            className="ui-icon-btn ui-icon-btn--accent"
+            aria-label={ConnectionCopy.newProfile}
+            title={ConnectionCopy.newProfile}
+            onClick={onNewProfile}
+          >
+            <PlusIcon />
+          </button>
+        </div>
+      )}
       {profiles.length === 0 && formVisible ? (
         <p className="connection-panel__hint" data-testid={ConnectionAccessibility.noConnections}>
           {ConnectionCopy.noConnections}
