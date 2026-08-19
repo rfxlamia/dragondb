@@ -433,12 +433,21 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
     stores.tabs.getState().switchTab(id);
     const tab = stores.tabs.getState().tabs.find((item) => item.id === id);
     const session = stores.session.getState();
+
+    if (tab?.databaseName && session.isConnected && session.databaseName !== tab.databaseName) {
+      void stores.session
+        .getState()
+        .switchDatabase(tab.databaseName)
+        .catch(() => undefined);
+    }
+
+    const effectiveDatabase = tab?.databaseName ?? session.databaseName;
     const identity =
-      tab?.selectedTableName && session.connectionId !== null && session.databaseName !== null
+      tab?.selectedTableName && session.connectionId !== null && effectiveDatabase !== null
         ? {
             tabId: id,
             connectionId: session.connectionId,
-            database: session.databaseName,
+            database: effectiveDatabase,
             table: {
               schema: tab.selectedTableSchema ?? undefined,
               name: tab.selectedTableName,
