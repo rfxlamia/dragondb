@@ -84,15 +84,35 @@ export function splitSqlStatements(sql: string): string[] {
   return statements;
 }
 
+/**
+ * True when the quote at `start` opens a PostgreSQL escape string (`E'…'`),
+ * where a backslash escapes the next character. Plain `'…'` literals do not
+ * honour backslashes under the default `standard_conforming_strings = on`, so
+ * only the E-prefixed form gets escape handling.
+ */
+function isEscapeStringQuote(sql: string, start: number): boolean {
+  const prefix = sql.charAt(start - 1);
+  if (prefix !== "E" && prefix !== "e") return false;
+  const before = sql.charAt(start - 2);
+  // A trailing E of a longer word (e.g. `VALUE'…'`) is not the escape prefix.
+  return before === "" || !/[A-Za-z0-9_$]/.test(before);
+}
+
 function consumeQuoted(
   sql: string,
   start: number,
   quote: "'" | '"',
 ): { text: string; end: number } {
+  const escapeAware = quote === "'" && isEscapeStringQuote(sql, start);
   let text = quote;
   let i = start + 1;
   while (i < sql.length) {
     const q = sql.charAt(i);
+    if (escapeAware && q === "\\" && i + 1 < sql.length) {
+      text += q + sql.charAt(i + 1);
+      i += 2;
+      continue;
+    }
     text += q;
     if (q === quote) {
       if (sql.charAt(i + 1) === quote) {

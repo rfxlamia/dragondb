@@ -192,9 +192,16 @@ pub fn split_sql_statements(sql: &str) -> Vec<String> {
         }
         if c == '\'' || c == '"' {
             let quote = c;
+            let escape_aware = quote == '\'' && is_escape_string_quote(&chars, i);
             current.push(c);
             i += 1;
             while i < chars.len() {
+                if escape_aware && chars[i] == '\\' && i + 1 < chars.len() {
+                    current.push(chars[i]);
+                    current.push(chars[i + 1]);
+                    i += 2;
+                    continue;
+                }
                 current.push(chars[i]);
                 if chars[i] == quote {
                     if i + 1 < chars.len() && chars[i + 1] == quote {
@@ -307,6 +314,23 @@ fn strip_leading_option_list(s: &str) -> Option<&str> {
         }
     }
     None
+}
+
+/// True when the quote at `index` opens a PostgreSQL escape string (`E'…'`),
+/// where a backslash escapes the next character. Plain `'…'` literals do not
+/// honour backslashes under the default `standard_conforming_strings = on`.
+fn is_escape_string_quote(chars: &[char], index: usize) -> bool {
+    if index == 0 {
+        return false;
+    }
+    if !matches!(chars[index - 1], 'E' | 'e') {
+        return false;
+    }
+    // A trailing E of a longer word (e.g. `VALUE'…'`) is not the escape prefix.
+    match index.checked_sub(2).and_then(|prev| chars.get(prev)) {
+        None => true,
+        Some(c) => !(c.is_ascii_alphanumeric() || *c == '_' || *c == '$'),
+    }
 }
 
 fn dollar_tag_end(chars: &[char], start: usize) -> Option<usize> {
@@ -635,6 +659,21 @@ mod tests {
         );
         // Statements that merely start with the same letters still wrap.
         assert!(should_wrap_transaction(&["SELECT 1", "UPDATE t SET c = 1"]));
+    }
+
+    #[test]
+    fn split_sql_statements_keeps_escape_string_constants_whole() {
+        // E'…' honours backslash escapes, so \' is an escaped quote and the
+        // semicolon after it is part of the literal, not a statement boundary.
+        assert_eq!(
+            split_sql_statements(r#"SELECT E'a\'; b' AS x; SELECT 2"#),
+            vec![r#"SELECT E'a\'; b' AS x"#, "SELECT 2"]
+        );
+        // A doubled backslash ends the escape, so this quote really does close.
+        assert_eq!(
+            split_sql_statements(r#"SELECT E'a\\'; SELECT 2"#),
+            vec![r#"SELECT E'a\\'"#, "SELECT 2"]
+        );
     }
 
     #[test]

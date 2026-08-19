@@ -15,6 +15,7 @@ import { coreToTableRef, tableRefToCore } from "./ipc/table-ref";
 import { createTauriDragonIpc } from "./ipc/tauri-client";
 import { loadDateFormat, type QueryResultsDateFormat } from "./lib/date-format-setting";
 import { newSavedQueryName } from "./lib/new-saved-query-name";
+import { unknownErrorMessage } from "./lib/unknown-error-message";
 import { type BrowseRetryTarget, browseRetryBlocked } from "./stores/browse-session-store";
 import { type AppStores, composeAppStores } from "./stores/compose-app-stores";
 import { recoverBrowseAfterTimeout } from "./stores/recover-browse-after-timeout";
@@ -171,6 +172,9 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
   const [launchError, setLaunchError] = useState<string | null>(null);
   const [connectionCollapsed, setConnectionCollapsed] = useState(false);
   const [missingDatabase, setMissingDatabase] = useState(false);
+  const [databaseSwitchError, setDatabaseSwitchError] = useState<string | null>(null);
+  /** Run ids with a cancel already in flight — Stop/Escape must not re-send. */
+  const cancellingRunsRef = useRef<Set<number>>(new Set());
   const [selectedSchema, setSelectedSchema] = useState<string | null>(null);
   const [schemaError, setSchemaError] = useState<string | null>(null);
   const [dateFormat, setDateFormat] = useState<QueryResultsDateFormat>(loadDateFormat);
@@ -429,17 +433,30 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
     tabDocumentsRef.current.delete(id);
   }
 
-  function handleSwitchTab(id: string): void {
+  /**
+   * Activating a tab is gated on its database becoming the live one: SQL runs
+   * against whatever database Rust last switched to, so activating first and
+   * switching afterwards can leave the tab pointing at one database while
+   * statements execute on another. On failure the previous tab stays active and
+   * the reason is shown, rather than the rejection being swallowed.
+   */
+  async function handleSwitchTab(id: string): Promise<void> {
+    const target = stores.tabs.getState().tabs.find((item) => item.id === id);
+    const live = stores.session.getState();
+
+    if (target?.databaseName && live.isConnected && live.databaseName !== target.databaseName) {
+      try {
+        await stores.session.getState().switchDatabase(target.databaseName);
+      } catch (error) {
+        setDatabaseSwitchError(unknownErrorMessage(error, ConnectionCopy.databaseSwitchErrorHint));
+        return;
+      }
+    }
+    setDatabaseSwitchError(null);
+
     stores.tabs.getState().switchTab(id);
     const tab = stores.tabs.getState().tabs.find((item) => item.id === id);
     const session = stores.session.getState();
-
-    if (tab?.databaseName && session.isConnected && session.databaseName !== tab.databaseName) {
-      void stores.session
-        .getState()
-        .switchDatabase(tab.databaseName)
-        .catch(() => undefined);
-    }
 
     const effectiveDatabase = tab?.databaseName ?? session.databaseName;
     const identity =
@@ -632,7 +649,14 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
       });
   }
 
-  function handleCancelSql(): void {
+  /**
+   * Cancelled is published only once the backend confirms it. Marking the run
+   * cancelled up front (and bumping its generation) made a rejected cancel look
+   * successful while PostgreSQL kept executing, and discarded the result that
+   * eventually arrived. On failure the run keeps its generation, so its result
+   * still lands, and the reason is shown instead of being swallowed.
+   */
+  async function handleCancelSql(): Promise<void> {
     const liveId = stores.session.getState().connectionId;
     if (liveId === null) return;
     const tabId = stores.tabs.getState().activeTabId;
@@ -641,8 +665,19 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
     if (tab === undefined || tab.status?.kind !== "running") return;
     const runId = stores.tabs.getState().getRunGeneration(tabId);
     if (runId === null) return;
+    if (cancellingRunsRef.current.has(runId)) return;
+    cancellingRunsRef.current.add(runId);
+    try {
+      await ipc.cancelQuery(liveId, runId);
+    } catch (error) {
+      stores.tabs
+        .getState()
+        .applyRunFailure(tabId, unknownErrorMessage(error, ResultsCopy.cancelFailed), runId);
+      return;
+    } finally {
+      cancellingRunsRef.current.delete(runId);
+    }
     stores.tabs.getState().applyRunCancelled(tabId);
-    void ipc.cancelQuery(liveId, runId).catch(() => undefined);
   }
 
   function handleClearTabResults(): void {
@@ -1011,7 +1046,7 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
         onRunSql={onRunSql}
         databaseName={activeTabDatabaseName ?? databaseName}
         sqlRunning={status.kind === "running"}
-        onCancelSql={handleCancelSql}
+        onCancelSql={() => void handleCancelSql()}
         onClearTabResults={handleClearTabResults}
         onCommittedFromChange={handleCommittedFromChange}
         historyStore={stores.history}
@@ -1080,6 +1115,12 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
             <div className="app-connection-error" role="alert">
               <strong>{ConnectionCopy.connectionError}</strong>
               <p>{launchError}</p>
+            </div>
+          ) : null}
+          {databaseSwitchError ? (
+            <div className="app-connection-error" role="alert">
+              <strong>{ConnectionCopy.databaseSwitchError}</strong>
+              <p>{databaseSwitchError}</p>
             </div>
           ) : null}
           {/* Rail and panel share one column and both stay mounted: the column
@@ -1181,7 +1222,7 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
               mutationToast={mutationToast}
               canvas={canvas}
               onNewTab={handleNewTab}
-              onSwitchTab={handleSwitchTab}
+              onSwitchTab={(id) => void handleSwitchTab(id)}
               onCloseTab={handleCloseTab}
               onSelectQuery={handleSelectQuery}
               onNewQuery={handleNewQuery}

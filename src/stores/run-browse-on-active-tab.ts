@@ -178,6 +178,7 @@ async function fetchAndPublishBrowsePage(
         ctx.safePage,
         tabGeneration,
         timers,
+        ctx.browseGeneration,
       );
     }
     if (outcome.kind === "query-error") {
@@ -204,7 +205,7 @@ async function fetchAndPublishBrowsePage(
     if (isVisibleBrowsePage(stores, ctx.tabId, ctx.safePage)) {
       await publishBrowsePageToTab(stores, ctx.tabId, table, visible, tabGeneration);
     }
-    stores.browse.getState().publish(stores.browse.getState().generation, {
+    stores.browse.getState().publish(ctx.browseGeneration, {
       lifecycle: { phase: "ready" },
     });
     return cachedPageToQueryResult(visible);

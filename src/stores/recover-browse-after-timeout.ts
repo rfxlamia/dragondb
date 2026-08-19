@@ -113,11 +113,13 @@ export async function waitForBrowseCancellation(
   stores: AppStores,
   retry: BrowseRetryTarget,
   timers: TimerHandles,
+  generation: number,
 ): Promise<void> {
   const cancelWait = createFirstSettlement<"cancel" | "stuck">();
   await new Promise<void>((resolve) => {
     const finish = (phase: "retryReady" | "reconnectRequired", error: string | null) => {
-      const generation = stores.browse.getState().generation;
+      // publish() rejects a stale generation, so a browse that moved on while
+      // the cancel was in flight keeps its own lifecycle.
       stores.browse.getState().publish(generation, {
         lifecycle: { phase, retry, error },
       });
@@ -147,14 +149,32 @@ export async function settleBrowseTimeout(
   page: number,
   runId: number,
   timers: TimerHandles,
+  browseGeneration: number,
 ): Promise<never> {
+  // The browse that timed out may no longer be the current one. Cancelling its
+  // network query is still correct; touching the newer browse's cache or
+  // lifecycle is not.
+  if (stores.browse.getState().generation !== browseGeneration) {
+    await ipc.cancelQuery(identity.connectionId, runId).catch(() => undefined);
+    throw new BrowseTimeoutError();
+  }
   stores.browse.getState().invalidateCache();
   const retry = retryTargetFor(identity, page);
+  // invalidateCache() bumped the generation; recapture so this timeout's own
+  // publishes land while anything newer still displaces them.
   const generation = stores.browse.getState().generation;
   stores.browse.getState().publish(generation, {
     lifecycle: { phase: "cancelling", retry, error: null },
   });
-  await waitForBrowseCancellation(ipc, identity.connectionId, runId, stores, retry, timers);
+  await waitForBrowseCancellation(
+    ipc,
+    identity.connectionId,
+    runId,
+    stores,
+    retry,
+    timers,
+    generation,
+  );
   throw new BrowseTimeoutError();
 }
 

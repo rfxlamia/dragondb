@@ -3269,3 +3269,129 @@ describe("App tab switch reconciles the live database", () => {
     await waitFor(() => expect(switchDatabase).toHaveBeenCalledWith(expect.anything(), "shop"));
   });
 });
+
+describe("failed database switch on tab activation", () => {
+  // handleSwitchTab activates the target tab, then fires switchDatabase and
+  // swallows rejection. On failure the active tab claims database B while the
+  // Rust session is still on database A, so later SQL runs on the wrong one.
+  it("does not leave the active tab claiming a database the session never switched to", async () => {
+    const ipc = createMockDragonIpc("happy");
+    await ipc.createDatabase("shop");
+    await ipc.createDatabase("warehouse");
+    const saveTabState = vi.spyOn(ipc, "saveTabState");
+    const switchDatabase = vi.spyOn(ipc, "switchDatabase");
+    const user = userEvent.setup();
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
+
+    await user.selectOptions(screen.getByTestId(ConnectionAccessibility.databasePicker), "shop");
+    await waitFor(() => expect(document.title).toBe("shop"));
+
+    await user.click(screen.getByTestId(TabBarAccessibility.newTab));
+    await user.selectOptions(
+      screen.getByTestId(ConnectionAccessibility.databasePicker),
+      "warehouse",
+    );
+    await waitFor(() => expect(document.title).toBe("warehouse"));
+
+    // The backend refuses the switch back to tab 1's database.
+    switchDatabase.mockRejectedValueOnce(new Error("switch failed"));
+    await user.click(defined(screen.getAllByRole("tab")[0], "expected first tab"));
+    await waitFor(() => expect(switchDatabase).toHaveBeenLastCalledWith(expect.anything(), "shop"));
+
+    // document.title follows the LIVE session database.
+    const liveDatabase = document.title;
+    const activeTabPersists = saveTabState.mock.calls
+      .map(([dto]) => dto)
+      .filter((dto) => dto.isActive);
+    const activeTabDatabase = activeTabPersists[activeTabPersists.length - 1]?.databaseName;
+
+    expect(activeTabDatabase).toBe(liveDatabase);
+    // The rejection must be visible, not swallowed.
+    expect(screen.getByText(ConnectionCopy.databaseSwitchError)).toBeInTheDocument();
+  });
+});
+
+describe("SQL cancellation that the backend rejects", () => {
+  // handleCancelSql marks the tab cancelled before cancelQuery resolves and
+  // swallows its rejection, so a failed cancellation still reads as cancelled
+  // while PostgreSQL keeps executing the statement.
+  it("does not report the run as cancelled when cancelQuery fails", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const runQuery = vi.spyOn(ipc, "runQuery").mockImplementation(async () => {
+      await gate;
+      return { columns: ["n"], rows: [[99]], rowsAffected: null, durationMs: 12 };
+    });
+    const cancelQuery = vi.spyOn(ipc, "cancelQuery").mockRejectedValue(new Error("cancel refused"));
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
+    await user.selectOptions(screen.getByLabelText("Catalog"), "app");
+    await waitFor(() => expect(document.title).toBe("app"));
+    await user.click(screen.getByRole("radio", { name: /sql/i }));
+    fireEvent.change(screen.getByRole("textbox", { name: "SQL editor" }), {
+      target: { value: "SELECT pg_sleep(10)" },
+    });
+
+    vi.useFakeTimers();
+    try {
+      const timerUser = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+      fireEvent.click(screen.getByRole("button", { name: SqlHatchCopy.run }));
+      await waitFor(() => expect(runQuery).toHaveBeenCalledTimes(1));
+      await vi.advanceTimersByTimeAsync(3001);
+      await timerUser.keyboard("{Escape}");
+    } finally {
+      vi.useRealTimers();
+    }
+
+    await waitFor(() => expect(cancelQuery).toHaveBeenCalledTimes(1));
+    // The statement was never cancelled — the UI must not claim it was.
+    expect(screen.queryByText(SqlHatchCopy.queryCancelled)).toBeNull();
+
+    release();
+  });
+
+  it("does not silently discard the result of a run whose cancellation failed", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const runQuery = vi.spyOn(ipc, "runQuery").mockImplementation(async () => {
+      await gate;
+      return { columns: ["n"], rows: [[99]], rowsAffected: null, durationMs: 12 };
+    });
+    const cancelQuery = vi.spyOn(ipc, "cancelQuery").mockRejectedValue(new Error("cancel refused"));
+    render(<App ipc={ipc} />);
+    await connectFirst(user, ipc);
+    await user.selectOptions(screen.getByLabelText("Catalog"), "app");
+    await waitFor(() => expect(document.title).toBe("app"));
+    await user.click(screen.getByRole("radio", { name: /sql/i }));
+    fireEvent.change(screen.getByRole("textbox", { name: "SQL editor" }), {
+      target: { value: "SELECT pg_sleep(10)" },
+    });
+
+    vi.useFakeTimers();
+    try {
+      const timerUser = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+      fireEvent.click(screen.getByRole("button", { name: SqlHatchCopy.run }));
+      await waitFor(() => expect(runQuery).toHaveBeenCalledTimes(1));
+      await vi.advanceTimersByTimeAsync(3001);
+      await timerUser.keyboard("{Escape}");
+    } finally {
+      vi.useRealTimers();
+    }
+    await waitFor(() => expect(cancelQuery).toHaveBeenCalledTimes(1));
+
+    // PostgreSQL kept executing and the statement completed. Its rows must not
+    // vanish: applyRunCancelled already bumped the generation, so the result is
+    // dropped as stale even though the cancellation never happened.
+    release();
+    await waitFor(() => expect(screen.queryByTestId(ResultsAccessibility.grid)).not.toBeNull());
+  });
+});

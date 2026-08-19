@@ -4,6 +4,7 @@ export const ResultsCopy = {
   noRowsFound: "No rows found",
   loadingResults: "Loading results...",
   queryFailedTitle: "Query Failed",
+  cancelFailed: "Couldn't cancel this query. Reconnect, then try again.",
   nullToken: "NULL",
   multipleRowsSelected: "Multiple Rows Selected",
   selectOnlyOneRow: "Please select only one row to edit at a time.",

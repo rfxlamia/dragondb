@@ -35,8 +35,8 @@
     "semantic_hash": "fea2c09b116a57d28360f14cc69d30fd"
   },
   "src-tauri/src/commands.rs": {
-    "mtime": 1787129061.585667,
-    "ast_hash": "69ff8ef207fbe6db365b40e1229abaf3",
+    "mtime": 1787137388.8088818,
+    "ast_hash": "bb50bec3652e616e25034b86d45e20a0",
     "semantic_hash": ""
   },
   "src-tauri/src/lib.rs": {
@@ -65,8 +65,8 @@
     "semantic_hash": ""
   },
   "src-tauri/src/postgres/query.rs": {
-    "mtime": 1787129089.4752371,
-    "ast_hash": "15bd398132d4e62bec4cc4dbd4fedf29",
+    "mtime": 1787137371.0110807,
+    "ast_hash": "5c7fc33bfb34d6758399c1464ec6c1dd",
     "semantic_hash": ""
   },
   "src-tauri/src/postgres/row_ops.rs": {
@@ -305,8 +305,8 @@
     "semantic_hash": ""
   },
   "src/stores/tabs-store.ts": {
-    "mtime": 1787124212.0984538,
-    "ast_hash": "01b65a0f56cf3c876b0aec47ac61a27e",
+    "mtime": 1787137312.7645528,
+    "ast_hash": "d5e2d8e9b6bae92bba4e52d1852afa5f",
     "semantic_hash": ""
   },
   "src/stores/types.ts": {
@@ -725,8 +725,8 @@
     "semantic_hash": ""
   },
   "tests/ui/app-wiring.test.tsx": {
-    "mtime": 1787123496.0694528,
-    "ast_hash": "cac94fc56f4e89096039226924652031",
+    "mtime": 1787135713.0151489,
+    "ast_hash": "f3cc67b77f17eef55269c057b6ff38be",
     "semantic_hash": ""
   },
   "tests/ui/connection/connection-form.test.tsx": {
@@ -1482,6 +1482,11 @@
   "tests/stores/tab-database-mismatch-bug.test.ts": {
     "mtime": 1787128914.0058725,
     "ast_hash": "d74e6ad29152b2120a27845285d44796",
+    "semantic_hash": ""
+  },
+  "tests/stores/run-id-collision-bug.test.ts": {
+    "mtime": 1787136012.5439517,
+    "ast_hash": "fc26ce1718a8b34fe2858715d37a1778",
     "semantic_hash": ""
   }
 }

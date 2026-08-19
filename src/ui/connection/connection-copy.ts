@@ -67,6 +67,8 @@ export const ConnectionCopy = {
   collapseConnection: "Hide sidebar",
   showConnection: "Show sidebar",
   connectionError: "Connection Error",
+  databaseSwitchError: "Couldn't switch database",
+  databaseSwitchErrorHint: "Couldn't switch to that tab's database. Reconnect, then try again.",
   noDatabases: "No databases",
 } as const;
 

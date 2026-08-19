@@ -195,11 +195,15 @@ export function createBrowseSessionStore(): StoreApi<BrowseSessionState> {
     startBrowse(identity) {
       persistProjection(get());
       clearCacheAndInFlight();
+      // Identity change is a generation change: work started against the old
+      // identity (an in-flight query, a pending timeout) must not publish into
+      // the new one.
       set({
         identity,
         page: 0,
         hasNext: false,
         lifecycle: IDLE,
+        generation: get().generation + 1,
       });
       persistProjection(get());
     },
