@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ColumnInfo, DragonIpc, TableRef } from "../../ipc/contract";
 import { tableDisplayName } from "../../lib/table-display-name";
 import { unknownErrorMessage } from "../../lib/unknown-error-message";
-import { ChevronDownIcon, ChevronRightIcon, TableIcon } from "../icons";
+import { ChevronDownIcon, ChevronRightIcon, SearchIcon, TableIcon } from "../icons";
 import { TableContextMenu } from "./table-context-menu";
 import { TableDdlSheet } from "./table-ddl-sheet";
 import { TableExportSheet } from "./table-export-sheet";
@@ -28,6 +28,8 @@ export type TableListProps = {
   onFetchAll?: (table: TableRef) => Promise<{ columns: string[]; rows: unknown[][] }>;
   saveCsvFile?: DragonIpc["saveCsvFile"];
   saveTextFile?: DragonIpc["saveTextFile"];
+  /** True while a sheet or confirm owns this list — see ConnectionPanel. */
+  onBlockingChange?: (blocking: boolean) => void;
 };
 
 type PendingAdmin = { table: TableRef; kind: "drop" | "truncate" };
@@ -46,6 +48,7 @@ export function TableList(props: TableListProps): React.JSX.Element {
     onFetchAll,
     saveCsvFile,
     saveTextFile,
+    onBlockingChange,
   } = props;
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
   const [pending, setPending] = useState<PendingAdmin | null>(null);
@@ -56,8 +59,18 @@ export function TableList(props: TableListProps): React.JSX.Element {
   const [displayedBySchema, setDisplayedBySchema] = useState<Readonly<Record<string, number>>>(
     () => ({}),
   );
+  const [filter, setFilter] = useState("");
+  const [collapsedSchemas, setCollapsedSchemas] = useState<ReadonlySet<string>>(() => new Set());
 
-  const groups = groupTables(tables);
+  const blocking = pending !== null || ddl !== null || exportTable !== null;
+  useEffect(() => {
+    onBlockingChange?.(blocking);
+  }, [blocking, onBlockingChange]);
+
+  const needle = filter.trim().toLowerCase();
+  const matchedTables =
+    needle === "" ? tables : tables.filter((table) => table.name.toLowerCase().includes(needle));
+  const groups = groupTables(matchedTables);
   const firstKey = tables[0] ? catalogKey(tables[0]) : null;
   const canExport = Boolean(onFetchAll && saveCsvFile && saveTextFile);
 
@@ -110,116 +123,158 @@ export function TableList(props: TableListProps): React.JSX.Element {
     });
   }
 
+  function toggleSchema(schema: string): void {
+    setCollapsedSchemas((current) => {
+      const next = new Set(current);
+      if (next.has(schema)) next.delete(schema);
+      else next.add(schema);
+      return next;
+    });
+  }
+
   return (
     <div className="table-list" data-testid={TablesAccessibility.list}>
+      <div className="ui-search table-list__search">
+        <span className="ui-search__icon">
+          <SearchIcon />
+        </span>
+        <input
+          type="search"
+          className="ui-search__input"
+          aria-label={TablesCopy.searchTables}
+          placeholder={TablesCopy.searchTables}
+          data-testid={TablesAccessibility.search}
+          value={filter}
+          onChange={(event) => setFilter(event.target.value)}
+        />
+      </div>
+      {groups.length === 0 ? (
+        <p className="table-list__empty">{TablesCopy.noMatchingTables}</p>
+      ) : null}
       {groups.map((group) => {
         const displayedCount = displayedBySchema[group.schema] ?? SCHEMA_BATCH_SIZE;
         const visibleTables = group.tables.slice(0, displayedCount);
         const hasMore = group.tables.length > displayedCount;
         return (
           <section key={group.schema} className="table-list__schema">
-            <h3 className="table-list__schema-title">{group.schema}</h3>
-            <ul className="table-list__rows">
-              {visibleTables.map((table) => {
-                const key = catalogKey(table);
-                const isExpanded = expanded.has(key);
-                const columns = columnsByTable[key] ?? [];
-                const expandLabel =
-                  key === firstKey && !isExpanded
-                    ? TablesCopy.expandColumns
-                    : isExpanded
-                      ? TablesCopy.collapseColumns
-                      : `${table.name} columns`;
-                return (
-                  <li key={key} className="table-list__row">
-                    <div className="table-list__row-main ui-row-host">
-                      <button
-                        type="button"
-                        className="table-list__expand"
-                        aria-expanded={isExpanded}
-                        aria-label={expandLabel}
-                        onClick={() => toggleExpanded(table)}
-                      >
-                        {isExpanded ? (
-                          <ChevronDownIcon size={13} />
-                        ) : (
-                          <ChevronRightIcon size={13} />
-                        )}
-                      </button>
-                      {table.tableType === "foreign" ? (
-                        <span
-                          className="table-list__foreign"
-                          role="img"
-                          aria-label={TablesCopy.foreignTable}
-                        >
-                          <ForeignTableIcon />
-                        </span>
-                      ) : (
-                        <span className="table-list__glyph">
-                          <TableIcon size={14} />
-                        </span>
-                      )}
-                      <button
-                        type="button"
-                        className="table-list__name"
-                        onClick={() => onBrowse(table)}
-                      >
-                        {tableDisplayName(table)}
-                      </button>
-                      <TableContextMenu
-                        executing={executing}
-                        exportDisabled={!canExport}
-                        onRefresh={() => onRefresh?.(table)}
-                        onDdl={() => void handleDdl(table)}
-                        onExport={() => {
-                          if (canExport) setExportTable(table);
-                        }}
-                        onTruncate={() => setPending({ table, kind: "truncate" })}
-                        onDrop={() => setPending({ table, kind: "drop" })}
-                        truncateDisabled={table.tableType === "foreign"}
-                      />
-                    </div>
-                    {isExpanded ? (
-                      <ul className="table-list__columns">
-                        {columns.map((column) => (
-                          <li key={column.name} className="table-list__column">
-                            <span className="table-list__column-name">{column.name}</span>
-                            <span className="table-list__column-type">{column.dataType}</span>
-                            {column.isPrimaryKey ? (
-                              <span
-                                className="table-list__key"
-                                role="img"
-                                aria-label={TablesCopy.primaryKey}
-                              >
-                                <KeyIcon />
-                              </span>
-                            ) : null}
-                            {column.isForeignKey ? (
-                              <span
-                                className="table-list__key"
-                                role="img"
-                                aria-label={TablesCopy.foreignKey}
-                              >
-                                <FkIcon />
-                              </span>
-                            ) : null}
-                          </li>
-                        ))}
-                      </ul>
-                    ) : null}
-                  </li>
-                );
-              })}
-            </ul>
-            {hasMore ? (
+            <h3 className="table-list__schema-title">
               <button
                 type="button"
-                className="table-list__load-more"
-                onClick={() => loadMoreSchema(group.schema)}
+                className="table-list__schema-toggle"
+                data-testid={TablesAccessibility.schemaToggle(group.schema)}
+                aria-expanded={!collapsedSchemas.has(group.schema)}
+                onClick={() => toggleSchema(group.schema)}
               >
-                {TablesCopy.loadMore}
+                {collapsedSchemas.has(group.schema) ? <ChevronRightIcon /> : <ChevronDownIcon />}
+                <span className="table-list__schema-name">{group.schema}</span>
+                <span className="table-list__schema-count">{group.tables.length}</span>
               </button>
-            ) : null}
+            </h3>
+            {collapsedSchemas.has(group.schema) ? null : (
+              <>
+                <ul className="table-list__rows">
+                  {visibleTables.map((table) => {
+                    const key = catalogKey(table);
+                    const isExpanded = expanded.has(key);
+                    const columns = columnsByTable[key] ?? [];
+                    const expandLabel =
+                      key === firstKey && !isExpanded
+                        ? TablesCopy.expandColumns
+                        : isExpanded
+                          ? TablesCopy.collapseColumns
+                          : `${table.name} columns`;
+                    return (
+                      <li key={key} className="table-list__row">
+                        <div className="table-list__row-main ui-row-host">
+                          <button
+                            type="button"
+                            className="table-list__expand"
+                            aria-expanded={isExpanded}
+                            aria-label={expandLabel}
+                            onClick={() => toggleExpanded(table)}
+                          >
+                            {isExpanded ? (
+                              <ChevronDownIcon size={13} />
+                            ) : (
+                              <ChevronRightIcon size={13} />
+                            )}
+                          </button>
+                          {table.tableType === "foreign" ? (
+                            <span
+                              className="table-list__foreign"
+                              role="img"
+                              aria-label={TablesCopy.foreignTable}
+                            >
+                              <ForeignTableIcon />
+                            </span>
+                          ) : (
+                            <span className="table-list__glyph">
+                              <TableIcon size={14} />
+                            </span>
+                          )}
+                          <button
+                            type="button"
+                            className="table-list__name"
+                            onClick={() => onBrowse(table)}
+                          >
+                            {tableDisplayName(table)}
+                          </button>
+                          <TableContextMenu
+                            executing={executing}
+                            exportDisabled={!canExport}
+                            onRefresh={() => onRefresh?.(table)}
+                            onDdl={() => void handleDdl(table)}
+                            onExport={() => {
+                              if (canExport) setExportTable(table);
+                            }}
+                            onTruncate={() => setPending({ table, kind: "truncate" })}
+                            onDrop={() => setPending({ table, kind: "drop" })}
+                            truncateDisabled={table.tableType === "foreign"}
+                          />
+                        </div>
+                        {isExpanded ? (
+                          <ul className="table-list__columns">
+                            {columns.map((column) => (
+                              <li key={column.name} className="table-list__column">
+                                <span className="table-list__column-name">{column.name}</span>
+                                <span className="table-list__column-type">{column.dataType}</span>
+                                {column.isPrimaryKey ? (
+                                  <span
+                                    className="table-list__key"
+                                    role="img"
+                                    aria-label={TablesCopy.primaryKey}
+                                  >
+                                    <KeyIcon />
+                                  </span>
+                                ) : null}
+                                {column.isForeignKey ? (
+                                  <span
+                                    className="table-list__key"
+                                    role="img"
+                                    aria-label={TablesCopy.foreignKey}
+                                  >
+                                    <FkIcon />
+                                  </span>
+                                ) : null}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : null}
+                      </li>
+                    );
+                  })}
+                </ul>
+                {hasMore ? (
+                  <button
+                    type="button"
+                    className="table-list__load-more"
+                    onClick={() => loadMoreSchema(group.schema)}
+                  >
+                    {TablesCopy.loadMore}
+                  </button>
+                ) : null}
+              </>
+            )}
           </section>
         );
       })}

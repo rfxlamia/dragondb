@@ -1,18 +1,15 @@
 /**
- * Connected-workspace shell: Queries sits beside the tab strip + canvas, and
- * results span the full main-column width below that row (flush to the
- * Connection sidebar). Extracted from `App.tsx` (T12) to keep that file a thin
- * composer of stores/hooks. `App.tsx` still owns the `app-main-column` wrapper
- * div, the `VisualQueryCanvas` construction (`canvas` prop passed in here), and
- * every handler — this component is presentational/wiring only.
+ * Connected-workspace shell: tab strip + canvas above results spanning the full
+ * main-column width (flush to the sidebar). Extracted from `App.tsx` (T12) to
+ * keep that file a thin composer of stores/hooks. `App.tsx` still owns the
+ * `app-main-column` wrapper div, the `VisualQueryCanvas` construction (`canvas`
+ * prop passed in here), and every handler — this component is presentational/wiring only.
  */
 import type { ReactNode } from "react";
-import { Group, Panel, Separator } from "react-resizable-panels";
 import type {
   ColumnInfo,
   ConnectionProfileDto,
   ProfileId,
-  QueryFolderDto,
   SavedQueryDto,
 } from "../../ipc/contract";
 import type { QueryResultsDateFormat } from "../../lib/date-format-setting";
@@ -22,7 +19,6 @@ import type {
   TabRunStatus,
   TabState,
 } from "../../stores/tabs-store";
-import { QueriesColumn } from "../library/queries-column";
 import { QueryResultsPane, type RowReloadRecovery } from "../results/query-results-pane";
 import { MutationToast, type MutationToastTable } from "./mutation-toast";
 import { TabBar } from "./tab-bar";
@@ -37,12 +33,6 @@ export type AppWorkspaceProps = {
   profiles: ConnectionProfileDto[];
   profileId: ProfileId | null;
   libraryQueries: SavedQueryDto[];
-  libraryFolders: QueryFolderDto[];
-  savedQueryId: string | null;
-  executingQueryId: string | null;
-  schemaNames: string[];
-  selectedSchema: string | null;
-  schemaError: string | null;
   status: TabRunStatus;
   compact: TabResultGrid | null;
   raw: TabResultGrid | null;
@@ -65,23 +55,10 @@ export type AppWorkspaceProps = {
   onSaveCsv: (csv: string) => void | Promise<void>;
   onRetryRowReload: () => void | Promise<void>;
   mutationToast: MutationToastData | null;
-  canvas: React.ReactNode;
+  canvas: ReactNode;
   onNewTab: () => void;
   onSwitchTab: (id: string) => void;
   onCloseTab: (id: string) => void;
-  onSelectQuery: (id: string | null) => void;
-  onNewQuery: () => void;
-  onRenameQuery: (id: string, name: string) => void;
-  onDeleteQuery: (id: string) => void;
-  onMoveQuery: (id: string, folderId: string | null) => void;
-  onDeleteFolder: (id: string, deleteQueries: boolean) => void;
-  onLibraryRefresh: () => void | Promise<void>;
-  onDuplicateQuery: (id: string) => void;
-  onRenameFolder: (id: string, name: string) => void;
-  onCreateFolder: (name: string) => Promise<{ id: string }> | { id: string };
-  hasCachedResult: (id: string) => boolean;
-  onSelectSchema: (schema: string | null) => void;
-  onDismissSchemaError: () => void;
   onDismissMutationToast: () => void;
   onViewMutationTable: (table: MutationToastTable) => void;
 };
@@ -95,12 +72,6 @@ export function AppWorkspace(props: AppWorkspaceProps): React.JSX.Element {
     profiles,
     profileId,
     libraryQueries,
-    libraryFolders,
-    savedQueryId,
-    executingQueryId,
-    schemaNames,
-    selectedSchema,
-    schemaError,
     status,
     compact,
     raw,
@@ -122,19 +93,6 @@ export function AppWorkspace(props: AppWorkspaceProps): React.JSX.Element {
     onNewTab,
     onSwitchTab,
     onCloseTab,
-    onSelectQuery,
-    onNewQuery,
-    onRenameQuery,
-    onDeleteQuery,
-    onMoveQuery,
-    onDeleteFolder,
-    onLibraryRefresh,
-    onDuplicateQuery,
-    onRenameFolder,
-    onCreateFolder,
-    hasCachedResult,
-    onSelectSchema,
-    onDismissSchemaError,
     onDismissMutationToast,
     onViewMutationTable,
   } = props;
@@ -142,50 +100,13 @@ export function AppWorkspace(props: AppWorkspaceProps): React.JSX.Element {
   const toast = mutationToast;
   const tableName = toast?.tableName;
 
-  const queriesPanel = (
-    <Panel className="app-workspace-split__queries" defaultSize={220} minSize={160}>
-      <QueriesColumn
-        queries={libraryQueries}
-        folders={libraryFolders}
-        selectedQueryId={savedQueryId}
-        onSelectQuery={onSelectQuery}
-        onNewQuery={onNewQuery}
-        onRenameQuery={onRenameQuery}
-        onDeleteQuery={onDeleteQuery}
-        onMoveQuery={onMoveQuery}
-        onDeleteFolder={onDeleteFolder}
-        onRefresh={onLibraryRefresh}
-        onDuplicateQuery={onDuplicateQuery}
-        onRenameFolder={onRenameFolder}
-        onCreateFolder={onCreateFolder}
-        hasCachedResult={hasCachedResult}
-        executingQueryId={executingQueryId}
-        schemas={schemaNames}
-        selectedSchema={selectedSchema}
-        onSelectSchema={onSelectSchema}
-        schemaError={schemaError}
-        onDismissSchemaError={onDismissSchemaError}
-      />
-    </Panel>
-  );
-
-  const queriesRow = (main: ReactNode) => (
-    <Group orientation="horizontal" className="app-workspace-split">
-      {queriesPanel}
-      <Separator className="app-workspace-split__separator" />
-      <Panel className="app-workspace-split__main" minSize={400}>
-        {main}
-      </Panel>
-    </Group>
-  );
-
   if (!workspaceReady) {
-    return queriesRow(null);
+    return <div className="app-workspace-main" />;
   }
 
   return (
     <WorkspaceSplit
-      canvas={queriesRow(
+      canvas={
         <div className="app-workspace-main">
           <TabBar
             tabs={tabs.map((tab, index) => {
@@ -213,8 +134,8 @@ export function AppWorkspace(props: AppWorkspaceProps): React.JSX.Element {
             onCloseTab={onCloseTab}
           />
           {canvas}
-        </div>,
-      )}
+        </div>
+      }
       results={
         <div className="app-results-wrapper">
           {tableName ? (

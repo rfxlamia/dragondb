@@ -1,17 +1,14 @@
 import { useCallback, useEffect, useImperativeHandle, useState } from "react";
 import type {
-  ColumnInfo,
   ConnectionId,
   ConnectionProfileDto,
   ConnectResult,
   DragonIpc,
   IpcError,
   ProfileId,
-  TableRef,
 } from "../../ipc/contract";
 import { ConnectionStringParseError } from "../../lib/connection-string";
-import { ConnectIcon, DisconnectIcon, SidebarIcon } from "../icons";
-import { ConnectionAccessibility } from "./connection-accessibility";
+import { ConnectIcon, DisconnectIcon } from "../icons";
 import { ConnectionCopy, humanIpcErrorMessage } from "./connection-copy";
 import { ConnectionCreatedDialog } from "./connection-created-dialog";
 import { ConnectionDatabasePicker } from "./connection-database-picker";
@@ -25,7 +22,6 @@ import { ConnectionFormSheet } from "./connection-form-sheet";
 import { ConnectionPanelActions } from "./connection-panel-actions";
 import { ConnectionProfileList } from "./connection-profile-list";
 import { ConnectionStatusBanner, type ConnectionStatusPhase } from "./connection-status-banner";
-import { ConnectionTablesList } from "./connection-tables-list";
 import { useConnectionConfirmations } from "./use-connection-confirmations";
 import { useConnectionStringMode } from "./use-connection-string-mode";
 import "./connection.css";
@@ -54,27 +50,12 @@ export interface ConnectionPanelProps {
   formVisible: boolean;
   onFormVisibleChange: (next: boolean) => void;
   onProfilesLoaded: (count: number) => void;
-  tables?: TableRef[];
-  tablesLoading?: boolean;
-  tablesErrorMessage?: string | null;
-  onBrowse?: (table: TableRef) => void;
-  columnsByTable?: Record<string, ColumnInfo[]>;
-  executing?: boolean;
-  onDrop?: (table: TableRef) => void | Promise<void>;
-  onTruncate?: (table: TableRef) => void | Promise<void>;
-  onGenerateDdl?: (table: TableRef) => unknown;
-  onRefresh?: (table: TableRef) => void;
-  onFetchAll?: (table: TableRef) => Promise<{ columns: string[]; rows: unknown[][] }>;
-  onExpand?: (table: TableRef) => void;
-  saveCsvFile?: DragonIpc["saveCsvFile"];
-  saveTextFile?: DragonIpc["saveTextFile"];
   connectionId?: ConnectionId | null;
   databaseName?: string | null;
   /** Session switchDatabase — picker must not rewrite profile.database. */
   onSwitchDatabase?: (name: string) => Promise<void>;
   /** Clear session/tab database selection when the active catalog is dropped. */
   onClearDatabase?: () => Promise<void>;
-  onCollapse?: () => void;
   missingDatabase?: boolean;
   /** Session connect via store (generation-guarded). Profile CRUD stays on ipc. */
   connectProfile: (id: ProfileId) => Promise<ConnectResult>;
@@ -84,6 +65,10 @@ export interface ConnectionPanelProps {
   onDisconnected: () => void;
   onSwitchSuccess: (result: ConnectResult) => void;
   onSwitchFailure: (error: IpcError) => void;
+  /** True while a sheet or confirm owns this panel, so the shell can freeze the
+      sidebar's view switch — a fixed-position sheet would otherwise be stranded
+      over a body that is no longer there. */
+  onBlockingChange?: (blocking: boolean) => void;
 }
 
 export function ConnectionPanel(props: ConnectionPanelProps): React.JSX.Element {
@@ -95,20 +80,6 @@ export function ConnectionPanel(props: ConnectionPanelProps): React.JSX.Element 
     formVisible,
     onFormVisibleChange,
     onProfilesLoaded,
-    tables = [],
-    tablesLoading = false,
-    tablesErrorMessage = null,
-    onBrowse,
-    columnsByTable,
-    executing,
-    onDrop,
-    onTruncate,
-    onGenerateDdl,
-    onRefresh,
-    onFetchAll,
-    onExpand,
-    saveCsvFile,
-    saveTextFile,
     connectProfile,
     disconnectSession,
     onConnected,
@@ -117,8 +88,8 @@ export function ConnectionPanel(props: ConnectionPanelProps): React.JSX.Element 
     databaseName: databaseNameProp,
     onSwitchDatabase,
     onClearDatabase,
-    onCollapse,
     missingDatabase = false,
+    onBlockingChange,
   } = props;
 
   const [profiles, setProfiles] = useState<ConnectionProfileDto[]>([]);
@@ -158,6 +129,12 @@ export function ConnectionPanel(props: ConnectionPanelProps): React.JSX.Element 
     setBusy,
     setProfiles,
   });
+
+  const [pickerBlocking, setPickerBlocking] = useState(false);
+  const blocking = formVisible || confirm.hasPending || pickerBlocking;
+  useEffect(() => {
+    onBlockingChange?.(blocking);
+  }, [blocking, onBlockingChange]);
 
   const canConnect = selectedId !== null && !dirty && !sessionClaimed && !busy;
 
@@ -466,23 +443,6 @@ export function ConnectionPanel(props: ConnectionPanelProps): React.JSX.Element 
               <ConnectIcon />
             </button>
           ) : null}
-          {/* The form sheet is fixed-position and lives inside this panel, so it
-              would keep floating over a collapsed shell with no column left to
-              return to. The scrim already reads as "not now"; disabling makes
-              that true instead of stranding the draft. */}
-          {onCollapse ? (
-            <button
-              type="button"
-              className="ui-icon-btn"
-              data-testid={ConnectionAccessibility.collapseConnection}
-              aria-label={ConnectionCopy.collapseConnection}
-              title={ConnectionCopy.collapseConnection}
-              disabled={formVisible}
-              onClick={onCollapse}
-            >
-              <SidebarIcon />
-            </button>
-          ) : null}
         </div>
       </div>
 
@@ -515,25 +475,7 @@ export function ConnectionPanel(props: ConnectionPanelProps): React.JSX.Element 
           onCreateDatabase={handleCreateDatabase}
           onConnectDatabase={handleConnectCreatedDatabase}
           onDeleteDatabase={handleDeleteDatabase}
-        />
-      ) : null}
-
-      {sessionClaimed ? (
-        <ConnectionTablesList
-          tables={tables}
-          tablesLoading={tablesLoading}
-          tablesErrorMessage={tablesErrorMessage}
-          onBrowse={onBrowse}
-          columnsByTable={columnsByTable}
-          executing={executing}
-          onDrop={onDrop}
-          onTruncate={onTruncate}
-          onGenerateDdl={onGenerateDdl}
-          onRefresh={onRefresh}
-          onFetchAll={onFetchAll}
-          onExpand={onExpand}
-          saveCsvFile={saveCsvFile}
-          saveTextFile={saveTextFile}
+          onBlockingChange={setPickerBlocking}
         />
       ) : null}
 

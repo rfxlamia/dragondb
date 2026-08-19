@@ -3,7 +3,6 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createMockDragonIpc, fixtureProfileFields } from "../../../src/ipc/mock";
-import { TABLES_LOAD_FAILED } from "../../../src/stores/schema-store";
 import { ConnectionAccessibility } from "../../../src/ui/connection/connection-accessibility";
 import { ConnectionCopy } from "../../../src/ui/connection/connection-copy";
 import { ConnectionPanel } from "../../../src/ui/connection/connection-panel";
@@ -179,18 +178,15 @@ describe("ConnectionPanel session-action ownership", () => {
     expect(screen.getAllByRole("button", { name: ConnectionCopy.delete })).toHaveLength(1);
   });
 
-  // Collapsing unmounts the panel, and the sheet lives inside it — so an
-  // enabled collapse button behind the scrim silently discards a half-typed
-  // profile.
-  it("cannot be collapsed while the sheet holds an unsaved draft", async () => {
+  it("reports a blocking surface while the connection form is visible", () => {
     const ipc = createMockDragonIpc("happy");
-    const onCollapse = vi.fn();
+    const onBlockingChange = vi.fn();
     render(
       <ConnectionPanel
         ipc={ipc}
         {...formGateProps({ formVisible: true })}
         isConnected={false}
-        onCollapse={onCollapse}
+        onBlockingChange={onBlockingChange}
         {...sessionPropsFromIpc(ipc)}
         onConnected={vi.fn()}
         onDisconnected={vi.fn()}
@@ -198,8 +194,28 @@ describe("ConnectionPanel session-action ownership", () => {
         onSwitchFailure={vi.fn()}
       />,
     );
-    await screen.findByRole("dialog", { name: ConnectionCopy.formTitleNew });
-    expect(screen.getByTestId(ConnectionAccessibility.collapseConnection)).toBeDisabled();
+
+    expect(onBlockingChange).toHaveBeenLastCalledWith(true);
+  });
+
+  it("reports no blocking surface while the form is closed", () => {
+    const ipc = createMockDragonIpc("happy");
+    const onBlockingChange = vi.fn();
+    render(
+      <ConnectionPanel
+        ipc={ipc}
+        {...formGateProps({ formVisible: false })}
+        isConnected={false}
+        onBlockingChange={onBlockingChange}
+        {...sessionPropsFromIpc(ipc)}
+        onConnected={vi.fn()}
+        onDisconnected={vi.fn()}
+        onSwitchSuccess={vi.fn()}
+        onSwitchFailure={vi.fn()}
+      />,
+    );
+
+    expect(onBlockingChange).toHaveBeenLastCalledWith(false);
   });
 });
 
@@ -701,9 +717,6 @@ describe("ConnectionPanel Save-then-Connect", () => {
         formVisible={true}
         onFormVisibleChange={vi.fn()}
         onProfilesLoaded={vi.fn()}
-        tables={[{ schema: "public", name: "users", tableType: "regular" }]}
-        tablesLoading={false}
-        tablesErrorMessage={TABLES_LOAD_FAILED}
         {...sessionPropsFromIpc(ipc)}
         onConnected={vi.fn()}
         onDisconnected={vi.fn()}

@@ -33,8 +33,4 @@ export const QueriesCopy = {
   sortCreatedOldest: "Oldest created",
   sortUpdatedNewest: "Newest updated",
   sortUpdatedOldest: "Oldest updated",
-  allSchemas: "All schemas",
-  schema: "Schema",
-  schemaError: "Could not set the schema search path.",
-  ok: "OK",
 } as const;

@@ -1,0 +1,24 @@
+/* Sidebars recede: the rail carries the sidebar surface, and the hairline on
+   its right edge is the shell's first vertical separator. */
+.activity-rail {
+  align-items: center;
+  background: var(--surface-sidebar);
+  border-right: 1px solid var(--border-subtle);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  /* Row height, not viewport height: at =48rem the rail shares a grid row with
+     the sidebar band and the workspace sits on the row below, so a 100vh rail
+     would push the whole workspace off-screen. */
+  height: 100%;
+  max-height: 100vh;
+  padding: 0.5rem 5px;
+  position: sticky;
+  top: 0;
+  width: var(--sidebar-rail-width);
+}
+
+.activity-rail__spacer {
+  flex: 1;
+}

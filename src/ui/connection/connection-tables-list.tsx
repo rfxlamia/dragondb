@@ -1,6 +1,8 @@
 import type { ColumnInfo, DragonIpc, TableRef } from "../../ipc/contract";
 import { TABLES_LOAD_FAILED } from "../../stores/schema-store";
 import { TableList } from "../tables/table-list";
+import { TablesAccessibility } from "../tables/tables-accessibility";
+import { TablesCopy } from "../tables/tables-copy";
 import { ConnectionAccessibility } from "./connection-accessibility";
 import { ConnectionCopy } from "./connection-copy";
 
@@ -22,6 +24,12 @@ export function ConnectionTablesList(props: {
   onFetchAll?: (table: TableRef) => Promise<{ columns: string[]; rows: unknown[][] }>;
   saveCsvFile?: DragonIpc["saveCsvFile"];
   saveTextFile?: DragonIpc["saveTextFile"];
+  onBlockingChange?: (blocking: boolean) => void;
+  schemas?: string[];
+  selectedSchema?: string | null;
+  onSelectSchema?: (schema: string | null) => void;
+  schemaError?: string | null;
+  onDismissSchemaError?: () => void;
 }): React.JSX.Element {
   const {
     tables,
@@ -39,6 +47,12 @@ export function ConnectionTablesList(props: {
     onFetchAll,
     saveCsvFile,
     saveTextFile,
+    onBlockingChange,
+    schemas,
+    selectedSchema,
+    onSelectSchema,
+    schemaError,
+    onDismissSchemaError,
   } = props;
 
   let body: React.ReactNode;
@@ -68,12 +82,41 @@ export function ConnectionTablesList(props: {
         onFetchAll={onFetchAll}
         saveCsvFile={saveCsvFile}
         saveTextFile={saveTextFile}
+        onBlockingChange={onBlockingChange}
       />
     );
   }
 
   return (
     <div className="connection-tables" data-testid={ConnectionAccessibility.tablesRegion}>
+      {schemas !== undefined && schemas.length > 1 && onSelectSchema ? (
+        <label className="connection-tables__schema">
+          <span className="ui-visually-hidden">{TablesCopy.filterBySchema}</span>
+          <select
+            className="ui-quiet-select"
+            data-testid={TablesAccessibility.schemaPicker}
+            value={selectedSchema ?? ""}
+            onChange={(event) =>
+              onSelectSchema(event.target.value === "" ? null : event.target.value)
+            }
+          >
+            <option value="">{TablesCopy.allSchemas}</option>
+            {schemas.map((schema) => (
+              <option key={schema} value={schema}>
+                {schema}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
+      {schemaError ? (
+        <div className="connection-tables__schema-error" role="alert">
+          <p>{schemaError}</p>
+          <button type="button" onClick={onDismissSchemaError}>
+            {TablesCopy.ok}
+          </button>
+        </div>
+      ) : null}
       {body}
     </div>
   );

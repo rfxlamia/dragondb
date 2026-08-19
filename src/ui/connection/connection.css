@@ -437,6 +437,21 @@
   gap: 0.5rem;
 }
 
+.connection-tables__schema {
+  display: flex;
+  min-width: 0;
+}
+
+.connection-tables__schema-error {
+  background: var(--error-tint);
+  border-radius: var(--radius);
+  color: var(--error-text);
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.5rem;
+}
+
 .connection-tables-list {
   display: flex;
   flex-direction: column;

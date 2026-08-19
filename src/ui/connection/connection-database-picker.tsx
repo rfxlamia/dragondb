@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { DatabaseIcon, PlusIcon, TrashIcon } from "../icons";
 import { ConnectionAccessibility } from "./connection-accessibility";
 import { ConnectionConfirmDialog } from "./connection-confirm-dialog";
@@ -15,6 +15,8 @@ export function ConnectionDatabasePicker(props: {
   onCreateDatabase?: (name: string) => void | Promise<void>;
   onConnectDatabase?: (name: string) => void | Promise<void>;
   onDeleteDatabase?: (name: string) => void | Promise<void>;
+  /** True while this picker's create or delete dialog is open — see ConnectionPanel. */
+  onBlockingChange?: (blocking: boolean) => void;
 }): React.JSX.Element {
   const {
     isConnected,
@@ -26,6 +28,7 @@ export function ConnectionDatabasePicker(props: {
     onCreateDatabase,
     onConnectDatabase,
     onDeleteDatabase,
+    onBlockingChange,
   } = props;
   const [createOpen, setCreateOpen] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
@@ -33,6 +36,10 @@ export function ConnectionDatabasePicker(props: {
   const [deleteError, setDeleteError] = useState(false);
   const [switchError, setSwitchError] = useState(false);
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    onBlockingChange?.(createOpen || deleteOpen);
+  }, [createOpen, deleteOpen, onBlockingChange]);
 
   const empty = databases.length === 0;
   const showPulse = isConnected && (missingFromList || selected === null);

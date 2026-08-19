@@ -255,3 +255,23 @@ export function SortIcon({ size = 15 }: IconProps = {}): React.JSX.Element {
     </svg>
   );
 }
+
+export function SettingsIcon({ size = 16 }: IconProps = {}): React.JSX.Element {
+  return (
+    <svg {...svgProps(size)} aria-hidden="true">
+      <path d="M2.5 4.75h11M2.5 11.25h11" />
+      <circle cx="6" cy="4.75" r="1.75" />
+      <circle cx="10.5" cy="11.25" r="1.75" />
+    </svg>
+  );
+}
+
+export function HelpIcon({ size = 16 }: IconProps = {}): React.JSX.Element {
+  return (
+    <svg {...svgProps(size)} aria-hidden="true">
+      <circle cx="8" cy="8" r="6" />
+      <path d="M6.35 6.3a1.7 1.7 0 1 1 2.2 1.85c-.4.16-.62.5-.62.92v.28" />
+      <path d="M8 11.9h.01" />
+    </svg>
+  );
+}

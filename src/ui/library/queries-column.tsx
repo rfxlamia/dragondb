@@ -28,11 +28,8 @@ export type QueriesColumnProps = {
   onCreateFolder?: (name: string) => Promise<{ id: string }> | { id: string };
   hasCachedResult?: (id: string) => boolean;
   executingQueryId?: string | null;
-  schemas?: string[];
-  selectedSchema?: string | null;
-  onSelectSchema?: (schema: string | null) => void;
-  schemaError?: string | null;
-  onDismissSchemaError?: () => void;
+  /** True while one of this column's sheets is open — see ConnectionPanel. */
+  onBlockingChange?: (blocking: boolean) => void;
 };
 
 const REFRESH_MIN_MS = 450;
@@ -74,11 +71,7 @@ export function QueriesColumn(props: QueriesColumnProps): React.JSX.Element {
     onCreateFolder,
     hasCachedResult,
     executingQueryId,
-    schemas,
-    selectedSchema,
-    onSelectSchema,
-    schemaError,
-    onDismissSchemaError,
+    onBlockingChange,
   } = props;
   const [sheet, setSheet] = useState<QueriesSheet | null>(null);
   const [filter, setFilter] = useState("");
@@ -123,6 +116,10 @@ export function QueriesColumn(props: QueriesColumnProps): React.JSX.Element {
       : "";
   const renameBlank = renameName.trim().length === 0;
   const sheetOpen = sheet !== null;
+
+  useEffect(() => {
+    onBlockingChange?.(sheet !== null);
+  }, [sheet, onBlockingChange]);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent): void {
@@ -191,7 +188,11 @@ export function QueriesColumn(props: QueriesColumnProps): React.JSX.Element {
   }
 
   return (
-    <section className="queries-column" data-testid={QueriesAccessibility.column}>
+    <section
+      className="queries-column"
+      aria-label={QueriesCopy.title}
+      data-testid={QueriesAccessibility.column}
+    >
       <div
         className="queries-column__body"
         inert={sheetOpen ? true : undefined}
@@ -204,11 +205,6 @@ export function QueriesColumn(props: QueriesColumnProps): React.JSX.Element {
           onSortChange={setSort}
           onNewQuery={onNewQuery}
           onRefresh={onRefresh ? () => void handleRefresh() : undefined}
-          schemas={schemas}
-          selectedSchema={selectedSchema}
-          onSelectSchema={onSelectSchema}
-          schemaError={schemaError}
-          onDismissSchemaError={onDismissSchemaError}
         />
 
         {refreshing ? (

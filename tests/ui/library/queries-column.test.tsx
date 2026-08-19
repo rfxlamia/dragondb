@@ -290,51 +290,6 @@ describe("QueriesColumn", () => {
     expect(onDeleteQuery).not.toHaveBeenCalled();
   });
 
-  it("schema picker calls onSelectSchema when a schema is chosen", async () => {
-    const user = userEvent.setup();
-    const onSelectSchema = vi.fn();
-    render(
-      <QueriesColumn
-        queries={[q1]}
-        folders={[]}
-        selectedQueryId={null}
-        onSelectQuery={vi.fn()}
-        onNewQuery={vi.fn()}
-        onRenameQuery={vi.fn()}
-        onDeleteQuery={vi.fn()}
-        onMoveQuery={vi.fn()}
-        onDeleteFolder={vi.fn()}
-        schemas={["public", "analytics"]}
-        selectedSchema={null}
-        onSelectSchema={onSelectSchema}
-      />,
-    );
-    await user.selectOptions(screen.getByTestId(QueriesAccessibility.schemaPicker), "public");
-    expect(onSelectSchema).toHaveBeenCalledWith("public");
-  });
-
-  it("schema error OK dismisses the error banner", async () => {
-    const user = userEvent.setup();
-    const onDismissSchemaError = vi.fn();
-    render(
-      <QueriesColumn
-        queries={[q1]}
-        folders={[]}
-        selectedQueryId={null}
-        onSelectQuery={vi.fn()}
-        onNewQuery={vi.fn()}
-        onRenameQuery={vi.fn()}
-        onDeleteQuery={vi.fn()}
-        onMoveQuery={vi.fn()}
-        onDeleteFolder={vi.fn()}
-        schemaError={QueriesCopy.schemaError}
-        onDismissSchemaError={onDismissSchemaError}
-      />,
-    );
-    await user.click(screen.getByRole("button", { name: QueriesCopy.ok }));
-    expect(onDismissSchemaError).toHaveBeenCalledOnce();
-  });
-
   it("duplicate calls onDuplicateQuery with the selected query id", async () => {
     const user = userEvent.setup();
     const onDuplicateQuery = vi.fn();
@@ -381,5 +336,30 @@ describe("QueriesColumn", () => {
     await user.keyboard("{Delete}");
     expect(screen.queryByRole("button", { name: QueriesCopy.confirmDelete })).toBeNull();
     expect(onDeleteQuery).not.toHaveBeenCalled();
+  });
+
+  it("reports a blocking surface while a sheet is open", async () => {
+    const user = userEvent.setup();
+    const onBlockingChange = vi.fn();
+    render(
+      <QueriesColumn
+        queries={[q1]}
+        folders={[]}
+        selectedQueryId="q1"
+        onSelectQuery={vi.fn()}
+        onNewQuery={vi.fn()}
+        onRenameQuery={vi.fn()}
+        onDeleteQuery={vi.fn()}
+        onMoveQuery={vi.fn()}
+        onDeleteFolder={vi.fn()}
+        onBlockingChange={onBlockingChange}
+      />,
+    );
+
+    expect(onBlockingChange).toHaveBeenLastCalledWith(false);
+
+    await user.click(screen.getByLabelText(QueriesCopy.rename));
+
+    expect(onBlockingChange).toHaveBeenLastCalledWith(true);
   });
 });
