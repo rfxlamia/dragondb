@@ -35,8 +35,8 @@
     "semantic_hash": "fea2c09b116a57d28360f14cc69d30fd"
   },
   "src-tauri/src/commands.rs": {
-    "mtime": 1787124258.5267677,
-    "ast_hash": "70278bd71b893b664d1ddadf10e8083b",
+    "mtime": 1787129061.585667,
+    "ast_hash": "69ff8ef207fbe6db365b40e1229abaf3",
     "semantic_hash": ""
   },
   "src-tauri/src/lib.rs": {
@@ -65,8 +65,8 @@
     "semantic_hash": ""
   },
   "src-tauri/src/postgres/query.rs": {
-    "mtime": 1787127207.9479218,
-    "ast_hash": "6c972168d66e7931f8dfc2c0573a03e7",
+    "mtime": 1787129076.9703634,
+    "ast_hash": "f127ac0a66a3115ff7dd286d10b59132",
     "semantic_hash": ""
   },
   "src-tauri/src/postgres/row_ops.rs": {
@@ -90,8 +90,8 @@
     "semantic_hash": "f0bede53cf2de6112a10dea6dfe781af"
   },
   "src-tauri/src/session/mod.rs": {
-    "mtime": 1787112708.0462968,
-    "ast_hash": "7a4068d0fcc5e4b996812cfb4f6306b2",
+    "mtime": 1787128853.9867542,
+    "ast_hash": "c7e71fd08212aabbe40725db72461ba6",
     "semantic_hash": ""
   },
   "src-tauri/src/ssh/auth.rs": {
@@ -1480,8 +1480,8 @@
     "semantic_hash": ""
   },
   "tests/stores/tab-database-mismatch-bug.test.ts": {
-    "mtime": 1787125961.375168,
-    "ast_hash": "c0827c8c4360d8d2c30117b6fbd73b22",
+    "mtime": 1787128914.0058725,
+    "ast_hash": "d74e6ad29152b2120a27845285d44796",
     "semantic_hash": ""
   }
 }

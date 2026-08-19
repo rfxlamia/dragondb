@@ -242,13 +242,57 @@ mod tests {
     #[test]
     fn generate_table_ddl_sql_must_not_hardcode_create_table() {
         let sql = generate_table_ddl_sql("public", "remote_orders");
-        // The DDL template must NOT unconditionally emit 'CREATE TABLE' literal
-        // because the same function handles foreign tables. It should dynamically
-        // choose between CREATE TABLE and CREATE FOREIGN TABLE.
         let create_table_literal = "'CREATE TABLE ";
         assert!(
             !sql.contains(create_table_literal),
             "DDL must not hardcode 'CREATE TABLE' — must be dynamic for foreign tables"
+        );
+    }
+
+    #[test]
+    fn generate_table_ddl_sql_output_structure() {
+        let sql = generate_table_ddl_sql("public", "orders");
+
+        // Output DDL must include DEFAULT expressions for columns
+        assert!(
+            sql.contains("atthasdef") && sql.contains("pg_get_expr"),
+            "DDL must emit DEFAULT via pg_get_expr for columns with defaults"
+        );
+
+        // Output must format columns with indent (2 spaces + %I %s pattern)
+        assert!(
+            sql.contains("'  %I %s'"),
+            "DDL must emit indented column definitions"
+        );
+
+        // Constraints section must use pg_get_constraintdef for full constraint text
+        assert!(
+            sql.contains("pg_get_constraintdef"),
+            "DDL must use pg_get_constraintdef for PK/FK/UNIQUE/CHECK output"
+        );
+
+        // Indexes section must use pg_get_indexdef for CREATE INDEX statements
+        assert!(
+            sql.contains("pg_get_indexdef"),
+            "DDL must use pg_get_indexdef for non-constraint indexes"
+        );
+
+        // Identity/generated column handling
+        assert!(
+            sql.contains("attidentity") && sql.contains("attgenerated"),
+            "DDL must handle IDENTITY and GENERATED columns"
+        );
+
+        // Foreign table output must include SERVER clause
+        assert!(
+            sql.contains("SERVER") && sql.contains("srvname"),
+            "DDL must include SERVER for foreign tables"
+        );
+
+        // Output must use CASE for conditional CREATE TABLE vs CREATE FOREIGN TABLE
+        assert!(
+            sql.contains("CASE WHEN ti.is_foreign THEN 'CREATE FOREIGN TABLE'"),
+            "DDL must conditionally output CREATE FOREIGN TABLE"
         );
     }
 }

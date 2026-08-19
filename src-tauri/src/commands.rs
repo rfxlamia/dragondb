@@ -290,10 +290,11 @@ pub async fn run_query(
         return Err(query_cancelled_error());
     }
     let mut session = state.lock().await;
+    registry.set_active_run(run_id);
     if registry.is_run_cancelled(run_id) {
+        registry.clear_active_run(run_id);
         return Err(query_cancelled_error());
     }
-    registry.set_active_run(run_id);
     let result = session.run_query(&connection_id, sql).await;
     registry.clear_active_run(run_id);
     result

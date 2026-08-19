@@ -260,9 +260,17 @@ pub fn should_wrap_transaction(statements: &[&str]) -> bool {
             || s.starts_with("create database")
             || s.starts_with("drop database")
             || s.starts_with("create index concurrently")
+            || s.starts_with("create unique index concurrently")
             || s.starts_with("drop index concurrently")
             || s.starts_with("reindex database")
-            || s.starts_with("reindex system");
+            || s.starts_with("reindex system")
+            || s.starts_with("reindex concurrently")
+            || s.starts_with("alter system")
+            || s.starts_with("create tablespace")
+            || s.starts_with("drop tablespace")
+            || s.starts_with("create subscription")
+            || s.starts_with("drop subscription")
+            || s.starts_with("refresh materialized view concurrently");
         user_txn || illegal_in_txn
     })
 }
@@ -530,6 +538,32 @@ mod tests {
         assert!(
             !should_wrap_transaction(&["REINDEX DATABASE mydb", "SELECT 1"]),
             "REINDEX DATABASE cannot run inside a transaction block"
+        );
+        assert!(
+            !should_wrap_transaction(&[
+                "CREATE UNIQUE INDEX CONCURRENTLY idx ON t(c)",
+                "SELECT 1"
+            ]),
+            "CREATE UNIQUE INDEX CONCURRENTLY cannot run inside a transaction block"
+        );
+        assert!(
+            !should_wrap_transaction(&["REINDEX CONCURRENTLY t", "SELECT 1"]),
+            "REINDEX CONCURRENTLY cannot run inside a transaction block"
+        );
+        assert!(
+            !should_wrap_transaction(&["ALTER SYSTEM SET work_mem = '64MB'", "SELECT 1"]),
+            "ALTER SYSTEM cannot run inside a transaction block"
+        );
+        assert!(
+            !should_wrap_transaction(&[
+                "REFRESH MATERIALIZED VIEW CONCURRENTLY mv_stats",
+                "SELECT 1"
+            ]),
+            "REFRESH MATERIALIZED VIEW CONCURRENTLY cannot run inside a transaction block"
+        );
+        assert!(
+            !should_wrap_transaction(&["CREATE SUBSCRIPTION sub CONNECTION '' PUBLICATION pub", "SELECT 1"]),
+            "CREATE SUBSCRIPTION cannot run inside a transaction block"
         );
     }
 
