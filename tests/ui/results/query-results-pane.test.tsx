@@ -11,6 +11,7 @@ import type { TabResultGrid, TabRunStatus } from "../../../src/stores/tabs-store
 import { QueryResultsPane } from "../../../src/ui/results/query-results-pane";
 import { ResultsAccessibility } from "../../../src/ui/results/results-accessibility";
 import { ResultsCopy } from "../../../src/ui/results/results-copy";
+import { defined } from "../../lib/defined";
 
 afterEach(() => {
   cleanup();
@@ -180,10 +181,10 @@ describe("QueryResultsPane", () => {
         onSaveCsv={onSaveCsv}
       />,
     );
-    await user.click(screen.getAllByRole("row")[1]!);
+    await user.click(defined(screen.getAllByRole("row")[1], "expected first data row"));
     await user.click(screen.getByRole("button", { name: ResultsCopy.downloadCsv }));
     expect(onSaveCsv).toHaveBeenCalledTimes(1);
-    const csv = onSaveCsv.mock.calls[0]![0] as string;
+    const csv = defined(onSaveCsv.mock.calls[0]?.[0], "expected csv arg");
     expect(csv).toContain(raw);
     expect(csv).not.toContain(compactDisplay);
   });
@@ -250,7 +251,7 @@ describe("QueryResultsPane", () => {
         columnMetadata={[column({ name: "id", isPrimaryKey: true })]}
       />,
     );
-    await user.click(screen.getAllByRole("row")[1]!);
+    await user.click(defined(screen.getAllByRole("row")[1], "expected first data row"));
     const editBtn = screen.getByRole("button", { name: ResultsCopy.edit });
     expect(editBtn).not.toBeDisabled();
     const deleteBtn = screen.getByRole("button", { name: ResultsCopy.delete });
@@ -272,7 +273,7 @@ describe("QueryResultsPane", () => {
         columnMetadata={columns}
       />,
     );
-    await user.click(screen.getAllByRole("row")[1]!);
+    await user.click(defined(screen.getAllByRole("row")[1], "expected first data row"));
     await user.click(screen.getByRole("button", { name: ResultsCopy.edit }));
     expect(screen.getByLabelText("id")).toBeDisabled();
     expect(screen.getByLabelText("occurred_on")).toHaveAttribute("type", "date");
@@ -299,7 +300,7 @@ describe("QueryResultsPane", () => {
         onRetryRowReload={onRetryRowReload}
       />,
     );
-    await user.click(screen.getAllByRole("row")[1]!);
+    await user.click(defined(screen.getAllByRole("row")[1], "expected first data row"));
     await user.click(screen.getByRole("button", { name: ResultsCopy.edit }));
     await user.click(screen.getByRole("button", { name: ResultsCopy.save }));
     expect(await screen.findByRole("alert")).toHaveTextContent("could not be reloaded");
@@ -318,7 +319,7 @@ describe("QueryResultsPane", () => {
         raw={{ columns: ["id"], rows: [["1"]] }}
       />,
     );
-    await user.click(screen.getAllByRole("row")[1]!);
+    await user.click(defined(screen.getAllByRole("row")[1], "expected first data row"));
     await user.keyboard(" ");
     expect(screen.getByRole("dialog")).toBeInTheDocument();
   });

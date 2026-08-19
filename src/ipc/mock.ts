@@ -186,13 +186,14 @@ export function createMockDragonIpc(mode: MockMode = "happy"): DragonIpc {
     },
 
     async connectProfile(id: ProfileId): Promise<ConnectResult> {
-      if (!profiles.has(id)) {
+      const profile = profiles.get(id);
+      if (!profile) {
         throw { kind: "connection", message: "Profile not found" };
       }
       connectionSeq += 1;
       connectedProfileId = id;
       connectionId = `mock-conn-${connectionSeq}`;
-      return { connectionId, profileId: id, database: profiles.get(id)!.database };
+      return { connectionId, profileId: id, database: profile.database };
     },
 
     async disconnect(): Promise<void> {

@@ -9,6 +9,7 @@ import { createHistoryStore } from "../../../src/stores/history-store";
 import { HistoryAccessibility } from "../../../src/ui/history/history-accessibility";
 import { HistoryCopy } from "../../../src/ui/history/history-copy";
 import { QueryHistorySheet } from "../../../src/ui/history/query-history-sheet";
+import { defined } from "../../lib/defined";
 
 afterEach(() => cleanup());
 
@@ -277,7 +278,12 @@ describe("QueryHistorySheet", () => {
       />,
     );
     await screen.findAllByText("SELECT 1");
-    await user.click(screen.getAllByRole("button", { name: HistoryCopy.delete })[0]!);
+    await user.click(
+      defined(
+        screen.getAllByRole("button", { name: HistoryCopy.delete })[0],
+        "expected first delete",
+      ),
+    );
     expect(deleteHistory).toHaveBeenCalledWith("h1");
     await user.click(screen.getByRole("button", { name: HistoryCopy.clear }));
     await user.click(screen.getByRole("button", { name: HistoryCopy.confirmClear }));

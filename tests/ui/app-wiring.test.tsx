@@ -62,6 +62,7 @@ import { VisualQueryCopy } from "../../src/ui/visual-query/copy";
 import { serializeQueryDocument } from "../../src/ui/visual-query/tab-documents";
 import { WelcomeAccessibility } from "../../src/ui/welcome/welcome-accessibility";
 import { WelcomeCopy } from "../../src/ui/welcome/welcome-copy";
+import { defined } from "../lib/defined";
 
 function emitTauriMenuForTest(id: MenuEventId): void {
   menuListen.emit(id);
@@ -1532,7 +1533,7 @@ describe("App tab bar and in-session documents", () => {
       ResultsCopy.runQueryEmpty,
     );
     expect(screen.getByTestId(VisualQueryAccessibility.initialAddBlock)).not.toBeDisabled();
-    await user.click(screen.getAllByRole("tab")[0]!);
+    await user.click(defined(screen.getAllByRole("tab")[0], "expected first tab"));
     expect(screen.getByTestId(VisualQueryAccessibility.clauseCard("select"))).toBeInTheDocument();
     expect(screen.getByTestId(VisualQueryAccessibility.clauseCard("from"))).toBeInTheDocument();
   });
@@ -1558,7 +1559,7 @@ describe("App tab bar and in-session documents", () => {
       ResultsCopy.runQueryEmpty,
     );
     releaseRun();
-    await user.click(screen.getAllByRole("tab")[0]!);
+    await user.click(defined(screen.getAllByRole("tab")[0], "expected first tab"));
     await waitFor(() => expect(screen.getByTestId(ResultsAccessibility.grid)).toBeInTheDocument());
     expect(screen.getByTestId(VisualQueryAccessibility.clauseCard("from"))).toBeInTheDocument();
   });
@@ -1572,13 +1573,13 @@ describe("App tab bar and in-session documents", () => {
     await user.click(screen.getByTestId(TabBarAccessibility.newTab));
     await user.click(await screen.findByTestId(VisualQueryAccessibility.initialAddBlock));
     await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("select")));
-    await user.click(screen.getAllByRole("tab")[0]!);
+    await user.click(defined(screen.getAllByRole("tab")[0], "expected first tab"));
     await user.click(screen.getByTestId(VisualQueryAccessibility.startOver));
     expect(screen.getByText(VisualQueryCopy.emptyCanvasTitle)).toBeInTheDocument();
     expect(screen.getByTestId(ResultsAccessibility.empty)).toHaveTextContent(
       ResultsCopy.runQueryEmpty,
     );
-    await user.click(screen.getAllByRole("tab")[1]!);
+    await user.click(defined(screen.getAllByRole("tab")[1], "expected second tab"));
     expect(screen.getByTestId(VisualQueryAccessibility.clauseCard("select"))).toBeInTheDocument();
   });
 
@@ -1630,7 +1631,7 @@ describe("App tab bar and in-session documents", () => {
     expect(screen.getByTestId(ResultsAccessibility.empty)).toHaveTextContent(
       ResultsCopy.runQueryEmpty,
     );
-    await user.click(screen.getAllByRole("tab")[0]!);
+    await user.click(defined(screen.getAllByRole("tab")[0], "expected first tab"));
     expect(screen.queryByTestId(VisualQueryAccessibility.clauseCard("select"))).toBeNull();
     expect(screen.getByText(VisualQueryCopy.emptyCanvasTitle)).toBeInTheDocument();
   });
@@ -1684,11 +1685,11 @@ describe("App tab bar and in-session documents", () => {
     await user.click(screen.getByTestId(TabBarAccessibility.newTab));
     await user.click(screen.getByTestId(TabBarAccessibility.newTab));
     expect(screen.getAllByRole("tab")).toHaveLength(3);
-    await user.click(screen.getAllByRole("tab")[1]!);
+    await user.click(defined(screen.getAllByRole("tab")[1], "expected second tab"));
     await user.click(await screen.findByTestId(VisualQueryAccessibility.initialAddBlock));
     await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("select")));
     const closeButtons = screen.getAllByRole("button", { name: /close tab/i });
-    await user.click(closeButtons[0]!);
+    await user.click(defined(closeButtons[0], "expected first close tab button"));
     expect(screen.getAllByRole("tab")).toHaveLength(2);
     expect(screen.getByTestId(VisualQueryAccessibility.clauseCard("select"))).toBeInTheDocument();
   });
@@ -2004,7 +2005,7 @@ describe("App Queries column (SP-4b)", () => {
       await screen.findByText(/^Query \d{2}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/),
     ).toBeInTheDocument();
     expect(screen.getByTestId(VisualQueryAccessibility.clauseCard("select"))).toBeInTheDocument();
-    await user.click(screen.getAllByRole("tab")[0]!);
+    await user.click(defined(screen.getAllByRole("tab")[0], "expected first tab"));
     expect(screen.getByText(VisualQueryCopy.emptyCanvasTitle)).toBeInTheDocument();
     expect(screen.getByTestId(ResultsAccessibility.empty)).toHaveTextContent(
       ResultsCopy.runQueryEmpty,
@@ -2891,7 +2892,7 @@ describe("App table browser host wiring", () => {
       ),
     );
 
-    await user.click(screen.getAllByRole("tab")[0]!);
+    await user.click(defined(screen.getAllByRole("tab")[0], "expected first tab"));
     await screen.findByTestId(ResultsAccessibility.grid);
 
     expect(screen.getByRole("button", { name: ResultsCopy.prevPage })).toBeDisabled();
@@ -2939,7 +2940,9 @@ describe("App table browser host wiring", () => {
     await user.click(screen.getByRole("button", { name: ResultsCopy.prevPage }));
     expect(ipc.runQuery).toHaveBeenCalledTimes(2);
 
-    await user.click(screen.getAllByRole("button", { name: TablesCopy.menu })[0]!);
+    await user.click(
+      defined(screen.getAllByRole("button", { name: TablesCopy.menu })[0], "expected table menu"),
+    );
     await user.click(screen.getByRole("menuitem", { name: TablesCopy.refresh }));
     await waitFor(() => expect(ipc.runQuery).toHaveBeenCalledTimes(3));
   });
@@ -2962,7 +2965,9 @@ describe("App table browser host wiring", () => {
     await user.click(screen.getByRole("button", { name: ResultsCopy.prevPage }));
     expect(runQuery).toHaveBeenCalledTimes(2);
 
-    await user.click(screen.getAllByRole("button", { name: TablesCopy.menu })[0]!);
+    await user.click(
+      defined(screen.getAllByRole("button", { name: TablesCopy.menu })[0], "expected table menu"),
+    );
     await user.click(screen.getByRole("menuitem", { name: TablesCopy.truncate }));
     await user.click(screen.getByRole("button", { name: TablesCopy.confirmTruncate }));
 
@@ -2985,7 +2990,9 @@ describe("App table browser host wiring", () => {
     await connectFirst(user, ipc);
     await user.click(screen.getByRole("button", { name: "users" }));
     await screen.findByTestId(ResultsAccessibility.grid);
-    await user.click(screen.getAllByRole("button", { name: TablesCopy.menu })[0]!);
+    await user.click(
+      defined(screen.getAllByRole("button", { name: TablesCopy.menu })[0], "expected table menu"),
+    );
     await user.click(screen.getByRole("menuitem", { name: TablesCopy.drop }));
     await user.click(screen.getByRole("button", { name: TablesCopy.confirmDrop }));
     await waitFor(() => expect(screen.queryByTestId(ResultsAccessibility.grid)).toBeNull());
@@ -3019,7 +3026,9 @@ describe("App table browser host wiring", () => {
     await connectFirst(user, ipc);
     await user.click(screen.getByRole("button", { name: "users" }));
     await user.click(await screen.findByRole("button", { name: ResultsCopy.nextPage }));
-    await user.click(screen.getAllByRole("button", { name: TablesCopy.menu })[0]!);
+    await user.click(
+      defined(screen.getAllByRole("button", { name: TablesCopy.menu })[0], "expected table menu"),
+    );
     await user.click(screen.getByRole("menuitem", { name: TablesCopy.refresh }));
     await waitFor(() => expect(runQuery).toHaveBeenCalledTimes(3));
     expect(screen.getByRole("button", { name: ResultsCopy.prevPage })).toBeEnabled();
@@ -3058,7 +3067,7 @@ describe("App table browser host wiring", () => {
     render(<App ipc={ipc} />);
     await connectFirst(user, ipc);
     await user.click(screen.getByRole("button", { name: "users" }));
-    await user.click((await screen.findAllByRole("row"))[1]!);
+    await user.click(defined((await screen.findAllByRole("row"))[1], "expected first data row"));
     await user.click(screen.getByRole("button", { name: ResultsCopy.edit }));
     expect(screen.getByLabelText("id")).toBeDisabled();
     expect(screen.getByLabelText("occurred_on")).toHaveAttribute("type", "date");
@@ -3086,7 +3095,7 @@ describe("App table browser host wiring", () => {
     render(<App ipc={ipc} />);
     await connectFirst(user, ipc);
     await user.click(screen.getByRole("button", { name: "users" }));
-    await user.click((await screen.findAllByRole("row"))[1]!);
+    await user.click(defined((await screen.findAllByRole("row"))[1], "expected first data row"));
     await user.click(screen.getByRole("button", { name: ResultsCopy.edit }));
     await user.click(screen.getByRole("button", { name: ResultsCopy.save }));
     expect(await screen.findByRole("alert")).toHaveTextContent("could not be reloaded");
@@ -3120,7 +3129,7 @@ describe("App table browser host wiring", () => {
       await user.click(screen.getByRole("button", { name: ResultsCopy.prevPage }));
       expect(runQuery).toHaveBeenCalledTimes(2);
 
-      await user.click((await screen.findAllByRole("row"))[1]!);
+      await user.click(defined((await screen.findAllByRole("row"))[1], "expected first data row"));
       await user.click(
         operation === "update"
           ? screen.getByRole("button", { name: ResultsCopy.edit })
@@ -3131,7 +3140,10 @@ describe("App table browser host wiring", () => {
       await user.click(
         operation === "update"
           ? screen.getByRole("button", { name: ResultsCopy.save })
-          : screen.getAllByRole("button", { name: ResultsCopy.delete }).slice(-1)[0]!,
+          : defined(
+              screen.getAllByRole("button", { name: ResultsCopy.delete }).slice(-1)[0],
+              "expected delete confirm",
+            ),
       );
 
       await waitFor(() => expect(runQuery).toHaveBeenCalledTimes(3));
@@ -3153,7 +3165,7 @@ describe("App table browser host wiring", () => {
     await user.click(screen.getByRole("button", { name: ResultsCopy.prevPage }));
     expect(runQuery).toHaveBeenCalledTimes(2);
 
-    await user.click((await screen.findAllByRole("row"))[1]!);
+    await user.click(defined((await screen.findAllByRole("row"))[1], "expected first data row"));
     await user.click(screen.getByRole("button", { name: ResultsCopy.edit }));
     await user.click(screen.getByRole("button", { name: ResultsCopy.save }));
     await screen.findByRole("alert");

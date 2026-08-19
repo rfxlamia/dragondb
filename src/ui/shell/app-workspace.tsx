@@ -139,6 +139,9 @@ export function AppWorkspace(props: AppWorkspaceProps): React.JSX.Element {
     onViewMutationTable,
   } = props;
 
+  const toast = mutationToast;
+  const tableName = toast?.tableName;
+
   const queriesPanel = (
     <Panel className="app-workspace-split__queries" defaultSize={220} minSize={160}>
       <QueriesColumn
@@ -214,13 +217,13 @@ export function AppWorkspace(props: AppWorkspaceProps): React.JSX.Element {
       )}
       results={
         <div className="app-results-wrapper">
-          {mutationToast && mutationToast.tableName ? (
+          {tableName ? (
             <MutationToast
-              sql={mutationToast.sql}
-              title={mutationToast.title}
+              sql={toast.sql}
+              title={toast.title}
               table={{
-                schema: mutationToast.tableSchema ?? undefined,
-                name: mutationToast.tableName,
+                schema: toast.tableSchema ?? undefined,
+                name: tableName,
               }}
               onViewTable={onViewMutationTable}
               onDismiss={onDismissMutationToast}
