@@ -1130,8 +1130,8 @@
     "semantic_hash": ""
   },
   "src-tauri/src/postgres/database_admin.rs": {
-    "mtime": 1786901128.8655968,
-    "ast_hash": "3858ece8105588c59f04f867c5b21470",
+    "mtime": 1787128039.2758322,
+    "ast_hash": "3b7c5ddf427311d433d9af2501d96419",
     "semantic_hash": ""
   },
   "src-tauri/src/postgres/table_admin.rs": {

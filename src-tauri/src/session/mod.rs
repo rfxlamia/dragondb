@@ -635,7 +635,7 @@ impl AppSession {
     async fn run_database_admin(&self, name: &str, create: bool) -> Result<(), MappedIpcError> {
         let active = self.active.as_ref().ok_or_else(not_connected)?;
         let mut profile = active.profile.clone();
-        profile.database = maintenance_database(&profile.database).to_string();
+        profile.database = maintenance_database(name).to_string();
         let (client, mut tunnel, _abort) = establish_live(&profile, &active.secrets).await?;
         let result = if create {
             pg_create_database(&client, name).await
