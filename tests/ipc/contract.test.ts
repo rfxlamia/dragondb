@@ -294,7 +294,7 @@ describe("DragonIpc contract delta (SP-3 library/tab/history/row/csv)", () => {
       deleteRows: async (_input: DeleteRowsInput) => {},
       // SP-4b last slice — catalog / database / cancel / DDL / global history clear
       testConnection: async (_input: TestConnectionInput) => {},
-      cancelQuery: async (_connectionId: ConnectionId) => {},
+      cancelQuery: async (_connectionId: ConnectionId, _runId: number) => {},
       listDatabases: async (_connectionId: ConnectionId) => [],
       switchDatabase: async (_connectionId: ConnectionId, _name: string) => {},
       createDatabase: async (_name: string) => {},

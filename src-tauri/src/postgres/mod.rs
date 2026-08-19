@@ -14,7 +14,7 @@ pub mod row_ops;
 pub mod ssl;
 pub mod table_admin;
 
-pub use cancel::CancelRegistry;
+pub use cancel::{query_cancelled_error, CancelRegistry};
 pub use catalog::{
     list_columns, list_tables, ColumnInfoRow, TableRefRow, LIST_COLUMNS_SQL, LIST_TABLES_SQL,
 };

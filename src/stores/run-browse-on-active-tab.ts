@@ -157,6 +157,7 @@ async function fetchAndPublishBrowsePage(
   ctx: BrowseRunContext,
 ): Promise<QueryResult> {
   const tabGeneration = stores.tabs.getState().beginRun(ctx.tabId);
+  if (tabGeneration === null) throw new Error("Tab run could not start");
   const timers = createTimerHandles();
   const settlement = createFirstSettlement<"query" | "timeout">();
   try {
@@ -165,6 +166,7 @@ async function fetchAndPublishBrowsePage(
       ctx.identity.connectionId,
       table,
       ctx.safePage,
+      tabGeneration,
       timers,
       settlement,
     );
@@ -174,6 +176,7 @@ async function fetchAndPublishBrowsePage(
         ipc,
         ctx.identityAtStart ?? ctx.identity,
         ctx.safePage,
+        tabGeneration,
         timers,
       );
     }

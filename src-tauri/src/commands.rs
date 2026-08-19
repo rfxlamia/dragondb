@@ -9,8 +9,8 @@ use tauri::State;
 use tokio::sync::Mutex;
 
 use crate::postgres::{
-    collapse_ssl_mode, probe_config, CancelRegistry, ColumnInfoRow, IpcErrorKind, MappedIpcError,
-    ProbeConfig, QueryResultData, RowOperationError, TableRefRow,
+    collapse_ssl_mode, probe_config, query_cancelled_error, CancelRegistry, ColumnInfoRow,
+    IpcErrorKind, MappedIpcError, ProbeConfig, QueryResultData, RowOperationError, TableRefRow,
 };
 use crate::session::{
     AppSession, ConnectResult, ExecutableSql, ProfileFields, ProfileSecretsInput, SaveProfileInput,
@@ -217,8 +217,9 @@ pub async fn test_connection(input: TestConnectionInput) -> Result<(), MappedIpc
 pub async fn cancel_query(
     registry: State<'_, CancelRegistry>,
     connection_id: String,
+    run_id: u64,
 ) -> Result<(), MappedIpcError> {
-    registry.cancel_token(&connection_id).await
+    registry.cancel_run(&connection_id, run_id).await
 }
 
 #[tauri::command(rename_all = "camelCase")]
@@ -280,11 +281,22 @@ pub async fn list_columns(
 #[tauri::command(rename_all = "camelCase")]
 pub async fn run_query(
     state: State<'_, Mutex<AppSession>>,
+    registry: State<'_, CancelRegistry>,
     connection_id: String,
+    run_id: u64,
     sql: ExecutableSql,
 ) -> Result<QueryResultData, MappedIpcError> {
+    if registry.is_run_cancelled(run_id) {
+        return Err(query_cancelled_error());
+    }
     let mut session = state.lock().await;
-    session.run_query(&connection_id, sql).await
+    if registry.is_run_cancelled(run_id) {
+        return Err(query_cancelled_error());
+    }
+    registry.set_active_run(run_id);
+    let result = session.run_query(&connection_id, sql).await;
+    registry.clear_active_run(run_id);
+    result
 }
 
 #[tauri::command(rename_all = "camelCase")]
@@ -1036,10 +1048,10 @@ mod tests {
     fn cancel_query_command_uses_cancel_token() {
         let src = include_str!("commands.rs");
         let production = src.split("#[cfg(test)]").next().expect("has test module");
-        let needle = concat!("cancel_", "token");
+        let needle = concat!("cancel_", "run");
         assert!(
             production.contains(needle),
-            "cancel_query must use Client cancel token then cancel_query"
+            "cancel_query must route through cancel_run (PG cancel only for active run)"
         );
     }
 

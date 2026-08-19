@@ -243,7 +243,7 @@ export interface DragonIpc {
   disconnect(): Promise<void>;
   listTables(c: ConnectionId): Promise<TableRef[]>;
   listColumns(c: ConnectionId, table: TableRef): Promise<ColumnInfo[]>;
-  runQuery(c: ConnectionId, sql: ExecutableSQL): Promise<QueryResult>;
+  runQuery(c: ConnectionId, sql: ExecutableSQL, runId: number): Promise<QueryResult>;
 
   // SP-3 library (locked names — NOT listFolders/createFolder)
   listSavedQueries(): Promise<SavedQueryDto[]>;
@@ -291,8 +291,8 @@ export interface DragonIpc {
   // set_search_path, clear_all_history.
   /** Temporary SSH+DB probe — no session mutation; maps to Test banner states. */
   testConnection(input: TestConnectionInput): Promise<void>;
-  /** Interrupt in-flight runQuery / browse for the connection. */
-  cancelQuery(connectionId: ConnectionId): Promise<void>;
+  /** Interrupt the in-flight or queued run identified by `runId`. */
+  cancelQuery(connectionId: ConnectionId, runId: number): Promise<void>;
   /** Picker list; switch does NOT rewrite profile.database. */
   listDatabases(connectionId: ConnectionId): Promise<string[]>;
   switchDatabase(connectionId: ConnectionId, name: string): Promise<void>;

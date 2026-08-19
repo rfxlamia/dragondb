@@ -30,10 +30,11 @@ export async function runSelectOnActiveTab(
 
   const executingTabId = ensureActiveTab(stores);
   const gen = stores.tabs.getState().beginRun(executingTabId);
+  if (gen === null) throw new Error("Tab run could not start");
 
   let result: QueryResult;
   try {
-    result = await ipc.runQuery(connectionId, sql);
+    result = await ipc.runQuery(connectionId, sql, gen);
   } catch (error) {
     const { isConnected } = stores.session.getState();
     if (isConnected && gen !== null) {

@@ -49,7 +49,7 @@ describe("mock DragonIpc", () => {
 
   it("runQuery is present but unused by UI — returns empty result", async () => {
     const ipc = createMockDragonIpc("happy");
-    const result = await ipc.runQuery(FIXTURE_CONNECTION_ID, { text: "SELECT 1", params: [] });
+    const result = await ipc.runQuery(FIXTURE_CONNECTION_ID, { text: "SELECT 1", params: [] }, 0);
     expect(result.columns).toEqual([]);
     expect(result.rows).toEqual([]);
   });

@@ -627,10 +627,13 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
     const liveId = stores.session.getState().connectionId;
     if (liveId === null) return;
     const tabId = stores.tabs.getState().activeTabId;
-    if (tabId !== null) {
-      stores.tabs.getState().applyRunCancelled(tabId);
-    }
-    void ipc.cancelQuery(liveId).catch(() => undefined);
+    if (tabId === null) return;
+    const tab = stores.tabs.getState().tabs.find((t) => t.id === tabId);
+    if (tab === undefined || tab.status?.kind !== "running") return;
+    const runId = stores.tabs.getState().getRunGeneration(tabId);
+    if (runId === null) return;
+    stores.tabs.getState().applyRunCancelled(tabId);
+    void ipc.cancelQuery(liveId, runId).catch(() => undefined);
   }
 
   function handleClearTabResults(): void {
@@ -759,10 +762,14 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
   ): Promise<{ columns: string[]; rows: unknown[][] }> {
     const liveId = stores.session.getState().connectionId;
     if (liveId === null) throw new Error("Not connected");
-    const result = await ipc.runQuery(liveId, {
-      text: `SELECT * FROM ${quotedTableSql(table)}`,
-      params: [],
-    });
+    const result = await ipc.runQuery(
+      liveId,
+      {
+        text: `SELECT * FROM ${quotedTableSql(table)}`,
+        params: [],
+      },
+      0,
+    );
     return { columns: result.columns, rows: result.rows };
   }
 

@@ -74,6 +74,6 @@ describe("runSqlOnActiveTab", () => {
     const sql = { text: "SELECT 1 AS a; SELECT 2 AS b", params: [] };
     await runSqlOnActiveTab(stores, ipc, sql);
     expect(ipc.runQuery).toHaveBeenCalledOnce();
-    expect(ipc.runQuery).toHaveBeenCalledWith("c1", sql);
+    expect(ipc.runQuery).toHaveBeenCalledWith("c1", sql, expect.any(Number));
   });
 });

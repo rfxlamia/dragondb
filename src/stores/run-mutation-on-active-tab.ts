@@ -35,10 +35,11 @@ export async function runMutationOnActiveTab(
   const tabId = ensureActiveTab(stores);
   const previousStatus = stores.tabs.getState().tabs.find((tab) => tab.id === tabId)?.status;
   const generation = stores.tabs.getState().beginRun(tabId, { preserveResults: true });
+  if (generation === null) throw new Error("Tab run could not start");
 
   let result: QueryResult;
   try {
-    result = await ipc.runQuery(connectionId, sql);
+    result = await ipc.runQuery(connectionId, sql, generation);
   } catch (error) {
     if (stores.session.getState().isConnected && generation !== null) {
       stores.tabs

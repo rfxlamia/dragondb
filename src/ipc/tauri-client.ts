@@ -132,8 +132,8 @@ export function createTauriDragonIpc(): DragonIpc {
       return invokeCommand("list_columns", { connectionId: c, table });
     },
 
-    runQuery(c: ConnectionId, sql: ExecutableSQL): Promise<QueryResult> {
-      return invokeCommand("run_query", { connectionId: c, sql });
+    runQuery(c: ConnectionId, sql: ExecutableSQL, runId: number): Promise<QueryResult> {
+      return invokeCommand("run_query", { connectionId: c, sql, runId });
     },
 
     // SP-3 library — real Tauri invoke maps (Phase B).
@@ -226,8 +226,8 @@ export function createTauriDragonIpc(): DragonIpc {
     testConnection(input: TestConnectionInput): Promise<void> {
       return invokeCommand("test_connection", { input });
     },
-    cancelQuery(c: ConnectionId): Promise<void> {
-      return invokeCommand("cancel_query", { connectionId: c });
+    cancelQuery(c: ConnectionId, runId: number): Promise<void> {
+      return invokeCommand("cancel_query", { connectionId: c, runId });
     },
     listDatabases(c: ConnectionId): Promise<string[]> {
       return invokeCommand("list_databases", { connectionId: c });

@@ -75,15 +75,20 @@ export function raceBrowseQuery(
   connectionId: ConnectionId,
   table: TableRef,
   page: number,
+  runId: number,
   timers: TimerHandles,
   settlement: Settlement<"query" | "timeout">,
 ): Promise<BrowseRaceOutcome> {
   return new Promise((resolve) => {
     void ipc
-      .runQuery(connectionId, {
-        text: `SELECT * FROM ${quotedBrowseTableSql(table)} LIMIT ${BROWSE_VISIBLE_PAGE_SIZE + 1} OFFSET ${page * BROWSE_VISIBLE_PAGE_SIZE}`,
-        params: [],
-      })
+      .runQuery(
+        connectionId,
+        {
+          text: `SELECT * FROM ${quotedBrowseTableSql(table)} LIMIT ${BROWSE_VISIBLE_PAGE_SIZE + 1} OFFSET ${page * BROWSE_VISIBLE_PAGE_SIZE}`,
+          params: [],
+        },
+        runId,
+      )
       .then(
         (result) => {
           if (!settlement.tryWin("query")) return;
@@ -104,6 +109,7 @@ export function raceBrowseQuery(
 export async function waitForBrowseCancellation(
   ipc: DragonIpc,
   connectionId: ConnectionId,
+  runId: number,
   stores: AppStores,
   retry: BrowseRetryTarget,
   timers: TimerHandles,
@@ -121,7 +127,7 @@ export async function waitForBrowseCancellation(
       if (!cancelWait.tryWin("stuck")) return;
       finish("reconnectRequired", BROWSE_CANCEL_STUCK_MESSAGE);
     });
-    void ipc.cancelQuery(connectionId).then(
+    void ipc.cancelQuery(connectionId, runId).then(
       () => {
         if (!cancelWait.tryWin("cancel")) return;
         finish("retryReady", null);
@@ -139,6 +145,7 @@ export async function settleBrowseTimeout(
   ipc: DragonIpc,
   identity: BrowseIdentity,
   page: number,
+  runId: number,
   timers: TimerHandles,
 ): Promise<never> {
   stores.browse.getState().invalidateCache();
@@ -147,7 +154,7 @@ export async function settleBrowseTimeout(
   stores.browse.getState().publish(generation, {
     lifecycle: { phase: "cancelling", retry, error: null },
   });
-  await waitForBrowseCancellation(ipc, identity.connectionId, stores, retry, timers);
+  await waitForBrowseCancellation(ipc, identity.connectionId, runId, stores, retry, timers);
   throw new BrowseTimeoutError();
 }
 

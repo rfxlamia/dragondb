@@ -65,6 +65,8 @@ export type TabsState = {
   hydrateFromDto: (dto: TabStateDto) => void;
   refresh: () => Promise<void>;
   beginRun: (tabId: string, options?: { preserveResults?: boolean }) => number | null;
+  /** Current run generation for a tab (used to target cancelQuery). */
+  getRunGeneration: (tabId: string) => number | null;
   applyRunSuccess: (
     tabId: string,
     result: TabRunResult,
@@ -429,6 +431,10 @@ export function createTabsStore(ipc: DragonIpc, getters: TabsSessionGetters): St
             : { raw: null, compact: null, status: { kind: "running" } },
         );
         return generation;
+      },
+
+      getRunGeneration(tabId) {
+        return runGenerations.get(tabId) ?? null;
       },
 
       async applyRunSuccess(tabId, result, generation, options) {

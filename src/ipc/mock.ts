@@ -214,7 +214,7 @@ export function createMockDragonIpc(mode: MockMode = "happy"): DragonIpc {
       return HAPPY_COLUMNS[tableKey(table)] ?? [];
     },
 
-    async runQuery(_c: ConnectionId, _sql: ExecutableSQL): Promise<QueryResult> {
+    async runQuery(_c: ConnectionId, _sql: ExecutableSQL, _runId: number): Promise<QueryResult> {
       return emptyQueryResult();
     },
 
@@ -300,7 +300,7 @@ export function createMockDragonIpc(mode: MockMode = "happy"): DragonIpc {
       return [...databases];
     },
     async testConnection(_input: TestConnectionInput): Promise<void> {},
-    async cancelQuery(_c: ConnectionId): Promise<void> {
+    async cancelQuery(_c: ConnectionId, _runId: number): Promise<void> {
       throw notImplemented("cancelQuery");
     },
     async switchDatabase(_c: ConnectionId, name: string): Promise<void> {

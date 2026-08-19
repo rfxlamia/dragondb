@@ -117,12 +117,13 @@ describe("createTauriDragonIpc", () => {
       rowsAffected: null,
       durationMs: 9,
     });
-    const result = await ipc.runQuery("c-uuid", { text: "SELECT 1", params: [] });
+    const result = await ipc.runQuery("c-uuid", { text: "SELECT 1", params: [] }, 1);
     expect(result.rows).toEqual([[1]]);
     expect(result.durationMs).toBe(9);
     expect(invoke).toHaveBeenCalledWith("run_query", {
       connectionId: "c-uuid",
       sql: { text: "SELECT 1", params: [] },
+      runId: 1,
     });
   });
 
@@ -142,7 +143,7 @@ describe("createTauriDragonIpc", () => {
       message: "syntax error",
       position: 12,
     });
-    await expect(ipc.runQuery("c", { text: "SELEC", params: [] })).rejects.toEqual({
+    await expect(ipc.runQuery("c", { text: "SELEC", params: [] }, 2)).rejects.toEqual({
       kind: "syntax",
       message: "syntax error",
       position: 12,
@@ -438,8 +439,8 @@ describe("createTauriDragonIpc", () => {
     expect(invoke).toHaveBeenCalledWith("test_connection", expect.any(Object));
 
     invoke.mockResolvedValueOnce(undefined);
-    await ipc.cancelQuery("c-uuid");
-    expect(invoke).toHaveBeenCalledWith("cancel_query", { connectionId: "c-uuid" });
+    await ipc.cancelQuery("c-uuid", 3);
+    expect(invoke).toHaveBeenCalledWith("cancel_query", { connectionId: "c-uuid", runId: 3 });
 
     invoke.mockResolvedValueOnce(["postgres", "shop"]);
     expect(await ipc.listDatabases("c-uuid")).toEqual(["postgres", "shop"]);
