@@ -111,7 +111,9 @@ fn map_db_failure(message: &str, sqlstate: Option<&str>) -> MappedIpcError {
 }
 
 fn humanize_auth(raw: &str) -> String {
-    if raw.to_lowercase().contains("password authentication failed")
+    if raw
+        .to_lowercase()
+        .contains("password authentication failed")
         || raw.to_lowercase().contains("authentication failed")
     {
         "Authentication failed — check username and password.".into()

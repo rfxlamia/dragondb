@@ -2,18 +2,20 @@
 //!
 //! Command names and camelCase DTOs are locked for the TS DragonIpc client (T8).
 //! Errors reject as `MappedIpcError` objects (`{ kind, message, position? }`).
-//! No createDatabase / deleteDatabase commands.
+//! Database administration uses dedicated session methods, never run_query.
 
 use serde::{Deserialize, Serialize};
 use tauri::State;
 use tokio::sync::Mutex;
 
 use crate::postgres::{
-    ColumnInfoRow, IpcErrorKind, MappedIpcError, QueryResultData, RowOperationError, TableRefRow,
+    collapse_ssl_mode, probe_config, query_cancelled_error, CancelRegistry, ColumnInfoRow,
+    IpcErrorKind, MappedIpcError, ProbeConfig, QueryResultData, RowOperationError, TableRefRow,
 };
+use crate::secrets::ProfileSecrets;
 use crate::session::{
-    AppSession, ConnectResult, ExecutableSql, ProfileFields, ProfileSecretsInput,
-    SaveProfileInput, SavedQueryWriteInput, TabStateWriteInput, TableRefArg,
+    merge_test_secrets, AppSession, ConnectResult, ExecutableSql, ProfileFields,
+    ProfileSecretsInput, SaveProfileInput, SavedQueryWriteInput, TabStateWriteInput, TableRefArg,
 };
 use crate::storage::{FolderRow, HistoryRow, ProfileRow, SavedQueryRow, TabStateRow};
 
@@ -160,9 +162,124 @@ pub async fn connect_profile(
 }
 
 #[tauri::command]
-pub async fn disconnect(state: State<'_, Mutex<AppSession>>) -> Result<(), MappedIpcError> {
+pub async fn disconnect(
+    state: State<'_, Mutex<AppSession>>,
+    registry: State<'_, CancelRegistry>,
+) -> Result<(), MappedIpcError> {
+    registry.force_close();
     let mut session = state.lock().await;
     session.disconnect().await
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TestConnectionInput {
+    /// Saved profile being tested, when there is one. Secrets the edit form
+    /// never received are filled from that profile's keyring entry.
+    #[serde(default)]
+    pub profile_id: Option<String>,
+    pub host: String,
+    pub port: i64,
+    pub username: String,
+    pub database: String,
+    pub ssl_mode: String,
+    pub ssh_enabled: bool,
+    pub ssh_host: Option<String>,
+    pub ssh_port: Option<i64>,
+    pub ssh_username: Option<String>,
+    pub ssh_auth_method: Option<String>,
+    #[serde(default)]
+    pub password: Option<String>,
+    #[serde(default)]
+    pub ssh_password: Option<String>,
+    #[serde(default)]
+    pub ssh_private_key: Option<String>,
+    #[serde(default)]
+    pub ssh_passphrase: Option<String>,
+}
+
+#[tauri::command]
+pub async fn test_connection(
+    state: State<'_, Mutex<AppSession>>,
+    input: TestConnectionInput,
+) -> Result<(), MappedIpcError> {
+    // Editing a saved profile initialises the form's secrets to {} — stored
+    // values are never read back into the UI — so Test must fall back to the
+    // keyring for anything the user did not retype. Without this, Test reports
+    // an auth failure on a profile Connect opens fine.
+    let typed = ProfileSecretsInput {
+        password: input.password,
+        ssh_password: input.ssh_password,
+        ssh_passphrase: input.ssh_passphrase,
+        ssh_private_key: input.ssh_private_key,
+    };
+    let stored = match input.profile_id.as_deref() {
+        Some(profile_id) => state.lock().await.stored_secrets(profile_id)?,
+        None => ProfileSecrets::default(),
+    };
+    let secrets = merge_test_secrets(&typed, stored);
+    probe_config(ProbeConfig {
+        host: input.host,
+        port: input.port as u16,
+        username: input.username,
+        password: secrets.password.unwrap_or_default(),
+        database: input.database,
+        tls: collapse_ssl_mode(&input.ssl_mode),
+        ssh_host: input.ssh_enabled.then_some(input.ssh_host).flatten(),
+        ssh_port: input.ssh_port.unwrap_or(22) as u16,
+        ssh_username: input.ssh_username,
+        ssh_auth_method: input.ssh_auth_method,
+        ssh_password: secrets.ssh_password,
+        ssh_private_key: secrets.ssh_private_key,
+        ssh_passphrase: secrets.ssh_passphrase,
+    })
+    .await
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn cancel_query(
+    registry: State<'_, CancelRegistry>,
+    connection_id: String,
+    run_id: u64,
+) -> Result<(), MappedIpcError> {
+    registry.cancel_run(&connection_id, run_id).await
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn list_databases(
+    state: State<'_, Mutex<AppSession>>,
+    connection_id: String,
+) -> Result<Vec<String>, MappedIpcError> {
+    state.lock().await.list_databases(&connection_id).await
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn switch_database(
+    state: State<'_, Mutex<AppSession>>,
+    connection_id: String,
+    name: String,
+) -> Result<(), MappedIpcError> {
+    state
+        .lock()
+        .await
+        .switch_database(&connection_id, &name)
+        .await
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn create_database(
+    state: State<'_, Mutex<AppSession>>,
+    name: String,
+) -> Result<(), MappedIpcError> {
+    state.lock().await.create_database(&name).await
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn delete_database(
+    state: State<'_, Mutex<AppSession>>,
+    name: String,
+) -> Result<(), MappedIpcError> {
+    state.lock().await.delete_database(&name).await
 }
 
 #[tauri::command(rename_all = "camelCase")]
@@ -187,11 +304,74 @@ pub async fn list_columns(
 #[tauri::command(rename_all = "camelCase")]
 pub async fn run_query(
     state: State<'_, Mutex<AppSession>>,
+    registry: State<'_, CancelRegistry>,
     connection_id: String,
+    run_id: u64,
     sql: ExecutableSql,
 ) -> Result<QueryResultData, MappedIpcError> {
+    if registry.is_run_cancelled(run_id) {
+        // Drop the marker so a long session does not accumulate one entry per
+        // cancelled run; ids are never reused, so nothing can match it again.
+        registry.clear_active_run(run_id);
+        return Err(query_cancelled_error());
+    }
     let mut session = state.lock().await;
-    session.run_query(&connection_id, sql).await
+    registry.set_active_run(run_id);
+    if registry.is_run_cancelled(run_id) {
+        registry.clear_active_run(run_id);
+        return Err(query_cancelled_error());
+    }
+    let result = session.run_query(&connection_id, sql).await;
+    registry.clear_active_run(run_id);
+    result
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn truncate_table(
+    state: State<'_, Mutex<AppSession>>,
+    connection_id: String,
+    table: TableRefArg,
+) -> Result<(), MappedIpcError> {
+    state
+        .lock()
+        .await
+        .truncate_table(&connection_id, &table)
+        .await
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn drop_table(
+    state: State<'_, Mutex<AppSession>>,
+    connection_id: String,
+    table: TableRefArg,
+) -> Result<(), MappedIpcError> {
+    state.lock().await.drop_table(&connection_id, &table).await
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn generate_table_ddl(
+    state: State<'_, Mutex<AppSession>>,
+    connection_id: String,
+    table: TableRefArg,
+) -> Result<String, MappedIpcError> {
+    state
+        .lock()
+        .await
+        .generate_table_ddl(&connection_id, &table)
+        .await
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn set_search_path(
+    state: State<'_, Mutex<AppSession>>,
+    connection_id: String,
+    schema: Option<String>,
+) -> Result<(), MappedIpcError> {
+    state
+        .lock()
+        .await
+        .set_search_path(&connection_id, schema.as_deref())
+        .await
 }
 
 // --- Library commands (no &Connection; AppSession thin wrappers) ------------
@@ -349,6 +529,11 @@ pub async fn clear_history(
     session.clear_history_for_profile(&profile_id)
 }
 
+#[tauri::command]
+pub async fn clear_all_history(state: State<'_, Mutex<AppSession>>) -> Result<(), MappedIpcError> {
+    state.lock().await.clear_all_history()
+}
+
 // --- Tabs commands (no &Connection; AppSession thin wrappers) ---------------
 
 /// Tab IPC DTO — TS `order` ↔ Rust `order_index`; `cachedResultsData` is UTF-8 JSON text.
@@ -370,16 +555,17 @@ pub struct TabStateDto {
     /// Opaque JSON string (UTF-8 bytes on the wire to sqlite BLOB — not base64).
     pub cached_results_data: Option<String>,
     pub cached_column_names: Option<Vec<String>>,
+    pub visual_document_json: Option<String>,
 }
 
 impl From<TabStateRow> for TabStateDto {
     fn from(row: TabStateRow) -> Self {
-        let cached_results_data = row.cached_results_data.and_then(|bytes| {
-            String::from_utf8(bytes).ok()
-        });
-        let cached_column_names = row.cached_column_names.and_then(|s| {
-            serde_json::from_str(&s).ok()
-        });
+        let cached_results_data = row
+            .cached_results_data
+            .and_then(|bytes| String::from_utf8(bytes).ok());
+        let cached_column_names = row
+            .cached_column_names
+            .and_then(|s| serde_json::from_str(&s).ok());
         Self {
             id: row.id,
             connection_id: row.connection_id,
@@ -395,6 +581,7 @@ impl From<TabStateRow> for TabStateDto {
             selected_schema_filter: row.selected_schema_filter,
             cached_results_data,
             cached_column_names,
+            visual_document_json: row.visual_document_json,
         }
     }
 }
@@ -415,6 +602,7 @@ fn tab_write_input_from_dto(dto: TabStateDto) -> TabStateWriteInput {
         selected_schema_filter: dto.selected_schema_filter,
         cached_results_data: dto.cached_results_data,
         cached_column_names: dto.cached_column_names,
+        visual_document_json: dto.visual_document_json,
     }
 }
 
@@ -498,9 +686,33 @@ pub async fn save_csv_file(
     csv_text: String,
     default_path: Option<String>,
 ) -> Result<SaveCsvFileResult, MappedIpcError> {
+    save_text_with_filter(app, csv_text, default_path, "CSV", &["csv".to_string()]).await
+}
+
+/// Generic text save via native save dialog with a caller-provided filter.
+/// Cancel → `{ canceled: true }` (no write, no throw).
+#[tauri::command(rename_all = "camelCase")]
+pub async fn save_text_file(
+    app: tauri::AppHandle,
+    text: String,
+    default_path: Option<String>,
+    filter_name: String,
+    extensions: Vec<String>,
+) -> Result<SaveCsvFileResult, MappedIpcError> {
+    save_text_with_filter(app, text, default_path, &filter_name, &extensions).await
+}
+
+async fn save_text_with_filter(
+    app: tauri::AppHandle,
+    text: String,
+    default_path: Option<String>,
+    filter_name: &str,
+    extensions: &[String],
+) -> Result<SaveCsvFileResult, MappedIpcError> {
     use tauri_plugin_dialog::DialogExt;
 
-    let mut builder = app.dialog().file().add_filter("CSV", &["csv"]);
+    let ext_refs: Vec<&str> = extensions.iter().map(String::as_str).collect();
+    let mut builder = app.dialog().file().add_filter(filter_name, &ext_refs);
     if let Some(name) = default_path.as_deref() {
         builder = builder.set_file_name(name);
     }
@@ -519,17 +731,17 @@ pub async fn save_csv_file(
     })?;
 
     let written = tauri::async_runtime::spawn_blocking(move || {
-        std::fs::write(&path_buf, csv_text.as_bytes()).map(|()| path_buf)
+        std::fs::write(&path_buf, text.as_bytes()).map(|()| path_buf)
     })
     .await
     .map_err(|e| MappedIpcError {
         kind: IpcErrorKind::Unknown,
-        message: format!("CSV write task failed: {e}"),
+        message: format!("Write task failed: {e}"),
         position: None,
     })?
     .map_err(|e| MappedIpcError {
         kind: IpcErrorKind::Unknown,
-        message: format!("Failed to write CSV file: {e}"),
+        message: format!("Failed to write file: {e}"),
         position: None,
     })?;
 
@@ -570,6 +782,7 @@ mod tests {
             selected_schema_filter: None,
             cached_results_data: None,
             cached_column_names: None,
+            visual_document_json: None,
         }
     }
 
@@ -721,7 +934,10 @@ mod tests {
             row_count: Some(1),
             created_at: "1".into(),
         });
-        assert!(skipped.is_none(), "NULL profile_id must be skipped, not coerced to \"\"");
+        assert!(
+            skipped.is_none(),
+            "NULL profile_id must be skipped, not coerced to \"\""
+        );
 
         let kept = history_dto_from_row(HistoryRow {
             id: "h1".into(),
@@ -849,6 +1065,106 @@ mod tests {
         let dto = TabStateDto::from(row);
         assert_eq!(dto.cached_results_data.as_deref(), Some(json));
         assert_eq!(dto.order, 0); // order ↔ order_index
-        assert_eq!(dto.cached_column_names.as_deref(), Some(&["c".to_string()][..]));
+        assert_eq!(
+            dto.cached_column_names.as_deref(),
+            Some(&["c".to_string()][..])
+        );
+    }
+
+    #[test]
+    fn cancel_query_command_uses_cancel_token() {
+        let src = include_str!("commands.rs");
+        let production = src.split("#[cfg(test)]").next().expect("has test module");
+        let needle = concat!("cancel_", "run");
+        assert!(
+            production.contains(needle),
+            "cancel_query must route through cancel_run (PG cancel only for active run)"
+        );
+    }
+
+    #[test]
+    fn run_query_rejects_a_queued_run_cancelled_before_it_takes_the_session_lock() {
+        // run_query is serialized behind Mutex<AppSession>, so a run cancelled
+        // while it waits for the lock must still be refused once it acquires it.
+        // Checking only before the lock lets a "cancelled" mutation execute.
+        let src = include_str!("commands.rs");
+        let production = src.split("#[cfg(test)]").next().expect("has test module");
+        let body = production
+            .split("pub async fn run_query")
+            .nth(1)
+            .expect("run_query command")
+            .split("#[tauri::command")
+            .next()
+            .expect("run_query body");
+        let lock_at = body.find("state.lock()").expect("run_query locks the session");
+        let guard_at = body[lock_at..]
+            .find("is_run_cancelled")
+            .map(|offset| lock_at + offset);
+        assert!(
+            guard_at.is_some(),
+            "run_query must re-check is_run_cancelled AFTER acquiring the session lock"
+        );
+        let run_at = body.find("session.run_query").expect("run_query executes the sql");
+        assert!(
+            guard_at.expect("guard") < run_at,
+            "the post-lock cancellation guard must run before the query executes"
+        );
+    }
+
+    /// Mirrors Tauri camelCase command arg maps for table-admin IPC.
+    mod table_admin_ipc_args {
+        use crate::session::TableRefArg;
+        use serde::Deserialize;
+
+        #[derive(Debug, Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct TruncateTableArgs {
+            connection_id: String,
+            table: TableRefArg,
+        }
+
+        #[derive(Debug, Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct SetSearchPathArgs {
+            connection_id: String,
+            schema: Option<String>,
+        }
+
+        const TABLE_JSON: &str = r#"{"schema":"public","name":"temp","tableType":"regular"}"#;
+
+        #[test]
+        fn tauri_client_truncate_payload_missing_connection_id_fails() {
+            let payload = serde_json::json!({ "table": serde_json::from_str::<TableRefArg>(TABLE_JSON).unwrap() });
+            let err = serde_json::from_value::<TruncateTableArgs>(payload).unwrap_err();
+            assert!(
+                err.to_string().contains("connectionId"),
+                "expected missing connectionId error, got: {err}"
+            );
+        }
+
+        #[test]
+        fn truncate_payload_with_connection_id_deserializes() {
+            let payload = serde_json::json!({
+                "connectionId": "c-uuid",
+                "table": serde_json::from_str::<TableRefArg>(TABLE_JSON).unwrap(),
+            });
+            assert!(serde_json::from_value::<TruncateTableArgs>(payload).is_ok());
+        }
+
+        #[test]
+        fn tauri_client_set_search_path_payload_missing_connection_id_fails() {
+            let payload = serde_json::json!({ "schema": "audit" });
+            let err = serde_json::from_value::<SetSearchPathArgs>(payload).unwrap_err();
+            assert!(
+                err.to_string().contains("connectionId"),
+                "expected missing connectionId error, got: {err}"
+            );
+        }
+
+        #[test]
+        fn set_search_path_payload_with_connection_id_deserializes() {
+            let payload = serde_json::json!({ "connectionId": "c-uuid", "schema": "audit" });
+            assert!(serde_json::from_value::<SetSearchPathArgs>(payload).is_ok());
+        }
     }
 }

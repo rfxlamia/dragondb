@@ -2,7 +2,11 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ConnectionForm } from "../../../src/ui/connection/connection-form";
+import { ConnectionCopy } from "../../../src/ui/connection/connection-copy";
+import {
+  ConnectionForm,
+  emptyConnectionFormValue,
+} from "../../../src/ui/connection/connection-form";
 
 afterEach(() => cleanup());
 
@@ -48,5 +52,27 @@ describe("ConnectionForm SSH key pick", () => {
     const last = onChange.mock.calls[onChange.mock.calls.length - 1]?.[0];
     expect(last.secrets.sshPrivateKey).toContain("BEGIN OPENSSH PRIVATE KEY");
     expect(last.profile.sshPrivateKeyPath).toMatch(/id_ed25519/);
+  });
+});
+
+describe("ConnectionForm Test and show-password", () => {
+  it("Test calls onTest (panel must not call connectProfile from Test)", async () => {
+    const user = userEvent.setup();
+    const onTest = vi.fn(async () => undefined);
+    render(
+      <ConnectionForm value={emptyConnectionFormValue()} onChange={vi.fn()} onTest={onTest} />,
+    );
+    await user.type(screen.getByLabelText(ConnectionCopy.host), "127.0.0.1");
+    await user.click(screen.getByRole("button", { name: ConnectionCopy.test }));
+    expect(onTest).toHaveBeenCalledOnce();
+  });
+
+  it("show-password toggles the secret visibility", async () => {
+    const user = userEvent.setup();
+    render(<ConnectionForm value={emptyConnectionFormValue()} onChange={vi.fn()} />);
+    const password = screen.getByLabelText(ConnectionCopy.password);
+    expect(password).toHaveAttribute("type", "password");
+    await user.click(screen.getByRole("button", { name: ConnectionCopy.showPassword }));
+    expect(screen.getByLabelText(ConnectionCopy.password)).toHaveAttribute("type", "text");
   });
 });

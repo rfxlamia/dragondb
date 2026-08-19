@@ -1,0 +1,366 @@
+/**
+ * Shared control primitives.
+ *
+ * Every value here resolves to a creative-brief token — no new hues, no new
+ * radii (`--radius` 4px base, `--radius-lg` 8px for badge-class surfaces).
+ * Role aliases (`--surface-*`, `--border-*`, `--row-*`) live in `tokens.css`
+ * beside the shades they alias, so no stylesheet depends on this file's load
+ * order to resolve a color.
+ *
+ * These classes exist because the same three controls (icon button, segmented
+ * control, search field) were being redrawn in five component stylesheets,
+ * each time as a bordered white box. A bordered box per action is what made
+ * the app read as a web form rather than a desktop tool: the chrome competed
+ * with the data. Here the rule is inverted — chrome is flush and quiet until
+ * hovered or focused, and only a true CTA (Run query) carries fill.
+ */
+
+.ui-visually-hidden {
+  border: 0;
+  clip-path: inset(50%);
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  padding: 0;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+/* ── Icon button ────────────────────────────────────────────────────────────
+   Square, borderless, quiet. Accessible name always comes from aria-label
+   set to an existing copy constant. */
+
+.ui-icon-btn {
+  align-items: center;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius);
+  color: var(--neutral-600);
+  cursor: pointer;
+  display: inline-flex;
+  flex-shrink: 0;
+  height: var(--control-height);
+  justify-content: center;
+  padding: 0;
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard),
+    transform var(--duration-fast) var(--ease-out);
+  width: var(--control-height);
+}
+
+.ui-icon-btn:hover:not(:disabled) {
+  background: var(--row-hover);
+  color: var(--neutral-900);
+}
+
+.ui-icon-btn:active:not(:disabled) {
+  transform: scale(0.92);
+}
+
+.ui-icon-btn:disabled {
+  color: var(--neutral-400);
+  cursor: not-allowed;
+}
+
+.ui-icon-btn--accent:hover:not(:disabled) {
+  background: var(--primary-100);
+  color: var(--primary-700);
+}
+
+.ui-icon-btn--danger:hover:not(:disabled) {
+  background: var(--error-tint);
+  color: var(--error-text);
+}
+
+/* ── Segmented control ─────────────────────────────────────────────────────
+   Replaces stacked radio inputs. The track is recessed, the selected item is
+   the raised white plane — the same figure/ground logic as the sidebars. */
+
+.ui-segment {
+  background: var(--neutral-200);
+  border-radius: var(--radius);
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+}
+
+/* Works for either shape: a button with aria-checked, or a <label> wrapping a
+   visually hidden native radio (preferred — the browser keeps roving focus and
+   arrow-key behaviour, and only the dot chrome is replaced). */
+.ui-segment__item {
+  align-items: center;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--neutral-700);
+  cursor: pointer;
+  display: inline-flex;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  justify-content: center;
+  line-height: 1.4;
+  padding: 3px 12px;
+  position: relative;
+  user-select: none;
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard);
+}
+
+.ui-segment__item:hover:not([aria-checked="true"], :has(input:checked)) {
+  color: var(--neutral-900);
+}
+
+.ui-segment__item[aria-checked="true"],
+.ui-segment__item:has(input:checked) {
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-sm);
+  color: var(--neutral-900);
+  font-weight: 600;
+}
+
+/* Focus ring belongs on the segment, not on the 1px hidden input. */
+.ui-segment__item:has(input:focus-visible) {
+  outline: 2px solid var(--primary-600);
+  outline-offset: 2px;
+}
+
+/* ── Search field ──────────────────────────────────────────────────────────
+   Brief Input atom (white, 1px neutral-300) with a leading glyph, so a filter
+   field reads as search rather than as one more empty form box. */
+
+.ui-search {
+  align-items: center;
+  display: flex;
+  min-width: 0;
+  position: relative;
+}
+
+.ui-search__icon {
+  align-items: center;
+  color: var(--neutral-500);
+  display: flex;
+  left: 8px;
+  pointer-events: none;
+  position: absolute;
+}
+
+.ui-search__input {
+  appearance: none;
+  background: var(--surface-raised);
+  border: 1px solid var(--border-field);
+  border-radius: var(--radius);
+  box-sizing: border-box;
+  color: var(--neutral-900);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.4;
+  min-width: 0;
+  padding: 5px 8px 5px 27px;
+  transition: border-color var(--duration-fast) var(--ease-standard);
+  width: 100%;
+}
+
+.ui-search__input::placeholder {
+  color: var(--neutral-600);
+}
+
+.ui-search__input:hover {
+  border-color: var(--neutral-400);
+}
+
+/* The brief's single focus ring is 2px offset; a search field sits inside a
+   dense toolbar where that offset clips against the neighbouring control, so
+   the ring is pulled in to 1px. Same ring, same width — offset only. */
+.ui-search__input:focus-visible {
+  border-color: var(--primary-600);
+  outline-offset: 1px;
+}
+
+.ui-search__input::-webkit-search-cancel-button {
+  appearance: none;
+}
+
+/* ── Quiet select ─────────────────────────────────────────────────────────
+   Sidebar pickers (schema, sort, catalog) carry no visible label chrome:
+   their own value describes them. Borderless until hover keeps a sidebar
+   from reading as a settings form. */
+
+.ui-quiet-select {
+  appearance: none;
+  background-color: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  color: var(--neutral-800);
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.4;
+  max-width: 100%;
+  padding: 4px 8px;
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard);
+}
+
+.ui-quiet-select:hover {
+  background-color: var(--surface-raised);
+  border-color: var(--border-field);
+}
+
+/* ── Section label ─────────────────────────────────────────────────────────
+   Sentence case, not shouted uppercase: the brief's tone is "neutral-friendly",
+   and stacked ALL-CAPS micro-headers were a large part of the dated read. */
+
+.ui-section-label {
+  color: var(--neutral-600);
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  margin: 0;
+  text-transform: none;
+}
+
+/* ── Flush list row ───────────────────────────────────────────────────────
+   The core fix: list items are rows in a list, not bordered white boxes.
+   Actions inside a row stay hidden until the row is hovered or holds focus,
+   so a 200-row schema shows 200 names instead of 600 buttons. */
+
+.ui-row {
+  align-items: center;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius);
+  color: var(--neutral-900);
+  cursor: default;
+  display: flex;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  gap: 6px;
+  min-height: var(--row-height);
+  min-width: 0;
+  padding: 0 6px;
+  text-align: left;
+  transition: background-color var(--duration-fast) var(--ease-standard);
+  width: 100%;
+}
+
+.ui-row:hover {
+  background: var(--row-hover);
+}
+
+.ui-row--selected,
+.ui-row--selected:hover {
+  background: var(--row-selected);
+  color: var(--row-selected-text);
+}
+
+.ui-row__label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ui-row__glyph {
+  align-items: center;
+  color: var(--neutral-500);
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.ui-row:hover .ui-row__glyph,
+.ui-row--selected .ui-row__glyph {
+  color: var(--primary-600);
+}
+
+/* Hover-reveal: present for pointer users on hover, for keyboard users on
+   focus, and always exposed to assistive tech (opacity, never display:none). */
+.ui-row-actions {
+  align-items: center;
+  display: flex;
+  flex-shrink: 0;
+  gap: 2px;
+  opacity: 0;
+  /* Hidden means unclickable: opacity alone leaves a live hit target, so a
+     click aimed at the row label could land on an invisible Delete. */
+  pointer-events: none;
+  transition: opacity var(--duration-fast) var(--ease-standard);
+}
+
+.ui-row-host:hover .ui-row-actions,
+.ui-row-host:focus-within .ui-row-actions,
+.ui-row-actions:focus-within,
+.ui-row-actions--open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+@media (hover: none) {
+  .ui-row-actions {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+/* ── Menu surface ─────────────────────────────────────────────────────────
+   One popover treatment for every overflow menu (tables, saved queries). */
+
+.ui-menu {
+  background: var(--surface-raised);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 11rem;
+  padding: 4px;
+  transform-origin: top right;
+  transition:
+    opacity 140ms var(--ease-out),
+    transform 140ms var(--ease-out);
+
+  @starting-style {
+    opacity: 0;
+    transform: scale(0.96) translateY(-4px);
+  }
+}
+
+.ui-menu button {
+  align-items: center;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius);
+  color: var(--neutral-900);
+  cursor: pointer;
+  display: flex;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  gap: 8px;
+  padding: 6px 8px;
+  text-align: left;
+  transition: background-color var(--duration-fast) var(--ease-standard);
+}
+
+.ui-menu button:hover:not(:disabled) {
+  background: var(--row-hover);
+}
+
+.ui-menu button:disabled {
+  color: var(--neutral-500);
+  cursor: not-allowed;
+}
+
+.ui-menu button.ui-menu__danger {
+  color: var(--error-text);
+}
+
+.ui-menu button.ui-menu__danger:hover:not(:disabled) {
+  background: var(--error-tint);
+}

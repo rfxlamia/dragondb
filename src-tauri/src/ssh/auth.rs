@@ -9,7 +9,9 @@ use thiserror::Error;
 /// Raw auth inputs from the session / keyring layer.
 #[derive(Clone)]
 pub enum SshAuthInput {
-    Password { password: String },
+    Password {
+        password: String,
+    },
     PrivateKey {
         key_contents: String,
         passphrase: Option<String>,
@@ -90,9 +92,8 @@ pub fn parse_private_key_for_russh(
     key_contents: &str,
     passphrase: Option<&str>,
 ) -> Result<russh::keys::PrivateKey, SshAuthError> {
-    russh::keys::decode_secret_key(key_contents, passphrase).map_err(|e| {
-        SshAuthError::InvalidPrivateKey(e.to_string())
-    })
+    russh::keys::decode_secret_key(key_contents, passphrase)
+        .map_err(|e| SshAuthError::InvalidPrivateKey(e.to_string()))
 }
 
 #[cfg(test)]
@@ -112,7 +113,8 @@ mod tests {
     fn private_key_contents_with_passphrase_prepares_key_auth() {
         // Unit seam: validate + select PrivateKey variant from contents.
         // Do not require russh to parse a cryptographic fixture here.
-        let pem = "-----BEGIN OPENSSH PRIVATE KEY-----\nLINE1\nLINE2\n-----END OPENSSH PRIVATE KEY-----";
+        let pem =
+            "-----BEGIN OPENSSH PRIVATE KEY-----\nLINE1\nLINE2\n-----END OPENSSH PRIVATE KEY-----";
         let method = build_auth_method(SshAuthInput::PrivateKey {
             key_contents: pem.into(),
             passphrase: Some("phrase".into()),

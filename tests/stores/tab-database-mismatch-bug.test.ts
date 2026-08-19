@@ -1,0 +1,212 @@
+/**
+ * Proof: switching tabs must reconcile live database with tab.databaseName.
+ * The fix lives in handleSwitchTab (App.tsx). These tests simulate the same
+ * reconciliation logic to prove it works at the integration boundary.
+ */
+import { describe, expect, it, vi } from "vitest";
+import type { DragonIpc } from "../../src/ipc/contract";
+import { composeAppStores } from "../../src/stores/compose-app-stores";
+import {
+  reconcileTabDatabase,
+  shouldStampTabDatabase,
+} from "../../src/stores/reconcile-tab-database";
+
+function composeIpc(overrides: Partial<DragonIpc> = {}): DragonIpc {
+  return {
+    connectProfile: vi.fn(async () => ({
+      connectionId: "c1",
+      profileId: "P",
+      database: "alpha",
+    })),
+    disconnect: vi.fn(async () => undefined),
+    listTables: vi.fn(async () => []),
+    listColumns: vi.fn(async () => []),
+    runQuery: vi.fn(async () => ({
+      columns: ["n"],
+      rows: [[1]],
+      rowsAffected: null,
+      durationMs: 5,
+    })),
+    saveTabState: vi.fn(async () => undefined),
+    deleteTabState: vi.fn(async () => undefined),
+    listTabStates: vi.fn(async () => []),
+    switchDatabase: vi.fn(async (_cid: string, _name: string) => undefined),
+    listDatabases: vi.fn(async () => ["alpha", "beta"]),
+    ...overrides,
+  } as unknown as DragonIpc;
+}
+
+/**
+ * Simulate handleSwitchTab from App.tsx — the reconciliation logic.
+ */
+function handleSwitchTab(stores: ReturnType<typeof composeAppStores>, id: string): void {
+  stores.tabs.getState().switchTab(id);
+  const tab = stores.tabs.getState().tabs.find((item) => item.id === id);
+  const session = stores.session.getState();
+
+  if (tab?.databaseName && session.isConnected && session.databaseName !== tab.databaseName) {
+    void stores.session
+      .getState()
+      .switchDatabase(tab.databaseName)
+      .catch(() => undefined);
+  }
+}
+
+describe("tab database mismatch bug (proof)", () => {
+  it("handleSwitchTab reconciles live DB when tab.databaseName differs", async () => {
+    const ipc = composeIpc();
+    const stores = composeAppStores(ipc);
+
+    await stores.session.getState().connect("P");
+    expect(stores.session.getState().databaseName).toBe("alpha");
+
+    const tab1 = stores.tabs.getState().createTab();
+    await stores.tabs.getState().setDatabaseName(tab1.id, "alpha");
+
+    const tab2 = stores.tabs.getState().createTab();
+    stores.tabs.getState().switchTab(tab2.id);
+    await stores.session.getState().switchDatabase("beta");
+    await stores.tabs.getState().setDatabaseName(tab2.id, "beta");
+
+    expect(stores.session.getState().databaseName).toBe("beta");
+
+    // Switch back to tab1 using the App.tsx logic
+    handleSwitchTab(stores, tab1.id);
+
+    // switchDatabase must be called with "alpha" to reconcile
+    await vi.waitFor(() => {
+      expect(ipc.switchDatabase).toHaveBeenCalledWith("c1", "alpha");
+    });
+  });
+
+  it("handleSwitchTab does NOT call switchDatabase when DB already matches", async () => {
+    const ipc = composeIpc();
+    const stores = composeAppStores(ipc);
+
+    await stores.session.getState().connect("P");
+    const tab1 = stores.tabs.getState().createTab();
+    await stores.tabs.getState().setDatabaseName(tab1.id, "alpha");
+
+    // session is already on "alpha", tab1 says "alpha" — no switch needed
+    handleSwitchTab(stores, tab1.id);
+
+    expect(ipc.switchDatabase).not.toHaveBeenCalledWith("c1", "alpha");
+  });
+
+  it("without reconciliation (store-only switchTab), DB stays mismatched", async () => {
+    const ipc = composeIpc();
+    const stores = composeAppStores(ipc);
+
+    await stores.session.getState().connect("P");
+    const tab1 = stores.tabs.getState().createTab();
+    await stores.tabs.getState().setDatabaseName(tab1.id, "alpha");
+
+    const tab2 = stores.tabs.getState().createTab();
+    stores.tabs.getState().switchTab(tab2.id);
+    await stores.session.getState().switchDatabase("beta");
+    await stores.tabs.getState().setDatabaseName(tab2.id, "beta");
+
+    // Raw store switchTab — no reconciliation (proves why App.tsx logic is needed)
+    stores.tabs.getState().switchTab(tab1.id);
+
+    expect(stores.session.getState().databaseName).toBe("beta");
+    expect(ipc.switchDatabase).not.toHaveBeenCalledWith("c1", "alpha");
+  });
+});
+
+describe("reconcileTabDatabase", () => {
+  it("switches the live database to the tab's when they differ", () => {
+    expect(
+      reconcileTabDatabase({ tabDatabase: "alpha", liveDatabase: "beta", isConnected: true }),
+    ).toEqual({ kind: "switch", database: "alpha" });
+  });
+
+  it("does nothing when the tab already matches the live database", () => {
+    expect(
+      reconcileTabDatabase({ tabDatabase: "alpha", liveDatabase: "alpha", isConnected: true }),
+    ).toEqual({ kind: "none" });
+  });
+
+  it("clears the database context for a tab that has none while another is live", () => {
+    // Regression: deleting a tab's database persists databaseName === null. If
+    // the user visits another tab and comes back, the null tab must not adopt
+    // the database that tab left live — the hatch reads
+    // `tab.databaseName ?? session.databaseName` and would re-enable Run.
+    expect(
+      reconcileTabDatabase({ tabDatabase: null, liveDatabase: "beta", isConnected: true }),
+    ).toEqual({ kind: "clear" });
+  });
+
+  it("does nothing for a null tab when no database is live either", () => {
+    expect(
+      reconcileTabDatabase({ tabDatabase: null, liveDatabase: null, isConnected: true }),
+    ).toEqual({ kind: "none" });
+  });
+
+  it("does nothing while disconnected", () => {
+    expect(
+      reconcileTabDatabase({ tabDatabase: null, liveDatabase: "beta", isConnected: false }),
+    ).toEqual({ kind: "none" });
+    expect(
+      reconcileTabDatabase({ tabDatabase: "alpha", liveDatabase: "beta", isConnected: false }),
+    ).toEqual({ kind: "none" });
+  });
+});
+
+describe("shouldStampTabDatabase", () => {
+  it("stamps a tab created before any session once a database is live", () => {
+    expect(
+      shouldStampTabDatabase({
+        tabDatabase: null,
+        liveDatabase: "alpha",
+        isConnected: true,
+        databaseSelectionCleared: false,
+      }),
+    ).toBe(true);
+  });
+
+  it("never stamps a tab whose database selection was cleared", () => {
+    // Regression: closing a neighbouring tab activates this one without going
+    // through the switch path. Stamping there would bind the tab to the
+    // database the closed tab left live — the very adoption the clear exists
+    // to prevent.
+    expect(
+      shouldStampTabDatabase({
+        tabDatabase: null,
+        liveDatabase: "beta",
+        isConnected: true,
+        databaseSelectionCleared: true,
+      }),
+    ).toBe(false);
+  });
+
+  it("leaves a tab that already has a database alone", () => {
+    expect(
+      shouldStampTabDatabase({
+        tabDatabase: "alpha",
+        liveDatabase: "beta",
+        isConnected: true,
+        databaseSelectionCleared: false,
+      }),
+    ).toBe(false);
+  });
+
+  it("does nothing while disconnected or with no live database", () => {
+    expect(
+      shouldStampTabDatabase({
+        tabDatabase: null,
+        liveDatabase: "alpha",
+        isConnected: false,
+        databaseSelectionCleared: false,
+      }),
+    ).toBe(false);
+    expect(
+      shouldStampTabDatabase({
+        tabDatabase: null,
+        liveDatabase: null,
+        isConnected: true,
+        databaseSelectionCleared: false,
+      }),
+    ).toBe(false);
+  });
+});

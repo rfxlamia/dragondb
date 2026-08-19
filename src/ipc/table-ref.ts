@@ -1,6 +1,7 @@
 import type { TableReference } from "../core";
 import type { TableRef } from "./contract";
 
+/** Drops the IPC-only `tableType` — core `TableReference` has no catalog kind. */
 export function tableRefToCore(ref: TableRef): TableReference {
   return {
     schema: ref.schema ?? null,
@@ -8,11 +9,12 @@ export function tableRefToCore(ref: TableRef): TableReference {
   };
 }
 
+/** Core references are regular tables; foreign kinds only come from `listTables`. */
 export function coreToTableRef(ref: TableReference): TableRef {
   if (ref.schema === null) {
-    return { name: ref.name };
+    return { name: ref.name, tableType: "regular" };
   }
-  return { schema: ref.schema, name: ref.name };
+  return { schema: ref.schema, name: ref.name, tableType: "regular" };
 }
 
 export function formatTableDisplayName(ref: TableReference): string {

@@ -12,17 +12,15 @@ use rusqlite::{Connection, Result as SqliteResult};
 use std::path::{Path, PathBuf};
 
 pub use history::{
-    clear_history_for_profile, delete_history, insert_history, list_history, HistoryInsert,
-    HistoryRow,
+    clear_all as clear_all_history, clear_history_for_profile, delete_history, insert_history,
+    list_history, HistoryInsert, HistoryRow,
 };
 pub use library::{
     create_folder, delete_folder, delete_saved_queries, duplicate_saved_query, get_saved_query,
     insert_saved_query_with_id, list_folders, list_saved_queries, move_saved_query, rename_folder,
     save_saved_query, FolderRow, SavedQueryRow, SavedQueryWrite,
 };
-pub use profiles::{
-    delete_profile, get_profile, list_profiles, upsert_profile, ProfileRow,
-};
+pub use profiles::{delete_profile, get_profile, list_profiles, upsert_profile, ProfileRow};
 pub use schema::migrate;
 pub use tabs::{
     delete_tab_state, get_tab_state, insert_tab_state_with_id, list_tab_states,

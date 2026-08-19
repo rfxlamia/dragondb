@@ -178,11 +178,7 @@ impl KeyringStore {
         Ok(())
     }
 
-    fn get_slot(
-        &self,
-        profile_id: &str,
-        slot: &str,
-    ) -> Result<Option<String>, KeyringStoreError> {
+    fn get_slot(&self, profile_id: &str, slot: &str) -> Result<Option<String>, KeyringStoreError> {
         let account = account_name(profile_id, slot);
         match &self.backend {
             Backend::Os { service } => {
@@ -278,7 +274,8 @@ mod tests {
     fn ssh_private_key_stores_full_pem_contents_not_path() {
         let profile_id = test_profile_id();
         let store = KeyringStore::memory();
-        let pem = "-----BEGIN OPENSSH PRIVATE KEY-----\nLINE1\nLINE2\n-----END OPENSSH PRIVATE KEY-----";
+        let pem =
+            "-----BEGIN OPENSSH PRIVATE KEY-----\nLINE1\nLINE2\n-----END OPENSSH PRIVATE KEY-----";
         store
             .set_secrets(
                 &profile_id,

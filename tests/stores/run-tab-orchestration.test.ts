@@ -4,6 +4,7 @@ import { compactCell } from "../../src/lib/result-compactor";
 import { QUERY_FAILED_MESSAGE } from "../../src/lib/unknown-error-message";
 import { composeAppStores } from "../../src/stores/compose-app-stores";
 import { runSelectOnActiveTab } from "../../src/stores/run-select-on-active-tab";
+import { defined } from "../lib/defined";
 
 const FIXTURE_SQL = { text: "SELECT 1", params: [] as unknown[] };
 
@@ -41,7 +42,7 @@ describe("run → executing tab orchestration", () => {
     const result = await runSelectOnActiveTab(stores, ipc, FIXTURE_SQL);
     expect(result.durationMs).toBe(12);
     expect(stores.tabs.getState().tabs).toHaveLength(1);
-    const tab = stores.tabs.getState().tabs[0]!;
+    const tab = defined(stores.tabs.getState().tabs[0], "expected tab");
     expect(tab.raw?.rows[0]?.[0]).toBe(long);
     expect(tab.compact?.rows[0]?.[0]).toBe(compactCell(long));
     expect(tab.status).toEqual({ kind: "ok", rowCount: 1, durationMs: 12 });
@@ -67,7 +68,10 @@ describe("run → executing tab orchestration", () => {
     release();
     await runA;
     expect(stores.tabs.getState().tabs.find((t) => t.id === a.id)?.status?.kind).toBe("ok");
-    const b = stores.tabs.getState().tabs.find((t) => t.id !== a.id)!;
+    const b = defined(
+      stores.tabs.getState().tabs.find((t) => t.id !== a.id),
+      "expected other tab",
+    );
     expect(b.status).toEqual({ kind: "idle" });
   });
 
@@ -108,6 +112,52 @@ describe("run → executing tab orchestration", () => {
     });
   });
 
+  it("clearTabResults during in-flight run ignores late apply (generation)", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => {
+      release = r;
+    });
+    const ipc = composeIpc({
+      runQuery: vi.fn(async () => {
+        await gate;
+        return { columns: ["id"], rows: [[1]], rowsAffected: null, durationMs: 5 };
+      }),
+    });
+    const stores = composeAppStores(ipc);
+    await stores.session.getState().connect("P");
+    const tab = stores.tabs.getState().createTab();
+    const pending = runSelectOnActiveTab(stores, ipc, FIXTURE_SQL);
+    stores.tabs.getState().clearTabResults(tab.id);
+    release();
+    await pending;
+    const after = stores.tabs.getState().tabs.find((t) => t.id === tab.id);
+    expect(after?.status).toEqual({ kind: "idle" });
+    expect(after?.raw).toBeNull();
+    expect(after?.compact).toBeNull();
+  });
+
+  it("does not invoke onAppliedSuccess when a late apply does not land", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => {
+      release = r;
+    });
+    const ipc = composeIpc({
+      runQuery: vi.fn(async () => {
+        await gate;
+        return { columns: ["id"], rows: [[1]], rowsAffected: null, durationMs: 5 };
+      }),
+    });
+    const stores = composeAppStores(ipc);
+    await stores.session.getState().connect("P");
+    const tab = stores.tabs.getState().createTab();
+    const onAppliedSuccess = vi.fn();
+    const pending = runSelectOnActiveTab(stores, ipc, FIXTURE_SQL, onAppliedSuccess);
+    stores.tabs.getState().clearTabResults(tab.id);
+    release();
+    await pending;
+    expect(onAppliedSuccess).not.toHaveBeenCalled();
+  });
+
   it("Run failure applies error status then rethrows", async () => {
     const ipc = composeIpc({
       runQuery: vi.fn(async () => {
@@ -135,7 +185,10 @@ describe("run → executing tab orchestration", () => {
     const tab = stores.tabs.getState().createTab();
     const result = await runSelectOnActiveTab(stores, ipc, FIXTURE_SQL);
     expect(result).toMatchObject({ columns: ["id"], rows: [[1]], durationMs: 9 });
-    const after = stores.tabs.getState().tabs.find((t) => t.id === tab.id)!;
+    const after = defined(
+      stores.tabs.getState().tabs.find((t) => t.id === tab.id),
+      "expected same tab",
+    );
     expect(after.status).toEqual({ kind: "ok", rowCount: 1, durationMs: 9 });
     expect(after.raw).toEqual({ columns: ["id"], rows: [[1]] });
   });

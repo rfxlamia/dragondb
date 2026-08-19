@@ -18,8 +18,11 @@ import type {
   SaveCsvFileResult,
   SavedQueryDto,
   SaveProfileInput,
+  SaveTextFileFilter,
+  SaveTextFileResult,
   TableRef,
   TabStateDto,
+  TestConnectionInput,
   UpdateRowInput,
 } from "./contract";
 
@@ -129,8 +132,8 @@ export function createTauriDragonIpc(): DragonIpc {
       return invokeCommand("list_columns", { connectionId: c, table });
     },
 
-    runQuery(c: ConnectionId, sql: ExecutableSQL): Promise<QueryResult> {
-      return invokeCommand("run_query", { connectionId: c, sql });
+    runQuery(c: ConnectionId, sql: ExecutableSQL, runId: number): Promise<QueryResult> {
+      return invokeCommand("run_query", { connectionId: c, sql, runId });
     },
 
     // SP-3 library — real Tauri invoke maps (Phase B).
@@ -191,6 +194,18 @@ export function createTauriDragonIpc(): DragonIpc {
     saveCsvFile(csvText: string, defaultPath?: string): Promise<SaveCsvFileResult> {
       return invokeCommand("save_csv_file", { csvText, defaultPath });
     },
+    saveTextFile(
+      text: string,
+      defaultPath?: string,
+      filter?: SaveTextFileFilter,
+    ): Promise<SaveTextFileResult> {
+      return invokeCommand("save_text_file", {
+        text,
+        defaultPath,
+        filterName: filter?.name ?? "Text",
+        extensions: filter?.extensions ?? ["txt"],
+      });
+    },
     // SP-3 row ops — invokeRowOp preserves RowOperationError kinds (not IpcError).
     updateRow(input: UpdateRowInput): Promise<void> {
       return invokeRowOp("update_row", {
@@ -206,6 +221,40 @@ export function createTauriDragonIpc(): DragonIpc {
         table: input.table,
         primaryKeys: input.primaryKeys,
       });
+    },
+    // SP-4b last slice — hand-written camel→snake maps (no generic mapper).
+    testConnection(input: TestConnectionInput): Promise<void> {
+      return invokeCommand("test_connection", { input });
+    },
+    cancelQuery(c: ConnectionId, runId: number): Promise<void> {
+      return invokeCommand("cancel_query", { connectionId: c, runId });
+    },
+    listDatabases(c: ConnectionId): Promise<string[]> {
+      return invokeCommand("list_databases", { connectionId: c });
+    },
+    switchDatabase(c: ConnectionId, name: string): Promise<void> {
+      return invokeCommand("switch_database", { connectionId: c, name });
+    },
+    createDatabase(name: string): Promise<void> {
+      return invokeCommand("create_database", { name });
+    },
+    deleteDatabase(name: string): Promise<void> {
+      return invokeCommand("delete_database", { name });
+    },
+    truncateTable(c: ConnectionId, table: TableRef): Promise<void> {
+      return invokeCommand("truncate_table", { connectionId: c, table });
+    },
+    dropTable(c: ConnectionId, table: TableRef): Promise<void> {
+      return invokeCommand("drop_table", { connectionId: c, table });
+    },
+    generateTableDdl(c: ConnectionId, table: TableRef): Promise<string> {
+      return invokeCommand("generate_table_ddl", { connectionId: c, table });
+    },
+    setSearchPath(c: ConnectionId, schema: string | null): Promise<void> {
+      return invokeCommand("set_search_path", { connectionId: c, schema });
+    },
+    clearAllHistory(): Promise<void> {
+      return invokeCommand("clear_all_history");
     },
   };
 }

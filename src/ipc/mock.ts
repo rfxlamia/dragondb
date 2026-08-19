@@ -16,8 +16,11 @@ import type {
   SaveCsvFileResult,
   SavedQueryDto,
   SaveProfileInput,
+  SaveTextFileFilter,
+  SaveTextFileResult,
   TableRef,
   TabStateDto,
+  TestConnectionInput,
   UpdateRowInput,
 } from "./contract";
 
@@ -96,8 +99,8 @@ const EVENTS_COLUMNS: ColumnInfo[] = [
 ];
 
 const HAPPY_TABLES: TableRef[] = [
-  { schema: "public", name: "users" },
-  { schema: "analytics", name: "events" },
+  { schema: "public", name: "users", tableType: "regular" },
+  { schema: "analytics", name: "events", tableType: "regular" },
 ];
 
 const HAPPY_COLUMNS: Record<string, ColumnInfo[]> = {
@@ -117,6 +120,10 @@ function emptyQueryResult(): QueryResult {
     rowsAffected: null,
     durationMs: 0,
   };
+}
+
+function notImplemented(method: string): IpcError {
+  return { kind: "unknown", message: `SP-4b mock: ${method} not implemented` };
 }
 
 function newProfileId(): ProfileId {
@@ -150,6 +157,7 @@ export function createMockDragonIpc(mode: MockMode = "happy"): DragonIpc {
   let connectedProfileId: ProfileId | null = null;
   let connectionId: ConnectionId | null = null;
   let connectionSeq = 0;
+  let databases: string[] = ["app"];
 
   return {
     async listProfiles(): Promise<ConnectionProfileDto[]> {
@@ -178,13 +186,14 @@ export function createMockDragonIpc(mode: MockMode = "happy"): DragonIpc {
     },
 
     async connectProfile(id: ProfileId): Promise<ConnectResult> {
-      if (!profiles.has(id)) {
+      const profile = profiles.get(id);
+      if (!profile) {
         throw { kind: "connection", message: "Profile not found" };
       }
       connectionSeq += 1;
       connectedProfileId = id;
       connectionId = `mock-conn-${connectionSeq}`;
-      return { connectionId, profileId: id, database: profiles.get(id)!.database };
+      return { connectionId, profileId: id, database: profile.database };
     },
 
     async disconnect(): Promise<void> {
@@ -205,7 +214,7 @@ export function createMockDragonIpc(mode: MockMode = "happy"): DragonIpc {
       return HAPPY_COLUMNS[tableKey(table)] ?? [];
     },
 
-    async runQuery(_c: ConnectionId, _sql: ExecutableSQL): Promise<QueryResult> {
+    async runQuery(_c: ConnectionId, _sql: ExecutableSQL, _runId: number): Promise<QueryResult> {
       return emptyQueryResult();
     },
 
@@ -259,6 +268,13 @@ export function createMockDragonIpc(mode: MockMode = "happy"): DragonIpc {
     async saveCsvFile(_csvText: string, _defaultPath?: string): Promise<SaveCsvFileResult> {
       return { canceled: true };
     },
+    async saveTextFile(
+      _text: string,
+      _defaultPath?: string,
+      _filter?: SaveTextFileFilter,
+    ): Promise<SaveTextFileResult> {
+      return { canceled: true };
+    },
 
     // SP-3 row ops — reject with RowOperationError
     async updateRow(_input: UpdateRowInput): Promise<void> {
@@ -274,6 +290,39 @@ export function createMockDragonIpc(mode: MockMode = "happy"): DragonIpc {
         message: "SP-3 mock: deleteRows not implemented",
       };
       throw err;
+    },
+
+    // SP-4b last slice — picker + test probe happy stubs (restore/overlay/title wiring).
+    async listDatabases(_c: ConnectionId): Promise<string[]> {
+      const connected = connectedProfileId ? profiles.get(connectedProfileId) : undefined;
+      const current = connected?.database ?? "app";
+      if (!databases.includes(current)) databases.push(current);
+      return [...databases];
+    },
+    async testConnection(_input: TestConnectionInput): Promise<void> {},
+    async cancelQuery(_c: ConnectionId, _runId: number): Promise<void> {
+      throw notImplemented("cancelQuery");
+    },
+    async switchDatabase(_c: ConnectionId, name: string): Promise<void> {
+      if (!databases.includes(name)) databases.push(name);
+    },
+    async createDatabase(name: string): Promise<void> {
+      if (!databases.includes(name)) databases.push(name);
+    },
+    async deleteDatabase(name: string): Promise<void> {
+      databases = databases.filter((item) => item !== name);
+    },
+    async truncateTable(_c: ConnectionId, _table: TableRef): Promise<void> {},
+    async dropTable(_c: ConnectionId, _table: TableRef): Promise<void> {},
+    async generateTableDdl(_c: ConnectionId, table: TableRef): Promise<string> {
+      const schema = table.schema ?? "public";
+      return `CREATE TABLE ${schema}.${table.name} ();`;
+    },
+    async setSearchPath(_c: ConnectionId, _schema: string | null): Promise<void> {
+      throw notImplemented("setSearchPath");
+    },
+    async clearAllHistory(): Promise<void> {
+      throw notImplemented("clearAllHistory");
     },
   };
 }

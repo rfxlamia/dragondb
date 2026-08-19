@@ -1,39 +1,348 @@
-.app-shell {
-  background: var(--neutral-100);
-  color: var(--neutral-900);
-  display: grid;
-  font-family: var(--font-sans);
-  grid-template-columns: minmax(16rem, 22rem) minmax(0, 1fr);
+.app-startup,
+.app-welcome {
+  background: var(--surface-page);
+  height: 100vh;
   min-height: 100vh;
 }
 
-.app-shell .connection-panel {
-  border-right: 1px solid var(--neutral-300);
-  max-height: 100vh;
+.app-shell {
+  --sidebar-width: 20rem;
+  --sidebar-rail-width: 2.25rem;
+  background: var(--surface-page);
+  color: var(--neutral-900);
+  display: grid;
+  font-family: var(--font-sans);
+  /* The sidebar track follows the sidebar's own width rather than being sized
+     here: a width transition on the element animates everywhere, whereas
+     interpolating grid-template-columns does not. */
+  grid-template-columns: auto minmax(0, 1fr);
+  height: 100vh;
+  min-height: 100vh;
   overflow: auto;
-  padding: 1rem;
+  position: relative;
 }
 
-.app-shell .vq-canvas {
+.app-connection-error {
+  background: var(--error-tint);
+  border-bottom: 1px solid var(--neutral-300);
+  color: var(--error-text);
+  grid-column: 1 / -1;
+  padding: 0.75rem 1.25rem;
+}
+
+.app-connection-error strong,
+.app-connection-error p {
+  font-family: var(--font-sans);
+  margin: 0;
+}
+
+/* Collapse is one column changing width, not a panel swapped for a button. The
+   sidebar clips its contents at a fixed inner width, so the panel keeps its
+   layout while the column narrows — text never reflows mid-animation, which is
+   what made the old swap read as a jump cut. */
+.app-sidebar {
+  overflow: hidden;
+  position: relative;
+  transition: width var(--duration-panel) var(--ease-drawer);
+  width: var(--sidebar-width);
+}
+
+.app-shell--collapsed .app-sidebar {
+  width: var(--sidebar-rail-width);
+}
+
+.app-sidebar__panel {
+  height: 100%;
+  min-height: 0;
+  /* Expanding: hold until the column has opened far enough that the panel is
+     not caught mid-clip, then fade in. */
+  transition: opacity var(--duration-fast) var(--ease-out) 90ms;
+  width: var(--sidebar-width);
+}
+
+/* Collapsing: leave immediately, and faster than the column closes, so the rail
+   and the panel are never fighting for the same pixels. */
+.app-shell--collapsed .app-sidebar__panel {
+  opacity: 0;
+  transition-delay: 0ms;
+  transition-duration: 100ms;
+}
+
+/* The rail is the same column seen once the panel has gone: full height,
+   sidebar surface, expand toggle level with the Connection / Queries headers. */
+.app-sidebar__rail {
+  align-items: center;
+  background: var(--surface-sidebar);
+  border-right: 1px solid var(--border-subtle);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  inset: 0;
+  opacity: 0;
+  padding: 0.5rem 5px;
+  /* The rail overlays the panel's left edge, so while the sidebar is open it
+     must be click-through — otherwise it eats presses on the table-tree
+     chevrons sitting under it. */
+  pointer-events: none;
+  position: absolute;
+  transition: opacity var(--duration-fast) var(--ease-out);
+  width: var(--sidebar-rail-width);
+  z-index: 1;
+}
+
+.app-shell--collapsed .app-sidebar__rail {
+  opacity: 1;
+  pointer-events: auto;
+  transition-delay: 100ms;
+}
+
+.loading-overlay {
+  align-items: center;
+  background: oklch(1 0 0 / 0.72);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  position: fixed;
+  z-index: 40;
+}
+
+.loading-overlay__phase {
+  color: var(--neutral-900);
+  font-family: var(--font-sans);
+  font-size: 19px;
+  font-weight: 600;
+  margin: 0;
+}
+
+/* Sidebars recede and content is the raised white plane. It used to be the
+   other way round — white rails around a grey workspace — which put the
+   chrome in front of the data. */
+.app-shell .connection-panel {
+  background: var(--surface-sidebar);
+  border-right: 1px solid var(--border-subtle);
+  box-sizing: border-box;
+  height: 100%;
+  max-height: 100vh;
+  overflow: auto;
+  padding: 0.5rem 0.5rem 1rem;
+}
+
+.app-main-column {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 550px;
   min-width: 0;
+}
+
+.app-workspace-split {
+  flex: 1;
+  height: 100%;
+  min-height: 0;
+  width: 100%;
+}
+
+.app-workspace-split__queries,
+.app-workspace-split__main {
+  min-height: 0;
+  min-width: 0;
+}
+
+.app-workspace-split__queries {
+  background: var(--surface-sidebar);
+  border-right: 1px solid var(--border-subtle);
+}
+
+.app-workspace-split__separator,
+.workspace-split__separator {
+  background: var(--border-subtle);
+  transition: background-color var(--duration-fast) var(--ease-standard);
+}
+
+.app-workspace-split__separator:hover,
+.workspace-split__separator:hover,
+.app-workspace-split__separator[data-resize-handle-state="drag"],
+.workspace-split__separator[data-resize-handle-state="drag"] {
+  background: var(--primary-400);
+}
+
+.app-workspace-main {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+}
+
+.app-workspace-main .tab-bar,
+.app-main-column .tab-bar {
+  background: var(--surface-page);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.app-main-column .vq-canvas {
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+}
+
+.workspace-split {
+  flex: 1;
+  height: 100%;
+  min-height: 0;
+  width: 100%;
+}
+
+.workspace-split__canvas,
+.workspace-split__results {
+  background: oklch(1 0 0);
+  min-height: 0;
+}
+
+.workspace-split__canvas {
+  overflow: hidden;
+}
+
+.workspace-split__results {
+  overflow: auto;
+}
+
+.app-main-column .query-results {
+  box-sizing: border-box;
+  height: 100%;
+  overflow: hidden;
+}
+
+.app-results-wrapper {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  position: relative;
+}
+
+.mutation-toast {
+  align-items: flex-start;
+  background: var(--success-tint);
+  border: 1px solid var(--success-solid);
+  border-radius: var(--radius-lg);
+  bottom: 16px;
+  box-shadow: var(--shadow-md);
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  max-width: 320px;
+  padding: 10px 12px;
+  position: absolute;
+  right: 16px;
+  z-index: 30;
+}
+
+.mutation-toast__body {
+  min-width: 0;
+}
+
+.mutation-toast__title {
+  color: var(--success-text);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.mutation-toast__table {
+  color: var(--neutral-700);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  margin: 2px 0 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mutation-toast__actions {
+  align-items: center;
+  display: flex;
+  flex-shrink: 0;
+  gap: 8px;
+}
+
+.mutation-toast__view-table {
+  background: var(--primary-600);
+  border: none;
+  border-radius: var(--radius);
+  color: oklch(1 0 0);
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 6px 10px;
+}
+
+.mutation-toast__view-table:hover {
+  background: var(--primary-700);
+}
+
+.mutation-toast__dismiss {
+  background: transparent;
+  border: none;
+  color: var(--success-text);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  padding: 2px 4px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
 }
 
 html,
 body,
 #root {
-  background: var(--neutral-100);
+  background: var(--surface-page);
+  color: var(--neutral-900);
+  font-family: var(--font-sans);
   margin: 0;
   min-height: 100%;
 }
 
+/* Restores the shrink the old minmax(15rem, 20rem) track gave the sidebar. It
+   is a step rather than a range because the column now animates its own width,
+   and a width transition needs two definite endpoints. */
+@media (max-width: 64rem) {
+  .app-shell {
+    --sidebar-width: 15rem;
+  }
+}
+
 @media (max-width: 48rem) {
+  /* Stacked layout: the sidebar is a full-width band above the workspace, and
+     collapsing drops back to a rail beside the workspace rather than leaving a
+     full-width strip of empty chrome. */
   .app-shell {
     grid-template-columns: 1fr;
   }
 
+  .app-sidebar,
+  .app-sidebar__panel {
+    width: 100%;
+  }
+
+  .app-shell--collapsed {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .app-shell--collapsed .app-sidebar {
+    width: var(--sidebar-rail-width);
+  }
+
   .app-shell .connection-panel {
-    border-bottom: 1px solid var(--neutral-300);
+    border-bottom: 1px solid var(--border-subtle);
     border-right: none;
+    height: auto;
     max-height: none;
   }
 }

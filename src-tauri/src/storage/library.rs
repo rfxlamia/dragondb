@@ -232,8 +232,7 @@ pub fn list_saved_queries(conn: &Connection) -> SqliteResult<Vec<SavedQueryRow>>
 
 /// Duplicate a saved query (new id; copy fields; fresh timestamps).
 pub fn duplicate_saved_query(conn: &Connection, id: &str) -> SqliteResult<String> {
-    let src = get_saved_query(conn, id)?
-        .ok_or_else(|| rusqlite::Error::QueryReturnedNoRows)?;
+    let src = get_saved_query(conn, id)?.ok_or_else(|| rusqlite::Error::QueryReturnedNoRows)?;
     save_saved_query(
         conn,
         SavedQueryWrite {
@@ -248,11 +247,7 @@ pub fn duplicate_saved_query(conn: &Connection, id: &str) -> SqliteResult<String
 }
 
 /// Move a saved query to a folder, or unfolder when `folder_id` is `None`.
-pub fn move_saved_query(
-    conn: &Connection,
-    id: &str,
-    folder_id: Option<&str>,
-) -> SqliteResult<()> {
+pub fn move_saved_query(conn: &Connection, id: &str, folder_id: Option<&str>) -> SqliteResult<()> {
     let now = utc_now_millis();
     let n = conn.execute(
         "UPDATE saved_queries SET folder_id = ?1, updated_at = ?2 WHERE id = ?3",
@@ -341,10 +336,18 @@ mod tests {
         assert_eq!(list_saved_queries(&conn).unwrap().len(), 2);
 
         move_saved_query(&conn, &qid, None).unwrap(); // unfolder
-        assert!(get_saved_query(&conn, &qid).unwrap().unwrap().folder_id.is_none());
+        assert!(get_saved_query(&conn, &qid)
+            .unwrap()
+            .unwrap()
+            .folder_id
+            .is_none());
         move_saved_query(&conn, &qid, Some(&folder_id)).unwrap();
         assert_eq!(
-            get_saved_query(&conn, &qid).unwrap().unwrap().folder_id.as_deref(),
+            get_saved_query(&conn, &qid)
+                .unwrap()
+                .unwrap()
+                .folder_id
+                .as_deref(),
             Some(folder_id.as_str())
         );
     }
@@ -381,8 +384,16 @@ mod tests {
         // nullify
         delete_folder(&conn, &folder_id, false).unwrap();
         assert!(list_folders(&conn).unwrap().is_empty());
-        assert!(get_saved_query(&conn, &q1).unwrap().unwrap().folder_id.is_none());
-        assert!(get_saved_query(&conn, &q2).unwrap().unwrap().folder_id.is_none());
+        assert!(get_saved_query(&conn, &q1)
+            .unwrap()
+            .unwrap()
+            .folder_id
+            .is_none());
+        assert!(get_saved_query(&conn, &q2)
+            .unwrap()
+            .unwrap()
+            .folder_id
+            .is_none());
 
         let folder2 = create_folder(&conn, "F2").unwrap();
         move_saved_query(&conn, &q1, Some(&folder2)).unwrap();

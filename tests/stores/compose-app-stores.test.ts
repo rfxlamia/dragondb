@@ -18,6 +18,7 @@ function baseTabDto(id: string) {
     selectedSchemaFilter: null,
     cachedResultsData: null,
     cachedColumnNames: null,
+    visualDocumentJson: null,
   };
 }
 
@@ -163,5 +164,127 @@ describe("composeAppStores", () => {
     expect(stores.getCanvasEpoch()).toBe(next);
     expect(spy).toHaveBeenCalled();
     unsub();
+  });
+
+  it("new tabs persist profileId on connectionId, not the live session token", async () => {
+    const ipc = {
+      connectProfile: vi.fn(async (id: string) => ({
+        connectionId: "live-session-token",
+        profileId: id,
+        database: "app",
+      })),
+      disconnect: vi.fn(async () => undefined),
+      listTables: vi.fn(async () => []),
+      listColumns: vi.fn(async () => []),
+      saveTabState: vi.fn(async () => undefined),
+      deleteTabState: vi.fn(async () => undefined),
+      listTabStates: vi.fn(async () => []),
+    } as unknown as DragonIpc;
+    const stores = composeAppStores(ipc);
+    await stores.session.getState().connect("P");
+    const tab = stores.tabs.getState().createTab();
+    expect(tab.connectionId).toBe("P");
+    expect(tab.connectionId).not.toBe("live-session-token");
+  });
+
+  it("exposes library and history stores and library.refresh hits saved-query IPC", async () => {
+    const listSavedQueries = vi.fn(async () => []);
+    const listQueryFolders = vi.fn(async () => []);
+    const ipc = {
+      connectProfile: vi.fn(),
+      disconnect: vi.fn(),
+      listTables: vi.fn(),
+      listColumns: vi.fn(),
+      saveTabState: vi.fn(),
+      deleteTabState: vi.fn(),
+      listTabStates: vi.fn(async () => []),
+      listSavedQueries,
+      listQueryFolders,
+      listHistory: vi.fn(async () => []),
+    } as unknown as DragonIpc;
+    const stores = composeAppStores(ipc);
+    expect(stores.library).toBeDefined();
+    expect(stores.history).toBeDefined();
+    await stores.library.getState().refresh();
+    expect(listSavedQueries).toHaveBeenCalledOnce();
+    expect(listQueryFolders).toHaveBeenCalledOnce();
+  });
+
+  it("composes an isolated browse store for each app store graph", () => {
+    const ipc = {
+      connectProfile: vi.fn(async () => ({ connectionId: "c1", profileId: "P", database: "shop" })),
+      disconnect: vi.fn(async () => undefined),
+      listTables: vi.fn(async () => []),
+      listColumns: vi.fn(async () => []),
+      saveTabState: vi.fn(async () => undefined),
+      deleteTabState: vi.fn(async () => undefined),
+      listTabStates: vi.fn(async () => []),
+    } as unknown as DragonIpc;
+    const left = composeAppStores(ipc);
+    const right = composeAppStores(ipc);
+    left.browse.getState().startBrowse({
+      tabId: "t1",
+      connectionId: "c1",
+      database: "shop",
+      table: { schema: "public", name: "orders", tableType: "regular" },
+    });
+    expect(left.browse.getState().identity?.database).toBe("shop");
+    expect(right.browse.getState().identity).toBeNull();
+  });
+
+  it("resets browse only after switchDatabase commits", async () => {
+    let rejectSwitch = true;
+    const ipc = {
+      connectProfile: vi.fn(async () => ({ connectionId: "c1", profileId: "P", database: "shop" })),
+      switchDatabase: vi.fn(async () => {
+        if (rejectSwitch) throw new Error("switch failed");
+      }),
+      listTables: vi.fn(async () => []),
+      listColumns: vi.fn(async () => []),
+      saveTabState: vi.fn(async () => undefined),
+      deleteTabState: vi.fn(async () => undefined),
+      listTabStates: vi.fn(async () => []),
+    } as unknown as DragonIpc;
+    const stores = composeAppStores(ipc);
+    await stores.session.getState().connect("P");
+    stores.browse.getState().startBrowse({
+      tabId: "t1",
+      connectionId: "c1",
+      database: "shop",
+      table: { schema: "public", name: "orders", tableType: "regular" },
+    });
+
+    await expect(stores.session.getState().switchDatabase("analytics")).rejects.toThrow();
+    expect(stores.browse.getState().identity?.database).toBe("shop");
+
+    rejectSwitch = false;
+    await stores.session.getState().switchDatabase("analytics");
+    expect(stores.browse.getState().identity).toBeNull();
+  });
+
+  it("clears browse identity on disconnect and leaves it cleared after a failed reconnect", async () => {
+    const ipc = {
+      connectProfile: vi.fn(async () => ({ connectionId: "c1", profileId: "P", database: "shop" })),
+      disconnect: vi.fn(async () => undefined),
+      listTables: vi.fn(async () => []),
+      listColumns: vi.fn(async () => []),
+      saveTabState: vi.fn(async () => undefined),
+      deleteTabState: vi.fn(async () => undefined),
+      listTabStates: vi.fn(async () => []),
+    } as unknown as DragonIpc;
+    const stores = composeAppStores(ipc);
+    await stores.session.getState().connect("P");
+    stores.browse.getState().startBrowse({
+      tabId: "t1",
+      connectionId: "c1",
+      database: "shop",
+      table: { schema: "public", name: "orders", tableType: "regular" },
+    });
+    await stores.session.getState().disconnect();
+    expect(stores.browse.getState().identity).toBeNull();
+
+    vi.mocked(ipc.connectProfile).mockRejectedValueOnce(new Error("offline"));
+    await expect(stores.session.getState().connect("P")).rejects.toThrow("offline");
+    expect(stores.browse.getState().identity).toBeNull();
   });
 });

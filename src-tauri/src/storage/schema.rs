@@ -80,17 +80,13 @@ pub fn migrate(conn: &Connection) -> SqliteResult<()> {
     ensure_column(conn, "tab_states", "selected_schema_filter", "TEXT")?;
     ensure_column(conn, "tab_states", "cached_results_data", "BLOB")?;
     ensure_column(conn, "tab_states", "cached_column_names", "TEXT")?;
+    ensure_column(conn, "tab_states", "visual_document_json", "TEXT")?;
 
     Ok(())
 }
 
 /// Add a column if missing (`PRAGMA table_info` + `ALTER TABLE … ADD COLUMN`).
-fn ensure_column(
-    conn: &Connection,
-    table: &str,
-    name: &str,
-    type_sql: &str,
-) -> SqliteResult<()> {
+fn ensure_column(conn: &Connection, table: &str, name: &str, type_sql: &str) -> SqliteResult<()> {
     let mut stmt = conn.prepare(&format!("PRAGMA table_info({table})"))?;
     let cols: Vec<String> = stmt
         .query_map([], |row| row.get::<_, String>(1))?
@@ -108,6 +104,13 @@ fn ensure_column(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn tab_states_has_visual_document_json_column() {
+        let conn = Connection::open_in_memory().unwrap();
+        migrate(&conn).expect("migrate");
+        assert_has_columns(&conn, "tab_states", &["visual_document_json"]);
+    }
     use rusqlite::Connection;
 
     fn column_names(conn: &Connection, table: &str) -> Vec<String> {
@@ -271,11 +274,9 @@ mod tests {
             &["id", "name", "query_text", "folder_id"],
         );
         let id: String = conn
-            .query_row(
-                "SELECT id FROM saved_queries WHERE id='legacy'",
-                [],
-                |r| r.get(0),
-            )
+            .query_row("SELECT id FROM saved_queries WHERE id='legacy'", [], |r| {
+                r.get(0)
+            })
             .unwrap();
         assert_eq!(id, "legacy");
     }

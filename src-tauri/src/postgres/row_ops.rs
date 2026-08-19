@@ -211,7 +211,10 @@ fn json_values_as_text(
     values: &[Value],
     fail_kind: RowOperationErrorKind,
 ) -> Result<Vec<Box<dyn ToSql + Sync + Send>>, RowOperationError> {
-    values.iter().map(|v| json_to_text_sql(v, fail_kind)).collect()
+    values
+        .iter()
+        .map(|v| json_to_text_sql(v, fail_kind))
+        .collect()
 }
 
 fn typed_eq(column: &str, udt_name: &str, param: usize) -> String {
@@ -271,7 +274,10 @@ pub async fn update_row(
     let pk_columns = fetch_pk_idents(client, schema, table).await?;
     validate_update_preconditions(
         Some((schema, table)),
-        &pk_columns.iter().map(|c| c.name.as_str()).collect::<Vec<_>>(),
+        &pk_columns
+            .iter()
+            .map(|c| c.name.as_str())
+            .collect::<Vec<_>>(),
         true,
     )?;
 
@@ -341,7 +347,10 @@ pub async fn delete_rows(
     let pk_columns = fetch_pk_idents(client, schema, table).await?;
     validate_delete_preconditions(
         Some((schema, table)),
-        &pk_columns.iter().map(|c| c.name.as_str()).collect::<Vec<_>>(),
+        &pk_columns
+            .iter()
+            .map(|c| c.name.as_str())
+            .collect::<Vec<_>>(),
         primary_keys,
     )?;
 

@@ -19,11 +19,99 @@ function baseTab(overrides: Partial<TabStateDto> = {}): TabStateDto {
     selectedSchemaFilter: null,
     cachedResultsData: null,
     cachedColumnNames: null,
+    visualDocumentJson: null,
     ...overrides,
   };
 }
 
 describe("tabs-store", () => {
+  it("setQueryText updates only the requested tab buffer", () => {
+    const ipc = {
+      saveTabState: vi.fn(async () => undefined),
+      deleteTabState: vi.fn(async () => undefined),
+      listTabStates: vi.fn(async () => []),
+    } as unknown as DragonIpc;
+    const store = createTabsStore(ipc, {
+      getConnectionId: () => "c1",
+      getDatabaseName: () => "app",
+    });
+    store.setState({
+      tabs: [baseTab({ id: "active" }), baseTab({ id: "other", isActive: false })],
+      activeTabId: "active",
+    });
+
+    store.getState().setQueryText("active", "SELECT 1");
+
+    expect(store.getState().tabs.map(({ id, queryText }) => ({ id, queryText }))).toEqual([
+      { id: "active", queryText: "SELECT 1" },
+      { id: "other", queryText: "" },
+    ]);
+  });
+
+  it("stores visual IR separately and persists the updated tab", async () => {
+    const saveTabState = vi.fn(async () => undefined);
+    const ipc = {
+      saveTabState,
+      deleteTabState: vi.fn(async () => undefined),
+      listTabStates: vi.fn(async () => []),
+    } as unknown as DragonIpc;
+    const store = createTabsStore(ipc, {
+      getConnectionId: () => "c1",
+      getDatabaseName: () => "app",
+    });
+    store.setState({
+      tabs: [baseTab({ id: "active", queryText: "SELECT 1" })],
+      activeTabId: "active",
+    });
+    const ir = JSON.stringify({ statementKind: "select", fromTable: { name: "orders" } });
+
+    await store.getState().setVisualDocumentJson("active", ir);
+
+    expect(store.getState().tabs[0]).toMatchObject({
+      queryText: "SELECT 1",
+      visualDocumentJson: ir,
+    });
+    expect(saveTabState).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "active",
+        queryText: "SELECT 1",
+        visualDocumentJson: ir,
+      }),
+      { includeCachedResults: false },
+    );
+  });
+
+  it("persistTab includeCachedResults false does not wipe an existing results blob", async () => {
+    const saveTabState = vi.fn(
+      async (_dto: TabStateDto, _opts?: { includeCachedResults?: boolean }) => undefined,
+    );
+    const ipc = {
+      saveTabState,
+      deleteTabState: vi.fn(async () => undefined),
+      listTabStates: vi.fn(async () => []),
+    } as unknown as DragonIpc;
+    const store = createTabsStore(ipc, {
+      getConnectionId: () => "c1",
+      getDatabaseName: () => "app",
+    });
+    const blob = JSON.stringify({ columns: ["c"], rows: [["kept"]] });
+    await store.getState().persistTab(
+      baseTab({
+        id: "T",
+        queryText: "SELECT 1",
+        cachedResultsData: blob,
+        cachedColumnNames: ["c"],
+        visualDocumentJson: null,
+      }),
+      { includeCachedResults: false },
+    );
+    expect(saveTabState).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "T", queryText: "SELECT 1" }),
+      { includeCachedResults: false },
+    );
+    expect(saveTabState.mock.calls[0]?.[1]).toEqual({ includeCachedResults: false });
+  });
+
   it("createTab inherits connection/databaseName, empty queryText, order = max+1", () => {
     const ipc = {
       saveTabState: vi.fn(async () => undefined),
@@ -46,7 +134,7 @@ describe("tabs-store", () => {
     expect(store.getState().activeTabId).toBe(created.id);
   });
 
-  it("closeTab among N activates MRU by lastAccessedAt", () => {
+  it("closeTab among N activates MRU by lastAccessedAt", async () => {
     const ipc = {
       saveTabState: vi.fn(async () => undefined),
       deleteTabState: vi.fn(async () => undefined),
@@ -65,8 +153,10 @@ describe("tabs-store", () => {
       activeTabId: "t2",
     });
     store.getState().closeTab("t2");
-    expect(store.getState().tabs.map((t) => t.id)).toEqual(["t1", "t3"]);
     expect(store.getState().activeTabId).toBe("t1");
+    await vi.waitFor(() => {
+      expect(store.getState().tabs.map((t) => t.id)).toEqual(["t1", "t3"]);
+    });
   });
 
   it("closeTab MRU compares lastAccessedAt numerically", () => {
@@ -91,7 +181,7 @@ describe("tabs-store", () => {
     expect(store.getState().activeTabId).toBe("t3");
   });
 
-  it("closeTab on last tab recreates empty active tab", () => {
+  it("closeTab on last tab recreates empty active tab", async () => {
     const ipc = {
       saveTabState: vi.fn(async () => undefined),
       deleteTabState: vi.fn(async () => undefined),
@@ -106,12 +196,49 @@ describe("tabs-store", () => {
       activeTabId: "only",
     });
     store.getState().closeTab("only");
-    expect(store.getState().tabs).toHaveLength(1);
-    const next = store.getState().tabs[0];
+    const next = store.getState().tabs.find((tab) => tab.id !== "only");
     expect(next).toBeDefined();
     expect(next?.id).not.toBe("only");
     expect(next?.queryText).toBe("");
     expect(store.getState().activeTabId).toBe(next?.id);
+    await vi.waitFor(() => {
+      expect(store.getState().tabs).toEqual([next]);
+    });
+  });
+
+  it("keeps a closing tab visible until deleteTabState settles", async () => {
+    let releaseDelete!: () => void;
+    const deleteGate = new Promise<void>((resolve) => {
+      releaseDelete = resolve;
+    });
+    const ipc = {
+      saveTabState: vi.fn(async () => undefined),
+      deleteTabState: vi.fn(async () => deleteGate),
+      listTabStates: vi.fn(async () => []),
+    } as unknown as DragonIpc;
+    const store = createTabsStore(ipc, {
+      getConnectionId: () => null,
+      getDatabaseName: () => null,
+    });
+    store.setState({
+      tabs: [
+        baseTab({ id: "closing", isActive: true, lastAccessedAt: "2" }),
+        baseTab({ id: "next", isActive: false, lastAccessedAt: "1" }),
+      ],
+      activeTabId: "closing",
+    });
+
+    store.getState().closeTab("closing");
+
+    expect(store.getState().tabs.map((tab) => tab.id)).toContain("closing");
+    expect(store.getState().pendingDeletedIds.has("closing")).toBe(true);
+    expect(store.getState().activeTabId).toBe("next");
+
+    releaseDelete();
+    await deleteGate;
+    await vi.waitFor(() => {
+      expect(store.getState().tabs.map((tab) => tab.id)).not.toContain("closing");
+    });
   });
 
   it("pending-deleted tab ids ignore subsequent writes", async () => {
@@ -189,6 +316,126 @@ describe("tabs-store", () => {
     });
     return store;
   }
+
+  it("hydrateFromDto keeps this-session ok compact when cache differs", () => {
+    const ipc = mockTabsIpc();
+    const store = createTabsStore(ipc, {
+      getConnectionId: () => "c1",
+      getDatabaseName: () => "app",
+    });
+    store.setState({
+      tabs: [
+        {
+          ...baseTab({ id: "T" }),
+          raw: { columns: ["c"], rows: [["live"]] },
+          compact: { columns: ["c"], rows: [["live"]] },
+          status: { kind: "ok", rowCount: 1, durationMs: 5 },
+        },
+      ],
+      activeTabId: "T",
+    });
+    store.getState().hydrateFromDto(
+      baseTab({
+        id: "T",
+        cachedResultsData: JSON.stringify({ columns: ["c"], rows: [["cached"]] }),
+        cachedColumnNames: ["c"],
+      }),
+    );
+    const tab = store.getState().tabs.find((t) => t.id === "T");
+    expect(tab?.compact?.rows).toEqual([["live"]]);
+    expect(tab?.raw?.rows).toEqual([["live"]]);
+    expect(tab?.status).toEqual({ kind: "ok", rowCount: 1, durationMs: 5 });
+  });
+
+  it("hydrateFromDto keeps running compact/raw/status when cache differs", () => {
+    const ipc = mockTabsIpc();
+    const store = createTabsStore(ipc, {
+      getConnectionId: () => "c1",
+      getDatabaseName: () => "app",
+    });
+    store.setState({
+      tabs: [
+        {
+          ...baseTab({ id: "T" }),
+          raw: { columns: ["c"], rows: [["inflight"]] },
+          compact: { columns: ["c"], rows: [["inflight"]] },
+          status: { kind: "running" },
+        },
+      ],
+      activeTabId: "T",
+    });
+    store.getState().hydrateFromDto(
+      baseTab({
+        id: "T",
+        cachedResultsData: JSON.stringify({ columns: ["c"], rows: [["cached"]] }),
+        cachedColumnNames: ["c"],
+      }),
+    );
+    const tab = store.getState().tabs.find((t) => t.id === "T");
+    expect(tab?.compact?.rows).toEqual([["inflight"]]);
+    expect(tab?.raw?.rows).toEqual([["inflight"]]);
+    expect(tab?.status).toEqual({ kind: "running" });
+  });
+
+  it("hydrateFromDto keeps error compact/raw/status when cache differs", () => {
+    const ipc = mockTabsIpc();
+    const store = createTabsStore(ipc, {
+      getConnectionId: () => "c1",
+      getDatabaseName: () => "app",
+    });
+    store.setState({
+      tabs: [
+        {
+          ...baseTab({ id: "T" }),
+          raw: { columns: ["c"], rows: [["old"]] },
+          compact: { columns: ["c"], rows: [["old"]] },
+          status: { kind: "error", message: "boom" },
+        },
+      ],
+      activeTabId: "T",
+    });
+    store.getState().hydrateFromDto(
+      baseTab({
+        id: "T",
+        cachedResultsData: JSON.stringify({ columns: ["c"], rows: [["cached"]] }),
+        cachedColumnNames: ["c"],
+      }),
+    );
+    const tab = store.getState().tabs.find((t) => t.id === "T");
+    expect(tab?.compact?.rows).toEqual([["old"]]);
+    expect(tab?.raw?.rows).toEqual([["old"]]);
+    expect(tab?.status).toEqual({ kind: "error", message: "boom" });
+  });
+
+  it("hydrateFromDto applies cache compact when status is idle", () => {
+    const ipc = mockTabsIpc();
+    const store = createTabsStore(ipc, {
+      getConnectionId: () => "c1",
+      getDatabaseName: () => "app",
+    });
+    store.setState({
+      tabs: [
+        {
+          ...baseTab({ id: "T" }),
+          raw: null,
+          compact: null,
+          status: { kind: "idle" },
+        },
+      ],
+      activeTabId: "T",
+    });
+    store.getState().hydrateFromDto(
+      baseTab({
+        id: "T",
+        cachedResultsData: JSON.stringify({ columns: ["id"], rows: [["cached"]] }),
+        cachedColumnNames: ["id"],
+      }),
+    );
+    const tab = store.getState().tabs.find((t) => t.id === "T");
+    expect(tab?.compact?.columns).toEqual(["id"]);
+    expect(tab?.compact?.rows).toEqual([["cached"]]);
+    expect(tab?.status).toEqual({ kind: "idle" });
+  });
 
   it("beginRun clears prior result, sets status=running, returns generation", () => {
     const ipc = mockTabsIpc();
@@ -389,5 +636,311 @@ describe("tabs-store", () => {
     expect(store.getState().activeTabId).toBe("local");
     expect(store.getState().tabs.map((t) => t.id)).toEqual(["local", "db-active"]);
     expect(store.getState().tabs.some((t) => t.id === "gone")).toBe(false);
+  });
+
+  it("hydrateFromDto does not throw when cached rows are not arrays, so later tabs still hydrate", () => {
+    const ipc = mockTabsIpc();
+    const store = createTabsStore(ipc, {
+      getConnectionId: () => "c1",
+      getDatabaseName: () => "app",
+    });
+    expect(() => {
+      store.getState().hydrateFromDto(
+        baseTab({
+          id: "bad",
+          cachedResultsData: JSON.stringify({ columns: ["id"], rows: ["not-a-row"] }),
+        }),
+      );
+    }).not.toThrow();
+    store.getState().hydrateFromDto(
+      baseTab({
+        id: "good",
+        isActive: true,
+        cachedResultsData: JSON.stringify({ columns: ["id"], rows: [["ok"]] }),
+      }),
+    );
+    const good = store.getState().tabs.find((t) => t.id === "good");
+    expect(good?.compact?.rows).toEqual([["ok"]]);
+    expect(good?.status).toEqual({ kind: "idle" });
+  });
+
+  it("refresh continues hydrating later tabs when one cachedResultsData row is not an array", async () => {
+    const ipc = {
+      saveTabState: vi.fn(async () => undefined),
+      deleteTabState: vi.fn(async () => undefined),
+      listTabStates: vi.fn(async () => [
+        baseTab({
+          id: "bad",
+          isActive: false,
+          cachedResultsData: JSON.stringify({ columns: ["id"], rows: ["not-a-row"] }),
+        }),
+        baseTab({
+          id: "good",
+          isActive: true,
+          cachedResultsData: JSON.stringify({ columns: ["id"], rows: [["ok"]] }),
+        }),
+      ]),
+    } as unknown as DragonIpc;
+    const store = createTabsStore(ipc, {
+      getConnectionId: () => "c1",
+      getDatabaseName: () => "app",
+    });
+    await expect(store.getState().refresh()).resolves.toBeUndefined();
+    expect(store.getState().tabs.map((t) => t.id)).toEqual(["bad", "good"]);
+    expect(store.getState().activeTabId).toBe("good");
+    expect(store.getState().tabs.find((t) => t.id === "good")?.compact?.rows).toEqual([["ok"]]);
+  });
+
+  it("does not create a default tab before listTabStates resolves, then creates one when empty", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const saveTabState = vi.fn(async () => undefined);
+    const ipc = {
+      saveTabState,
+      deleteTabState: vi.fn(async () => undefined),
+      listTabStates: vi.fn(async () => {
+        await gate;
+        return [];
+      }),
+    } as unknown as DragonIpc;
+    const store = createTabsStore(ipc, {
+      getConnectionId: () => null,
+      getDatabaseName: () => null,
+    });
+    expect(store.getState().tabsReady).toBe(false);
+    expect(store.getState().tabs).toHaveLength(0);
+    const pending = store.getState().refresh();
+    expect(store.getState().tabs).toHaveLength(0);
+    expect(store.getState().tabsReady).toBe(false);
+    expect(store.getState().activeTabId).toBeNull();
+    release();
+    await pending;
+    expect(store.getState().tabsReady).toBe(true);
+    expect(store.getState().tabs).toHaveLength(1);
+    const created = store.getState().tabs[0];
+    expect(created).toBeDefined();
+    expect(store.getState().activeTabId).toBe(created?.id);
+    expect(created?.queryText).toBe("");
+    expect(saveTabState).toHaveBeenCalled();
+  });
+
+  it("sets tabsReady with one in-memory tab when listTabStates rejects", async () => {
+    const saveTabState = vi.fn(async () => undefined);
+    const ipc = {
+      saveTabState,
+      deleteTabState: vi.fn(async () => undefined),
+      listTabStates: vi.fn(async () => {
+        throw new Error("hydrate failed");
+      }),
+    } as unknown as DragonIpc;
+    const store = createTabsStore(ipc, {
+      getConnectionId: () => null,
+      getDatabaseName: () => null,
+    });
+    await store.getState().refresh();
+    expect(store.getState().tabsReady).toBe(true);
+    expect(store.getState().tabs).toHaveLength(1);
+    expect(store.getState().activeTabId).toBe(store.getState().tabs[0]?.id);
+    expect(saveTabState).toHaveBeenCalled();
+  });
+
+  it("preserves hydrated tabs without adding a default", async () => {
+    const saveTabState = vi.fn(async () => undefined);
+    const ipc = {
+      saveTabState,
+      deleteTabState: vi.fn(async () => undefined),
+      listTabStates: vi.fn(async () => [baseTab({ id: "hydrated", isActive: true })]),
+    } as unknown as DragonIpc;
+    const store = createTabsStore(ipc, {
+      getConnectionId: () => "c1",
+      getDatabaseName: () => "app",
+    });
+    await store.getState().refresh();
+    expect(store.getState().tabs.map((t) => t.id)).toEqual(["hydrated"]);
+    expect(store.getState().tabsReady).toBe(true);
+    expect(store.getState().activeTabId).toBe("hydrated");
+    expect(saveTabState).not.toHaveBeenCalled();
+  });
+
+  it("setSavedQueryId updates in-memory tab and persists metadata without changing compact/status", async () => {
+    const saveTabState = vi.fn(
+      async (_dto: TabStateDto, _opts?: { includeCachedResults?: boolean }) => undefined,
+    );
+    const ipc = {
+      saveTabState,
+      deleteTabState: vi.fn(async () => undefined),
+      listTabStates: vi.fn(async () => []),
+    } as unknown as DragonIpc;
+    const store = createTabsStore(ipc, {
+      getConnectionId: () => "c1",
+      getDatabaseName: () => "app",
+    });
+    const compact = { columns: ["id"], rows: [[1]] };
+    store.setState({
+      tabs: [
+        {
+          ...baseTab({ id: "t1", savedQueryId: null }),
+          compact,
+          status: { kind: "ok", rowCount: 1, durationMs: 3 },
+        },
+      ],
+      activeTabId: "t1",
+    });
+    saveTabState.mockClear();
+    store.getState().setSavedQueryId("t1", "q1");
+    expect(store.getState().tabs[0]?.savedQueryId).toBe("q1");
+    expect(store.getState().tabs[0]?.compact).toEqual(compact);
+    expect(store.getState().tabs[0]?.status).toEqual({
+      kind: "ok",
+      rowCount: 1,
+      durationMs: 3,
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(saveTabState).toHaveBeenCalled();
+    const persisted = saveTabState.mock.calls[0]?.[0];
+    expect(persisted?.savedQueryId).toBe("q1");
+    store.getState().setSavedQueryId("t1", null);
+    expect(store.getState().tabs[0]?.savedQueryId).toBeNull();
+  });
+
+  it("restoreSavedQueryResult restores a success cache or clears an uncached selection", () => {
+    const store = createTabsStore(
+      {
+        saveTabState: vi.fn(async () => undefined),
+        deleteTabState: vi.fn(async () => undefined),
+        listTabStates: vi.fn(async () => []),
+      } as unknown as DragonIpc,
+      { getConnectionId: () => "c1", getDatabaseName: () => "app" },
+    );
+    store.setState({ tabs: [{ ...baseTab({ id: "t1" }) }], activeTabId: "t1" });
+    const staleGeneration = store.getState().beginRun("t1");
+    const cached = {
+      compact: { columns: ["id"], rows: [[9]] },
+      status: { kind: "ok" as const, rowCount: 1, durationMs: 7 },
+    };
+    store.getState().restoreSavedQueryResult("t1", cached);
+    expect(store.getState().tabs[0]?.raw).toBeNull();
+    expect(store.getState().tabs[0]?.compact).toEqual(cached.compact);
+    expect(store.getState().tabs[0]?.status).toEqual(cached.status);
+    void store
+      .getState()
+      .applyRunSuccess(
+        "t1",
+        { columns: ["id"], rows: [[1]], durationMs: 1 },
+        staleGeneration ?? undefined,
+      );
+    expect(store.getState().tabs[0]?.compact).toEqual(cached.compact);
+    store.getState().restoreSavedQueryResult("t1", null);
+    expect(store.getState().tabs[0]?.compact).toBeNull();
+    expect(store.getState().tabs[0]?.status).toEqual({ kind: "idle" });
+  });
+
+  it("persistTab sends visualDocumentJson and does not stuff IR into queryText", async () => {
+    const saveTabState = vi.fn(
+      async (_dto: TabStateDto, _opts?: { includeCachedResults?: boolean }) => undefined,
+    );
+    const ipc = {
+      saveTabState,
+      deleteTabState: vi.fn(async () => undefined),
+      listTabStates: vi.fn(async () => []),
+    } as unknown as DragonIpc;
+    const store = createTabsStore(ipc, {
+      getConnectionId: () => "c1",
+      getDatabaseName: () => "app",
+    });
+    const ir = JSON.stringify({ statementKind: "select", from: "orders" });
+    await store.getState().persistTab(
+      baseTab({
+        id: "T",
+        queryText: "SELECT 1",
+        visualDocumentJson: ir,
+      }),
+      { includeCachedResults: false },
+    );
+    expect(saveTabState).toHaveBeenCalledWith(
+      expect.objectContaining({ queryText: "SELECT 1", visualDocumentJson: ir }),
+      expect.any(Object),
+    );
+    expect(saveTabState.mock.calls[0]?.[0]?.queryText).not.toBe(ir);
+  });
+
+  it("setBrowsePage updates only the requested tab and stays off the persist DTO", async () => {
+    const saveTabState = vi.fn(
+      async (_dto: TabStateDto, _opts?: { includeCachedResults?: boolean }) => undefined,
+    );
+    const store = createTabsStore(
+      {
+        saveTabState,
+        deleteTabState: vi.fn(async () => undefined),
+        listTabStates: vi.fn(async () => []),
+      } as unknown as DragonIpc,
+      {
+        getConnectionId: () => "c1",
+        getDatabaseName: () => "app",
+      },
+    );
+    store.setState({
+      tabs: [baseTab({ id: "a" }), baseTab({ id: "b", isActive: false })],
+      activeTabId: "a",
+    });
+
+    store.getState().setBrowsePage("b", 2);
+
+    expect(store.getState().tabs.find((tab) => tab.id === "a")?.browsePage ?? 0).toBe(0);
+    expect(store.getState().tabs.find((tab) => tab.id === "b")?.browsePage).toBe(2);
+
+    await store.getState().setVisualDocumentJson("b", "{}");
+    expect(saveTabState.mock.calls[0]?.[0]).not.toHaveProperty("browsePage");
+  });
+
+  it("clearBrowseResults clears browse payloads but preserves SQL/canvas payloads", () => {
+    const store = createTabsStore({} as DragonIpc, {
+      getConnectionId: () => "P",
+      getDatabaseName: () => "shop",
+    });
+    store.setState({
+      activeTabId: "browse",
+      tabs: [
+        {
+          ...baseTab({
+            id: "browse",
+            selectedTableSchema: "public",
+            selectedTableName: "orders",
+          }),
+          raw: { columns: ["id"], rows: [[1]] },
+          compact: { columns: ["id"], rows: [[1]] },
+          status: { kind: "ok", rowCount: 1, durationMs: 1 },
+          browsePage: 2,
+        },
+        {
+          ...baseTab({
+            id: "sql",
+            queryText: "SELECT 1",
+            visualDocumentJson: '{"statementKind":"select"}',
+          }),
+          raw: { columns: ["?column?"], rows: [[1]] },
+          compact: { columns: ["?column?"], rows: [[1]] },
+          status: { kind: "ok", rowCount: 1, durationMs: 1 },
+        },
+      ],
+    });
+
+    store.getState().clearBrowseResults();
+
+    expect(store.getState().tabs.find((tab) => tab.id === "browse")).toMatchObject({
+      selectedTableSchema: null,
+      selectedTableName: null,
+      raw: null,
+      compact: null,
+      browsePage: 0,
+    });
+    expect(store.getState().tabs.find((tab) => tab.id === "sql")).toMatchObject({
+      queryText: "SELECT 1",
+      raw: { rows: [[1]] },
+      compact: { rows: [[1]] },
+    });
   });
 });

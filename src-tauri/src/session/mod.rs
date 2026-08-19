@@ -11,20 +11,26 @@ use std::time::Instant;
 
 use rusqlite::Connection as SqliteConnection;
 use serde::{Deserialize, Serialize};
-use tokio_postgres::Client;
+use tokio::task::AbortHandle;
+use tokio_postgres::{CancelToken, Client};
 use uuid::Uuid;
 
 use crate::postgres::{
-    collapse_ssl_mode, connect as pg_connect, delete_rows as pg_delete_rows,
-    list_columns as pg_list_columns, list_tables as pg_list_tables, run_query as pg_run_query,
-    update_row as pg_update_row, ColumnInfoRow, ConnectParams, IpcErrorKind, MappedIpcError,
-    QueryResultData, RowOperationError, RowOperationErrorKind, TableRefRow,
+    collapse_ssl_mode, connect as pg_connect, create_database as pg_create_database,
+    delete_rows as pg_delete_rows, drop_database as pg_drop_database, drop_table as pg_drop_table,
+    generate_table_ddl as pg_generate_table_ddl, list_columns as pg_list_columns,
+    list_databases as pg_list_databases, list_tables as pg_list_tables, maintenance_database,
+    run_query as pg_run_query, set_search_path as pg_set_search_path,
+    truncate_table as pg_truncate_table, update_row as pg_update_row, CancelRegistry,
+    ColumnInfoRow, ConnectParams, IpcErrorKind, MappedIpcError, QueryResultData, RowOperationError,
+    RowOperationErrorKind, TableRefRow,
 };
 use crate::secrets::{KeyringStore, KeyringStoreError, ProfileSecrets};
 use crate::ssh::{
     build_auth_method, PreparedAuth, SshAuthInput, TunnelError, TunnelHandle, TunnelRequest,
 };
 use crate::storage::{
+    clear_all_history as storage_clear_all_history,
     clear_history_for_profile as storage_clear_history_for_profile,
     create_folder as storage_create_folder, delete_folder as storage_delete_folder,
     delete_history as storage_delete_history, delete_profile as storage_delete_profile,
@@ -36,9 +42,8 @@ use crate::storage::{
     insert_tab_state_with_id as storage_insert_tab_state_with_id,
     list_folders as storage_list_folders, list_history as storage_list_history,
     list_profiles as storage_list_profiles, list_saved_queries as storage_list_saved_queries,
-    list_tab_states as storage_list_tab_states,
-    move_saved_query as storage_move_saved_query, open_db,
-    rename_folder as storage_rename_folder, save_saved_query as storage_save_saved_query,
+    list_tab_states as storage_list_tab_states, move_saved_query as storage_move_saved_query,
+    open_db, rename_folder as storage_rename_folder, save_saved_query as storage_save_saved_query,
     upsert_profile, upsert_tab_state as storage_upsert_tab_state, FolderRow, HistoryInsert,
     HistoryRow, ProfileRow, SavedQueryRow, SavedQueryWrite, TabStateRow, TabStateWrite,
 };
@@ -127,6 +132,8 @@ pub struct TableRefArg {
     pub name: String,
     #[serde(default)]
     pub schema: Option<String>,
+    #[serde(default)]
+    pub table_type: Option<String>,
 }
 
 struct ActiveSession {
@@ -136,6 +143,7 @@ struct ActiveSession {
     /// Cached for reconnect (never logged).
     secrets: ProfileSecrets,
     client: Option<Client>,
+    cancel_token: Option<CancelToken>,
     tunnel: Option<TunnelHandle>,
     ssh_enabled: bool,
     /// Usable live handle (DB client and/or fake live flag). Cleared during oneshot teardown.
@@ -155,11 +163,19 @@ enum Backend {
 pub struct AppSession {
     backend: Backend,
     active: Option<ActiveSession>,
+    cancel_registry: CancelRegistry,
 }
 
 impl AppSession {
     /// Open production session under `app_data_dir`.
     pub fn open(app_data_dir: &Path) -> Result<Self, MappedIpcError> {
+        Self::open_with_cancel_registry(app_data_dir, CancelRegistry::default())
+    }
+
+    pub fn open_with_cancel_registry(
+        app_data_dir: &Path,
+        cancel_registry: CancelRegistry,
+    ) -> Result<Self, MappedIpcError> {
         let db_path = crate::storage::default_db_path(app_data_dir);
         let db = open_db(&db_path).map_err(|e| MappedIpcError {
             kind: IpcErrorKind::Unknown,
@@ -172,6 +188,7 @@ impl AppSession {
                 keyring: KeyringStore::new("dragondb"),
             },
             active: None,
+            cancel_registry,
         })
     }
 
@@ -181,6 +198,7 @@ impl AppSession {
         Self {
             backend: Backend::Fake(deps),
             active,
+            cancel_registry: CancelRegistry::default(),
         }
     }
 
@@ -375,10 +393,7 @@ impl AppSession {
 
     /// Keep oneshot reconnect cache aligned with the last successful save of the live profile.
     fn sync_active_after_profile_save(&mut self, row: &ProfileRow) {
-        let is_active = self
-            .active
-            .as_ref()
-            .is_some_and(|a| a.profile_id == row.id);
+        let is_active = self.active.as_ref().is_some_and(|a| a.profile_id == row.id);
         if !is_active {
             return;
         }
@@ -403,9 +418,7 @@ impl AppSession {
             Backend::Production { db, keyring } => {
                 // Delete keyring first so a keyring failure cannot orphan secrets
                 // after the sqlite row is already gone.
-                keyring
-                    .delete_all_for_profile(id)
-                    .map_err(keyring_err)?;
+                keyring.delete_all_for_profile(id).map_err(keyring_err)?;
                 {
                     let guard = db.lock().map_err(|_| MappedIpcError {
                         kind: IpcErrorKind::Unknown,
@@ -443,17 +456,25 @@ impl AppSession {
         match &mut self.backend {
             Backend::Production { .. } => {
                 let ssh_enabled = profile.ssh_enabled;
-                let (client, tunnel) = establish_live(&profile, &secrets).await?;
+                let (client, tunnel, abort) = establish_live(&profile, &secrets).await?;
                 self.active = Some(ActiveSession {
                     connection_id: connection_id.clone(),
                     profile_id: id.to_string(),
                     profile,
                     secrets,
+                    cancel_token: Some(client.cancel_token()),
                     client: Some(client),
                     tunnel,
                     ssh_enabled,
                     live: true,
                 });
+                let active = self.active.as_ref().expect("active session just installed");
+                self.cancel_registry.register(
+                    active.connection_id.clone(),
+                    active.cancel_token.clone().expect("production token"),
+                    collapse_ssl_mode(&active.profile.ssl_mode),
+                    Some(abort),
+                );
             }
             Backend::Fake(d) => {
                 let ssh_enabled = profile.ssh_enabled;
@@ -467,6 +488,7 @@ impl AppSession {
                     profile,
                     secrets,
                     client: None,
+                    cancel_token: None,
                     tunnel: None,
                     ssh_enabled,
                     live: true,
@@ -482,6 +504,7 @@ impl AppSession {
     }
 
     pub async fn disconnect(&mut self) -> Result<(), MappedIpcError> {
+        self.cancel_registry.clear();
         if let Some(mut active) = self.active.take() {
             if let Some(mut tunnel) = active.tunnel.take() {
                 let _ = tunnel.shutdown();
@@ -490,6 +513,158 @@ impl AppSession {
             active.client = None;
         }
         Ok(())
+    }
+
+    /// List connectable databases through the active live client.
+    pub async fn list_databases(&self, connection_id: &str) -> Result<Vec<String>, MappedIpcError> {
+        self.require_live(connection_id)?;
+        match &self.backend {
+            Backend::Fake(_) => Ok(vec!["postgres".into(), "shop".into()]),
+            Backend::Production { .. } => {
+                let client = self
+                    .active
+                    .as_ref()
+                    .and_then(|active| active.client.as_ref())
+                    .ok_or_else(not_connected)?;
+                pg_list_databases(client).await
+            }
+        }
+    }
+
+    /// Reconnect the live session to a database without persisting the picker choice.
+    pub async fn switch_database(
+        &mut self,
+        connection_id: &str,
+        name: &str,
+    ) -> Result<(), MappedIpcError> {
+        self.require_live(connection_id)?;
+        let active = self.active.as_ref().ok_or_else(not_connected)?;
+        let mut profile = active.profile.clone();
+        profile.database = name.to_string();
+        let secrets = active.secrets.clone();
+
+        match &mut self.backend {
+            Backend::Production { .. } => {
+                let (client, tunnel, abort) = establish_live(&profile, &secrets).await?;
+                let active = self.active.as_mut().ok_or_else(not_connected)?;
+                if let Some(mut prior_tunnel) = active.tunnel.take() {
+                    let _ = prior_tunnel.shutdown();
+                }
+                active.client = Some(client);
+                active.cancel_token =
+                    Some(active.client.as_ref().expect("client set").cancel_token());
+                active.tunnel = tunnel;
+                active.profile = profile;
+                active.live = true;
+                self.cancel_registry.register(
+                    active.connection_id.clone(),
+                    active.cancel_token.clone().expect("production token"),
+                    collapse_ssl_mode(&active.profile.ssl_mode),
+                    Some(abort),
+                );
+            }
+            Backend::Fake(_) => {
+                self.active.as_mut().ok_or_else(not_connected)?.profile = profile;
+            }
+        }
+        Ok(())
+    }
+
+    /// Create a database through a temporary maintenance connection without selecting it.
+    pub async fn create_database(&mut self, name: &str) -> Result<(), MappedIpcError> {
+        let connection_id = self
+            .active
+            .as_ref()
+            .map(|active| active.connection_id.clone())
+            .ok_or_else(not_connected)?;
+        self.require_live(&connection_id)?;
+        if matches!(self.backend, Backend::Fake(_)) {
+            return Ok(());
+        }
+        self.run_database_admin(name, true).await
+    }
+
+    /// Drop a database through a temporary maintenance connection.
+    /// If the live session is connected to that database, move it to the
+    /// maintenance database first so PostgreSQL will accept DROP DATABASE.
+    pub async fn delete_database(&mut self, name: &str) -> Result<(), MappedIpcError> {
+        if matches!(self.backend, Backend::Fake(_)) {
+            if self
+                .active
+                .as_ref()
+                .is_some_and(|active| active.profile.database == name)
+            {
+                let connection_id = self
+                    .active
+                    .as_ref()
+                    .map(|active| active.connection_id.clone())
+                    .ok_or_else(not_connected)?;
+                let maintenance = maintenance_database(name).to_string();
+                self.switch_database(&connection_id, &maintenance).await?;
+            }
+            return Ok(());
+        }
+        let live_name = self
+            .active
+            .as_ref()
+            .map(|active| active.profile.database.clone());
+        let prior = live_name.clone();
+        if live_name.as_deref() == Some(name) {
+            let connection_id = self
+                .active
+                .as_ref()
+                .map(|active| active.connection_id.clone())
+                .ok_or_else(not_connected)?;
+            let maintenance = maintenance_database(name).to_string();
+            self.switch_database(&connection_id, &maintenance).await?;
+        }
+        let result = self.run_database_admin(name, false).await;
+        let Err(drop_error) = result else {
+            return Ok(());
+        };
+        // The DROP failed after the session was moved to the maintenance
+        // database, so put it back. A restore failure cannot be swallowed:
+        // the frontend would keep showing `prior` while Rust is on the
+        // maintenance database, and later queries would run against it.
+        let Some(prior_name) = prior.filter(|current| current == name) else {
+            return Err(drop_error);
+        };
+        let Some(connection_id) = self
+            .active
+            .as_ref()
+            .map(|active| active.connection_id.clone())
+        else {
+            return Err(drop_error);
+        };
+        match self.switch_database(&connection_id, &prior_name).await {
+            Ok(()) => Err(drop_error),
+            Err(restore_error) => {
+                let landed_on = maintenance_database(name).to_string();
+                Err(combine_drop_and_restore_errors(
+                    drop_error,
+                    &restore_error,
+                    &prior_name,
+                    &landed_on,
+                ))
+            }
+        }
+    }
+
+    async fn run_database_admin(&self, name: &str, create: bool) -> Result<(), MappedIpcError> {
+        let active = self.active.as_ref().ok_or_else(not_connected)?;
+        let mut profile = active.profile.clone();
+        profile.database = maintenance_database(name).to_string();
+        let (client, mut tunnel, _abort) = establish_live(&profile, &active.secrets).await?;
+        let result = if create {
+            pg_create_database(&client, name).await
+        } else {
+            pg_drop_database(&client, name).await
+        };
+        drop(client);
+        if let Some(tunnel) = tunnel.as_mut() {
+            let _ = tunnel.shutdown();
+        }
+        result
     }
 
     pub async fn list_tables(
@@ -501,7 +676,7 @@ impl AppSession {
         let first = self.list_tables_once(is_fake).await;
         match first {
             Ok(rows) => Ok(rows),
-            Err(e) if is_connection_kind(&e) => {
+            Err(e) if self.should_oneshot_reconnect(&e) => {
                 self.oneshot_reconnect().await?;
                 self.list_tables_once(is_fake).await
             }
@@ -509,7 +684,10 @@ impl AppSession {
         }
     }
 
-    async fn list_tables_once(&mut self, is_fake: bool) -> Result<Vec<TableRefRow>, MappedIpcError> {
+    async fn list_tables_once(
+        &mut self,
+        is_fake: bool,
+    ) -> Result<Vec<TableRefRow>, MappedIpcError> {
         if !self.has_live_handle() {
             return Err(not_connected());
         }
@@ -518,6 +696,7 @@ impl AppSession {
             return Ok(vec![TableRefRow {
                 schema: "public".into(),
                 name: "users".into(),
+                table_type: "regular".into(),
             }]);
         }
         let client = self
@@ -540,7 +719,7 @@ impl AppSession {
         let first = self.list_columns_once(is_fake, schema, &table_name).await;
         match first {
             Ok(rows) => Ok(rows),
-            Err(e) if is_connection_kind(&e) => {
+            Err(e) if self.should_oneshot_reconnect(&e) => {
                 self.oneshot_reconnect().await?;
                 self.list_columns_once(is_fake, schema, &table_name).await
             }
@@ -567,6 +746,97 @@ impl AppSession {
             .and_then(|a| a.client.as_ref())
             .ok_or_else(not_connected)?;
         pg_list_columns(client, schema, table_name).await
+    }
+
+    pub async fn truncate_table(
+        &mut self,
+        connection_id: &str,
+        table: &TableRefArg,
+    ) -> Result<(), MappedIpcError> {
+        self.require_live(connection_id)?;
+        if matches!(self.backend, Backend::Fake(_)) {
+            return Ok(());
+        }
+        let client = self
+            .active
+            .as_ref()
+            .and_then(|a| a.client.as_ref())
+            .ok_or_else(not_connected)?;
+        if table.table_type.as_deref() == Some("foreign") {
+            return Err(MappedIpcError {
+                kind: IpcErrorKind::Unknown,
+                message: "TRUNCATE is not supported for foreign tables.".into(),
+                position: None,
+            });
+        }
+        pg_truncate_table(
+            client,
+            table.schema.as_deref().unwrap_or("public"),
+            &table.name,
+        )
+        .await
+    }
+
+    pub async fn drop_table(
+        &mut self,
+        connection_id: &str,
+        table: &TableRefArg,
+    ) -> Result<(), MappedIpcError> {
+        self.require_live(connection_id)?;
+        if matches!(self.backend, Backend::Fake(_)) {
+            return Ok(());
+        }
+        let client = self
+            .active
+            .as_ref()
+            .and_then(|a| a.client.as_ref())
+            .ok_or_else(not_connected)?;
+        pg_drop_table(
+            client,
+            table.schema.as_deref().unwrap_or("public"),
+            &table.name,
+            table.table_type.as_deref(),
+        )
+        .await
+    }
+
+    pub async fn generate_table_ddl(
+        &mut self,
+        connection_id: &str,
+        table: &TableRefArg,
+    ) -> Result<String, MappedIpcError> {
+        self.require_live(connection_id)?;
+        if matches!(self.backend, Backend::Fake(_)) {
+            return Ok(String::new());
+        }
+        let client = self
+            .active
+            .as_ref()
+            .and_then(|a| a.client.as_ref())
+            .ok_or_else(not_connected)?;
+        pg_generate_table_ddl(
+            client,
+            table.schema.as_deref().unwrap_or("public"),
+            &table.name,
+        )
+        .await
+    }
+
+    pub async fn set_search_path(
+        &mut self,
+        connection_id: &str,
+        schema: Option<&str>,
+    ) -> Result<(), MappedIpcError> {
+        self.require_live(connection_id)?;
+        if matches!(self.backend, Backend::Fake(_)) {
+            return Ok(());
+        }
+        let client = self
+            .active
+            .as_ref()
+            .and_then(|a| a.client.as_ref())
+            .ok_or_else(not_connected)?;
+        pg_set_search_path(client, schema).await
     }
 
     pub async fn run_query(
@@ -627,7 +897,7 @@ impl AppSession {
         let first = self.query_once(sql, params).await;
         match first {
             Ok(r) => Ok(r),
-            Err(e) if is_connection_kind(&e) => {
+            Err(e) if self.should_oneshot_reconnect(&e) => {
                 self.oneshot_reconnect().await?;
                 self.query_once(sql, params).await
             }
@@ -758,9 +1028,8 @@ impl AppSession {
         connection_id: &str,
         fail_kind: RowOperationErrorKind,
     ) -> Result<(), RowOperationError> {
-        self.require_live(connection_id).map_err(|e| {
-            RowOperationError::new(fail_kind, e.message)
-        })?;
+        self.require_live(connection_id)
+            .map_err(|e| RowOperationError::new(fail_kind, e.message))?;
         if !self.has_live_handle() {
             return Err(RowOperationError::new(
                 fail_kind,
@@ -787,6 +1056,10 @@ impl AppSession {
         }
     }
 
+    fn should_oneshot_reconnect(&self, error: &MappedIpcError) -> bool {
+        is_connection_kind(error) && !self.cancel_registry.teardown_requested()
+    }
+
     async fn oneshot_reconnect(&mut self) -> Result<(), MappedIpcError> {
         let Some(active) = self.active.as_mut() else {
             return Err(not_connected());
@@ -796,7 +1069,9 @@ impl AppSession {
             let _ = tunnel.shutdown();
         }
         active.client = None;
+        active.cancel_token = None;
         active.live = false;
+        self.cancel_registry.clear();
 
         let profile = active.profile.clone();
         let secrets = active.secrets.clone();
@@ -804,11 +1079,18 @@ impl AppSession {
 
         match &mut self.backend {
             Backend::Production { .. } => {
-                let (client, tunnel) = establish_live(&profile, &secrets).await?;
+                let (client, tunnel, abort) = establish_live(&profile, &secrets).await?;
                 if let Some(a) = self.active.as_mut() {
                     a.client = Some(client);
+                    a.cancel_token = Some(a.client.as_ref().expect("client set").cancel_token());
                     a.tunnel = tunnel;
                     a.live = true;
+                    self.cancel_registry.register(
+                        a.connection_id.clone(),
+                        a.cancel_token.clone().expect("production token"),
+                        collapse_ssl_mode(&a.profile.ssl_mode),
+                        Some(abort),
+                    );
                 }
                 Ok(())
             }
@@ -837,6 +1119,12 @@ impl AppSession {
             }),
             None => Err(not_connected()),
         }
+    }
+
+    /// Keyring secrets for a saved profile, for callers that must fill in
+    /// fields the edit form never received (see `merge_test_secrets`).
+    pub fn stored_secrets(&self, profile_id: &str) -> Result<ProfileSecrets, MappedIpcError> {
+        self.load_secrets(profile_id)
     }
 
     fn load_secrets(&self, profile_id: &str) -> Result<ProfileSecrets, MappedIpcError> {
@@ -887,8 +1175,9 @@ impl AppSession {
             }
             Backend::Fake(_) => Err(MappedIpcError {
                 kind: IpcErrorKind::Unknown,
-                message: "Library IPC requires production storage (temp AppSession::open in tests)."
-                    .into(),
+                message:
+                    "Library IPC requires production storage (temp AppSession::open in tests)."
+                        .into(),
                 position: None,
             }),
         }
@@ -905,17 +1194,16 @@ impl AppSession {
     }
 
     /// Create (id absent in DB) or update (id present). UPDATE matching 0 rows → error.
-    pub fn save_saved_query(&self, query: SavedQueryWriteInput) -> Result<SavedQueryRow, MappedIpcError> {
+    pub fn save_saved_query(
+        &self,
+        query: SavedQueryWriteInput,
+    ) -> Result<SavedQueryRow, MappedIpcError> {
         self.with_production_db(|db| {
             let exists = storage_get_saved_query(db, &query.id)
                 .map_err(sqlite_err)?
                 .is_some();
             let write = SavedQueryWrite {
-                id: if exists {
-                    Some(query.id.clone())
-                } else {
-                    None
-                },
+                id: if exists { Some(query.id.clone()) } else { None },
                 name: query.name.clone(),
                 query_text: query.query_text.clone(),
                 connection_id: query.connection_id.clone(),
@@ -977,7 +1265,11 @@ impl AppSession {
         })
     }
 
-    pub fn move_saved_query(&self, id: &str, folder_id: Option<&str>) -> Result<(), MappedIpcError> {
+    pub fn move_saved_query(
+        &self,
+        id: &str,
+        folder_id: Option<&str>,
+    ) -> Result<(), MappedIpcError> {
         self.with_production_db(|db| {
             storage_move_saved_query(db, id, folder_id).map_err(sqlite_err)
         })
@@ -1037,6 +1329,10 @@ impl AppSession {
         })
     }
 
+    pub fn clear_all_history(&self) -> Result<(), MappedIpcError> {
+        self.with_production_db(|db| storage_clear_all_history(db).map_err(sqlite_err))
+    }
+
     // --- Tabs thin wrappers -------------------------------------------------
 
     pub fn list_tab_states(&self) -> Result<Vec<TabStateRow>, MappedIpcError> {
@@ -1059,7 +1355,8 @@ impl AppSession {
         include_cached_results: bool,
     ) -> Result<(), MappedIpcError> {
         self.with_production_db(|db| {
-            let write = tab_write_from_input(&input, include_cached_results, /* for_update */ true)?;
+            let write =
+                tab_write_from_input(&input, include_cached_results, /* for_update */ true)?;
             match storage_upsert_tab_state(db, write) {
                 Ok(_) => Ok(()),
                 Err(rusqlite::Error::QueryReturnedNoRows) => Err(MappedIpcError {
@@ -1083,7 +1380,8 @@ impl AppSession {
         include_cached_results: bool,
     ) -> Result<(), MappedIpcError> {
         self.with_production_db(|db| {
-            let write = tab_write_from_input(&input, include_cached_results, /* for_update */ false)?;
+            let write =
+                tab_write_from_input(&input, include_cached_results, /* for_update */ false)?;
             storage_insert_tab_state_with_id(db, &input.id, write).map_err(sqlite_err)
         })
     }
@@ -1126,6 +1424,7 @@ fn tab_write_from_input(
         include_cached_results,
         cached_results_data: cached_bytes,
         cached_column_names: cached_cols,
+        visual_document_json: input.visual_document_json.clone(),
     })
 }
 
@@ -1151,6 +1450,7 @@ pub struct TabStateWriteInput {
     /// Opaque JSON string; stored as UTF-8 bytes (not base64).
     pub cached_results_data: Option<String>,
     pub cached_column_names: Option<Vec<String>>,
+    pub visual_document_json: Option<String>,
 }
 
 /// IPC write body for save_saved_query (mirrors TS SavedQueryDto fields used on write).
@@ -1173,7 +1473,7 @@ pub struct SavedQueryWriteInput {
 async fn establish_live(
     profile: &ProfileRow,
     secrets: &ProfileSecrets,
-) -> Result<(Client, Option<TunnelHandle>), MappedIpcError> {
+) -> Result<(Client, Option<TunnelHandle>, AbortHandle), MappedIpcError> {
     let password = secrets.password.as_deref().unwrap_or("");
     let tls = collapse_ssl_mode(&profile.ssl_mode);
 
@@ -1211,14 +1511,11 @@ async fn establish_live(
                 passphrase: secrets.ssh_passphrase.clone(),
             },
             _ => SshAuthInput::Password {
-                password: secrets
-                    .ssh_password
-                    .clone()
-                    .ok_or_else(|| MappedIpcError {
-                        kind: IpcErrorKind::Auth,
-                        message: "SSH password is missing from keyring.".into(),
-                        position: None,
-                    })?,
+                password: secrets.ssh_password.clone().ok_or_else(|| MappedIpcError {
+                    kind: IpcErrorKind::Auth,
+                    message: "SSH password is missing from keyring.".into(),
+                    position: None,
+                })?,
             },
         };
         let prepared: PreparedAuth = build_auth_method(auth_input).map_err(|e| MappedIpcError {
@@ -1254,14 +1551,14 @@ async fn establish_live(
         })
         .await
         {
-            Ok(client) => Ok((client, Some(tunnel))),
+            Ok((client, abort)) => Ok((client, Some(tunnel), abort)),
             Err(e) => {
                 let _ = tunnel.shutdown();
                 Err(e)
             }
         }
     } else {
-        let client = pg_connect(ConnectParams {
+        let (client, abort) = pg_connect(ConnectParams {
             host: &profile.host,
             port: profile.port as u16,
             user: &profile.username,
@@ -1270,7 +1567,7 @@ async fn establish_live(
             tls,
         })
         .await?;
-        Ok((client, None))
+        Ok((client, None, abort))
     }
 }
 
@@ -1302,6 +1599,22 @@ fn secrets_from_input(s: &ProfileSecretsInput) -> ProfileSecrets {
     }
 }
 
+/// Secrets for a Test against a saved profile. The edit form initialises its
+/// secrets to `{}` because stored values are never read back out of the
+/// keyring, so any field the user did not retype must come from the keyring —
+/// otherwise Test probes with an empty password and no SSH material and fails
+/// on a profile that Connect opens fine. A retyped value always wins; an empty
+/// string is the form's "unchanged" marker, matching `nonempty_secret`.
+pub fn merge_test_secrets(typed: &ProfileSecretsInput, stored: ProfileSecrets) -> ProfileSecrets {
+    let typed = secrets_from_input(typed);
+    ProfileSecrets {
+        password: typed.password.or(stored.password),
+        ssh_password: typed.ssh_password.or(stored.ssh_password),
+        ssh_passphrase: typed.ssh_passphrase.or(stored.ssh_passphrase),
+        ssh_private_key: typed.ssh_private_key.or(stored.ssh_private_key),
+    }
+}
+
 /// Empty string means omit (do not update keyring slot), matching edit-form UX.
 fn nonempty_secret(value: Option<&String>) -> Option<String> {
     value.filter(|v| !v.is_empty()).cloned()
@@ -1327,6 +1640,27 @@ fn map_tunnel_error(err: TunnelError) -> MappedIpcError {
             message,
             position: None,
         },
+    }
+}
+
+/// A failed DROP DATABASE leaves the live session on the maintenance database.
+/// When the restore back to the previously selected database also fails, the
+/// frontend would keep showing that database while Rust is on `postgres` /
+/// `template1`, so the restore failure must surface instead of being dropped.
+fn combine_drop_and_restore_errors(
+    drop_error: MappedIpcError,
+    restore_error: &MappedIpcError,
+    prior: &str,
+    landed_on: &str,
+) -> MappedIpcError {
+    MappedIpcError {
+        kind: IpcErrorKind::Connection,
+        message: format!(
+            "{} The session could not be returned to \"{prior}\" and is now connected to \"{landed_on}\": {}",
+            drop_error.message.trim_end(),
+            restore_error.message.trim_end()
+        ),
+        position: None,
     }
 }
 
@@ -1504,16 +1838,14 @@ impl FakeDeps {
                     .storage
                     .get_profile(profile_id)
                     .unwrap_or_else(|| sample_row(profile_id, ssh_enabled));
-                let secrets = self
-                    .keyring
-                    .get_secrets(profile_id)
-                    .unwrap_or_default();
+                let secrets = self.keyring.get_secrets(profile_id).unwrap_or_default();
                 Some(ActiveSession {
                     connection_id: connection_id.clone(),
                     profile_id: profile_id.clone(),
                     profile,
                     secrets,
                     client: None,
+                    cancel_token: None,
                     tunnel: None,
                     ssh_enabled,
                     live: true,
@@ -1620,7 +1952,8 @@ impl FakePostgres {
         self.connect_calls.fetch_add(1, Ordering::SeqCst);
         let prev = self.fail_connect_remaining.load(Ordering::SeqCst);
         if prev > 0 {
-            self.fail_connect_remaining.store(prev - 1, Ordering::SeqCst);
+            self.fail_connect_remaining
+                .store(prev - 1, Ordering::SeqCst);
             return Err(MappedIpcError {
                 kind: IpcErrorKind::Connection,
                 message: "Connection error: injected connect failure.".into(),
@@ -1645,11 +1978,7 @@ impl FakePostgres {
                 position: None,
             });
         }
-        let cleared = self
-            .dead_cleared
-            .lock()
-            .map(|g| *g)
-            .unwrap_or(false);
+        let cleared = self.dead_cleared.lock().map(|g| *g).unwrap_or(false);
         if self.dead_socket && !cleared {
             return Err(MappedIpcError {
                 kind: IpcErrorKind::Connection,
@@ -1693,10 +2022,7 @@ impl FakeStorage {
     }
 
     pub fn last_history(&self) -> Option<HistoryInsert> {
-        self.history
-            .lock()
-            .ok()
-            .and_then(|g| g.last().cloned())
+        self.history.lock().ok().and_then(|g| g.last().cloned())
     }
 
     fn list_profiles(&self) -> Vec<ProfileRow> {
@@ -1707,10 +2033,7 @@ impl FakeStorage {
     }
 
     fn get_profile(&self, id: &str) -> Option<ProfileRow> {
-        self.profiles
-            .lock()
-            .ok()
-            .and_then(|g| g.get(id).cloned())
+        self.profiles.lock().ok().and_then(|g| g.get(id).cloned())
     }
 
     fn upsert(&self, row: &ProfileRow) {
@@ -1866,6 +2189,86 @@ fn sample_query_result() -> QueryResultData {
 mod tests {
     use super::*;
 
+    #[test]
+    fn test_connection_reuses_stored_secrets_for_omitted_fields() {
+        // Editing a saved profile initialises the form's secrets to {}, so Test
+        // would otherwise probe with an empty password and no SSH material and
+        // report an auth failure for a profile Connect opens fine.
+        let typed = ProfileSecretsInput::default();
+        let stored = ProfileSecrets {
+            password: Some("stored-pw".into()),
+            ssh_password: Some("stored-ssh".into()),
+            ssh_passphrase: Some("stored-phrase".into()),
+            ssh_private_key: Some("stored-key".into()),
+        };
+        let merged = merge_test_secrets(&typed, stored);
+        assert_eq!(merged.password.as_deref(), Some("stored-pw"));
+        assert_eq!(merged.ssh_password.as_deref(), Some("stored-ssh"));
+        assert_eq!(merged.ssh_passphrase.as_deref(), Some("stored-phrase"));
+        assert_eq!(merged.ssh_private_key.as_deref(), Some("stored-key"));
+    }
+
+    #[test]
+    fn test_connection_prefers_freshly_typed_secrets_over_stored_ones() {
+        let typed = ProfileSecretsInput {
+            password: Some("typed-pw".into()),
+            // An empty string is the form's "unchanged" marker, not a blanking.
+            ssh_password: Some(String::new()),
+            ..ProfileSecretsInput::default()
+        };
+        let stored = ProfileSecrets {
+            password: Some("stored-pw".into()),
+            ssh_password: Some("stored-ssh".into()),
+            ..ProfileSecrets::default()
+        };
+        let merged = merge_test_secrets(&typed, stored);
+        assert_eq!(merged.password.as_deref(), Some("typed-pw"));
+        assert_eq!(merged.ssh_password.as_deref(), Some("stored-ssh"));
+    }
+
+    #[test]
+    fn test_connection_without_stored_secrets_keeps_the_typed_ones() {
+        let typed = ProfileSecretsInput {
+            password: Some("typed-pw".into()),
+            ..ProfileSecretsInput::default()
+        };
+        let merged = merge_test_secrets(&typed, ProfileSecrets::default());
+        assert_eq!(merged.password.as_deref(), Some("typed-pw"));
+        assert_eq!(merged.ssh_private_key, None);
+    }
+
+    #[test]
+    fn failed_drop_with_failed_restore_reports_the_database_the_session_landed_on() {
+        let drop_error = MappedIpcError {
+            kind: IpcErrorKind::Permission,
+            message: "must be owner of database shop".into(),
+            position: None,
+        };
+        let restore_error = MappedIpcError {
+            kind: IpcErrorKind::Connection,
+            message: "connection refused".into(),
+            position: None,
+        };
+        let combined =
+            combine_drop_and_restore_errors(drop_error, &restore_error, "shop", "postgres");
+        assert_eq!(combined.kind, IpcErrorKind::Connection);
+        assert!(
+            combined.message.contains("must be owner of database shop"),
+            "the original DROP failure must not be lost: {}",
+            combined.message
+        );
+        assert!(
+            combined.message.contains("connection refused"),
+            "the restore failure must not be swallowed: {}",
+            combined.message
+        );
+        assert!(
+            combined.message.contains("shop") && combined.message.contains("postgres"),
+            "the caller needs both the intended and the actual database: {}",
+            combined.message
+        );
+    }
+
     #[tokio::test]
     async fn disconnect_clears_session_and_rejects_list_without_silent_reconnect() {
         let mut session = AppSession::with_fakes(FakeDeps::connected_direct());
@@ -1881,7 +2284,10 @@ mod tests {
     #[tokio::test]
     async fn wrong_connection_id_rejects_without_reconnect() {
         let mut session = AppSession::with_fakes(FakeDeps::connected_direct());
-        let live = session.active_connection_id().expect("connected").to_string();
+        let live = session
+            .active_connection_id()
+            .expect("connected")
+            .to_string();
         let err = session
             .list_tables("not-the-live-id")
             .await
@@ -1904,7 +2310,9 @@ mod tests {
     fn map_tunnel_error_maps_connection_and_io_to_connection_kind() {
         let conn = map_tunnel_error(TunnelError::Connection("SSH handshake failed".into()));
         assert_eq!(conn.kind, IpcErrorKind::Connection);
-        let io = map_tunnel_error(TunnelError::Io("Failed to bind local tunnel listener".into()));
+        let io = map_tunnel_error(TunnelError::Io(
+            "Failed to bind local tunnel listener".into(),
+        ));
         assert_eq!(io.kind, IpcErrorKind::Connection);
     }
 
@@ -1948,7 +2356,10 @@ mod tests {
     async fn missing_live_handle_while_connected_triggers_oneshot_on_run_query() {
         let mut session = AppSession::with_fakes(FakeDeps::connected_direct());
         session.strip_live_handle_for_test();
-        let cid = session.active_connection_id().expect("still connected").to_string();
+        let cid = session
+            .active_connection_id()
+            .expect("still connected")
+            .to_string();
         session
             .run_query(
                 &cid,
@@ -2016,7 +2427,10 @@ mod tests {
             })
             .await
             .expect_err("keyring fail");
-        assert!(matches!(err.kind, IpcErrorKind::Unknown | IpcErrorKind::Auth));
+        assert!(matches!(
+            err.kind,
+            IpcErrorKind::Unknown | IpcErrorKind::Auth
+        ));
         assert_eq!(session.fake_storage().profile_count(), 0);
     }
 
@@ -2211,15 +2625,17 @@ mod tests {
                 },
             )
             .await;
-        let row = session.fake_storage().last_history().expect("failed history");
+        let row = session
+            .fake_storage()
+            .last_history()
+            .expect("failed history");
         assert!(!row.success);
-        assert!(
-            row.error_message
-                .as_deref()
-                .unwrap_or("")
-                .to_lowercase()
-                .contains("syntax")
-        );
+        assert!(row
+            .error_message
+            .as_deref()
+            .unwrap_or("")
+            .to_lowercase()
+            .contains("syntax"));
         assert_eq!(row.sql, "SELECT * FROM secrets");
     }
 
@@ -2257,5 +2673,40 @@ mod tests {
         assert_eq!(session.fake_keyring().secret_count_for(&profile_id), 0);
         let err = session.list_tables("any").await.expect_err("cleared");
         assert_eq!(err.kind, IpcErrorKind::Connection);
+    }
+
+    #[tokio::test]
+    async fn create_database_does_not_select_until_explicit_switch() {
+        let mut session = AppSession::with_fakes(FakeDeps::connected_direct());
+        let connection_id = session.active_connection_id().unwrap().to_string();
+        let original = session.active.as_ref().unwrap().profile.database.clone();
+
+        session
+            .create_database("shop")
+            .await
+            .expect("create database");
+        assert_eq!(session.active.as_ref().unwrap().profile.database, original);
+
+        session
+            .switch_database(&connection_id, "shop")
+            .await
+            .expect("explicit switch");
+        assert_eq!(session.active.as_ref().unwrap().profile.database, "shop");
+    }
+
+    #[tokio::test]
+    async fn delete_database_moves_the_live_session_off_the_dropped_database() {
+        let mut session = AppSession::with_fakes(FakeDeps::connected_direct());
+        let original = session.active.as_ref().unwrap().profile.database.clone();
+        assert_eq!(original, "app");
+
+        session
+            .delete_database("app")
+            .await
+            .expect("delete database");
+        assert_eq!(
+            session.active.as_ref().unwrap().profile.database,
+            "postgres"
+        );
     }
 }

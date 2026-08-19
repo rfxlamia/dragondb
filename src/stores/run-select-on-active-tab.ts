@@ -9,6 +9,7 @@ import type { ExecutableSQL } from "../core";
 import type { DragonIpc, QueryResult } from "../ipc/contract";
 import { QUERY_FAILED_MESSAGE, unknownErrorMessage } from "../lib/unknown-error-message";
 import type { AppStores } from "./compose-app-stores";
+import type { TabState } from "./tabs-store";
 
 function ensureActiveTab(stores: AppStores): string {
   const { activeTabId, createTab } = stores.tabs.getState();
@@ -20,6 +21,7 @@ export async function runSelectOnActiveTab(
   stores: AppStores,
   ipc: DragonIpc,
   sql: ExecutableSQL,
+  onAppliedSuccess?: (tab: TabState) => void,
 ): Promise<QueryResult> {
   const connectionId = stores.session.getState().connectionId;
   if (connectionId === null) {
@@ -28,10 +30,11 @@ export async function runSelectOnActiveTab(
 
   const executingTabId = ensureActiveTab(stores);
   const gen = stores.tabs.getState().beginRun(executingTabId);
+  if (gen === null) throw new Error("Tab run could not start");
 
   let result: QueryResult;
   try {
-    result = await ipc.runQuery(connectionId, sql);
+    result = await ipc.runQuery(connectionId, sql, gen);
   } catch (error) {
     const { isConnected } = stores.session.getState();
     if (isConnected && gen !== null) {
@@ -46,8 +49,9 @@ export async function runSelectOnActiveTab(
   // run into status error / null raw (see tabs-store deleteTabState .catch).
   const { isConnected } = stores.session.getState();
   if (isConnected && gen !== null) {
+    let applied = false;
     try {
-      await stores.tabs.getState().applyRunSuccess(
+      applied = await stores.tabs.getState().applyRunSuccess(
         executingTabId,
         {
           columns: result.columns,
@@ -57,7 +61,14 @@ export async function runSelectOnActiveTab(
         gen,
       );
     } catch {
-      /* best-effort persist */
+      /* in-memory apply landed; persist is best-effort */
+      applied = true;
+    }
+    if (applied) {
+      const tab = stores.tabs.getState().tabs.find((t) => t.id === executingTabId);
+      if (tab !== undefined) {
+        onAppliedSuccess?.(tab);
+      }
     }
   }
   return result;
