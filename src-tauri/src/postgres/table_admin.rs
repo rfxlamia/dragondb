@@ -100,7 +100,7 @@ SELECT
     || E'\n)'
     || CASE WHEN ti.is_foreign THEN
          COALESCE(' SERVER ' || (
-           SELECT fs.srvname FROM information_schema.foreign_tables ft
+           SELECT format('%I', fs.srvname) FROM information_schema.foreign_tables ft
            JOIN pg_catalog.pg_foreign_server fs ON fs.srvname = ft.foreign_server_name
            WHERE ft.foreign_table_schema = '{schema}' AND ft.foreign_table_name = '{table}'
            LIMIT 1
@@ -199,6 +199,21 @@ mod tests {
             r#"DROP FOREIGN TABLE "public"."remote_orders""#
         );
         assert!(!truncate_table_sql("public", "temp").contains("public.temp"));
+    }
+
+    #[test]
+    fn foreign_table_ddl_quotes_the_server_name_as_an_identifier() {
+        // srvname is user-supplied: a server named `Reporting Server` must render
+        // as SERVER "Reporting Server", not as bare SQL text.
+        let sql = generate_table_ddl_sql("public", "remote_orders");
+        assert!(
+            sql.contains("format('%I', fs.srvname)"),
+            "foreign SERVER name must be identifier-quoted, got:\n{sql}"
+        );
+        assert!(
+            !sql.contains("' SERVER ' || (\n           SELECT fs.srvname FROM"),
+            "raw srvname must not be concatenated unquoted"
+        );
     }
 
     #[test]

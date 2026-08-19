@@ -25,6 +25,24 @@ function ipcWithSave(saveSavedQuery: ReturnType<typeof vi.fn>): DragonIpc {
   } as unknown as DragonIpc;
 }
 
+/**
+ * Like `ipcWithSave`, but backs `listSavedQueries` with what was actually
+ * saved, so `libraryStore.refresh()` observes the row the same way it does
+ * against sqlite. A save that gates on `queries.find(id)` needs this.
+ */
+function ipcWithLibrary(saveSavedQuery: (q: SavedQueryDto) => Promise<SavedQueryDto>): DragonIpc {
+  const rows = new Map<string, SavedQueryDto>();
+  const wrapped = vi.fn(async (q: SavedQueryDto) => {
+    const result = await saveSavedQuery(q);
+    rows.set(q.id, q);
+    return result;
+  });
+  return {
+    ...ipcWithSave(wrapped),
+    listSavedQueries: vi.fn(async () => [...rows.values()]),
+  } as unknown as DragonIpc;
+}
+
 describe("useSavedQueryAutosave", () => {
   it("auto-creates a SavedQuery 500ms after hatch typing with none selected", async () => {
     vi.useFakeTimers();
@@ -43,6 +61,77 @@ describe("useSavedQueryAutosave", () => {
     expect(saveSavedQuery).toHaveBeenCalledWith(expect.objectContaining({ queryText: "SELECT 1" }));
     const created = saveSavedQuery.mock.calls[0]?.[0];
     expect(stores.tabs.getState().tabs[0]?.savedQueryId).toBe(created?.id);
+  });
+
+  it("creates exactly one SavedQuery when typing continues during a slow first save", async () => {
+    // The first debounce fires and its saveSavedQuery is still in flight when
+    // the user types again. Without serialization the second debounce still
+    // reads savedQueryId === null and creates a second row, orphaning one.
+    vi.useFakeTimers();
+    const gate: Array<() => void> = [];
+    const saveSavedQuery = vi.fn(async (q: SavedQueryDto) => {
+      if (gate.length === 0) {
+        await new Promise<void>((resolve) => gate.push(resolve));
+      }
+      return q;
+    });
+    const ipc = ipcWithLibrary(saveSavedQuery);
+    const stores = composeAppStores(ipc);
+    const tab = stores.tabs.getState().createTab();
+    const { rerender } = renderHook(
+      ({ queryText }) => useSavedQueryAutosave({ stores, queryText, isRestoring: false }),
+      { initialProps: { queryText: "" } },
+    );
+
+    act(() => stores.tabs.getState().setQueryText(tab.id, "SELECT 1"));
+    rerender({ queryText: "SELECT 1" });
+    await vi.advanceTimersByTimeAsync(500);
+
+    // First save is in flight and has not stamped the tab yet.
+    expect(stores.tabs.getState().tabs[0]?.savedQueryId).toBeNull();
+
+    act(() => stores.tabs.getState().setQueryText(tab.id, "SELECT 12"));
+    rerender({ queryText: "SELECT 12" });
+    await vi.advanceTimersByTimeAsync(500);
+
+    for (const release of gate) release();
+    await vi.advanceTimersByTimeAsync(500);
+
+    const createdIds = new Set(saveSavedQuery.mock.calls.map((call) => call[0].id));
+    expect(createdIds.size).toBe(1);
+    expect(stores.tabs.getState().tabs[0]?.savedQueryId).toBe([...createdIds][0]);
+  });
+
+  it("keeps the last edit when it lands while the creating save is in flight", async () => {
+    vi.useFakeTimers();
+    const gate: Array<() => void> = [];
+    const saveSavedQuery = vi.fn(async (q: SavedQueryDto) => {
+      if (gate.length === 0) {
+        await new Promise<void>((resolve) => gate.push(resolve));
+      }
+      return q;
+    });
+    const ipc = ipcWithLibrary(saveSavedQuery);
+    const stores = composeAppStores(ipc);
+    const tab = stores.tabs.getState().createTab();
+    const { rerender } = renderHook(
+      ({ queryText }) => useSavedQueryAutosave({ stores, queryText, isRestoring: false }),
+      { initialProps: { queryText: "" } },
+    );
+
+    act(() => stores.tabs.getState().setQueryText(tab.id, "SELECT 1"));
+    rerender({ queryText: "SELECT 1" });
+    await vi.advanceTimersByTimeAsync(500);
+    act(() => stores.tabs.getState().setQueryText(tab.id, "SELECT 12"));
+    rerender({ queryText: "SELECT 12" });
+    await vi.advanceTimersByTimeAsync(500);
+
+    for (const release of gate) release();
+    await vi.advanceTimersByTimeAsync(500);
+
+    const calls = saveSavedQuery.mock.calls;
+    const last = calls[calls.length - 1]?.[0];
+    expect(last?.queryText).toBe("SELECT 12");
   });
 
   it("does not auto-create after a persisted buffer finishes restoring", async () => {

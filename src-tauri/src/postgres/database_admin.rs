@@ -28,12 +28,19 @@ pub fn set_session_database_name(name: &str) -> &str {
     name
 }
 
+pub fn list_databases_sql() -> &'static str {
+    // datallowconn is a cluster-wide flag, so it still returns databases this
+    // role cannot open, and it leaves template1 in the list — both would show up
+    // as selectable and deletable catalog entries.
+    "SELECT datname FROM pg_database \
+     WHERE datallowconn AND NOT datistemplate \
+       AND has_database_privilege(datname, 'CONNECT') \
+     ORDER BY datname"
+}
+
 pub async fn list_databases(client: &Client) -> Result<Vec<String>, MappedIpcError> {
     let rows = client
-        .query(
-            "SELECT datname FROM pg_database WHERE datallowconn ORDER BY datname",
-            &[],
-        )
+        .query(list_databases_sql(), &[])
         .await
         .map_err(|error| map_tokio_postgres_error(&error))?;
     Ok(rows.into_iter().map(|row| row.get(0)).collect())
@@ -56,8 +63,24 @@ pub async fn drop_database(client: &Client, name: &str) -> Result<(), MappedIpcE
 #[cfg(test)]
 mod tests {
     use super::{
-        create_database_sql, drop_database_sql, maintenance_database, set_session_database_name,
+        create_database_sql, drop_database_sql, list_databases_sql, maintenance_database,
+        set_session_database_name,
     };
+
+    #[test]
+    fn list_databases_sql_excludes_templates_and_unconnectable_databases() {
+        let sql = list_databases_sql();
+        assert!(
+            sql.contains("datistemplate"),
+            "template databases must not be offered as pickable catalog entries: {sql}"
+        );
+        assert!(
+            sql.contains("has_database_privilege"),
+            "datallowconn is cluster-wide; the picker must also require CONNECT: {sql}"
+        );
+        assert!(sql.contains("datallowconn"), "{sql}");
+        assert!(sql.contains("ORDER BY datname"), "{sql}");
+    }
 
     #[test]
     fn create_database_sql_quotes_and_is_not_transactional() {

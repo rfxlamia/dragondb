@@ -9,7 +9,7 @@ export function ConnectionDatabasePicker(props: {
   isConnected: boolean;
   databases: string[];
   selected: string | null;
-  onSelect: (name: string) => void;
+  onSelect: (name: string) => void | Promise<void>;
   profileDatabase: string;
   missingFromList?: boolean;
   onCreateDatabase?: (name: string) => void | Promise<void>;
@@ -31,10 +31,28 @@ export function ConnectionDatabasePicker(props: {
   const [createError, setCreateError] = useState<string | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteError, setDeleteError] = useState(false);
+  const [switchError, setSwitchError] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const empty = databases.length === 0;
   const showPulse = isConnected && (missingFromList || selected === null);
+
+  /**
+   * The parent's switch is asynchronous, so the select cannot fire and forget:
+   * a failed reconnect would otherwise surface only as an unhandled rejection
+   * while the picker silently showed the database it never reached.
+   */
+  async function handleSelect(name: string): Promise<void> {
+    setBusy(true);
+    setSwitchError(false);
+    try {
+      await onSelect(name);
+    } catch {
+      setSwitchError(true);
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function handleCreate(name: string): Promise<void> {
     if (!onCreateDatabase) return;
@@ -97,9 +115,9 @@ export function ConnectionDatabasePicker(props: {
             className="ui-quiet-select connection-database-picker__select"
             id={ConnectionAccessibility.databasePicker}
             data-testid={ConnectionAccessibility.databasePicker}
-            disabled={!isConnected || empty}
+            disabled={!isConnected || empty || busy}
             value={selected ?? ""}
-            onChange={(event) => onSelect(event.target.value)}
+            onChange={(event) => void handleSelect(event.target.value)}
           >
             {empty ? <option value="">{ConnectionCopy.noDatabases}</option> : null}
             {selected === null && !empty ? <option value="" /> : null}
@@ -173,6 +191,12 @@ export function ConnectionDatabasePicker(props: {
       {deleteError ? (
         <p className="connection-panel__status" role="alert">
           {ConnectionCopy.deleteDatabaseError}
+        </p>
+      ) : null}
+
+      {switchError ? (
+        <p className="connection-panel__status" role="alert">
+          {ConnectionCopy.databaseSwitchError}
         </p>
       ) : null}
     </div>

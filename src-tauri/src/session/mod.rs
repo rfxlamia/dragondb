@@ -619,17 +619,35 @@ impl AppSession {
             self.switch_database(&connection_id, &maintenance).await?;
         }
         let result = self.run_database_admin(name, false).await;
-        if result.is_err() {
-            if let (Some(prior_name), Some(connection_id)) = (
-                prior.filter(|current| current == name),
-                self.active
-                    .as_ref()
-                    .map(|active| active.connection_id.clone()),
-            ) {
-                let _ = self.switch_database(&connection_id, &prior_name).await;
+        let Err(drop_error) = result else {
+            return Ok(());
+        };
+        // The DROP failed after the session was moved to the maintenance
+        // database, so put it back. A restore failure cannot be swallowed:
+        // the frontend would keep showing `prior` while Rust is on the
+        // maintenance database, and later queries would run against it.
+        let Some(prior_name) = prior.filter(|current| current == name) else {
+            return Err(drop_error);
+        };
+        let Some(connection_id) = self
+            .active
+            .as_ref()
+            .map(|active| active.connection_id.clone())
+        else {
+            return Err(drop_error);
+        };
+        match self.switch_database(&connection_id, &prior_name).await {
+            Ok(()) => Err(drop_error),
+            Err(restore_error) => {
+                let landed_on = maintenance_database(name).to_string();
+                Err(combine_drop_and_restore_errors(
+                    drop_error,
+                    &restore_error,
+                    &prior_name,
+                    &landed_on,
+                ))
             }
         }
-        result
     }
 
     async fn run_database_admin(&self, name: &str, create: bool) -> Result<(), MappedIpcError> {
@@ -1603,6 +1621,27 @@ fn map_tunnel_error(err: TunnelError) -> MappedIpcError {
     }
 }
 
+/// A failed DROP DATABASE leaves the live session on the maintenance database.
+/// When the restore back to the previously selected database also fails, the
+/// frontend would keep showing that database while Rust is on `postgres` /
+/// `template1`, so the restore failure must surface instead of being dropped.
+fn combine_drop_and_restore_errors(
+    drop_error: MappedIpcError,
+    restore_error: &MappedIpcError,
+    prior: &str,
+    landed_on: &str,
+) -> MappedIpcError {
+    MappedIpcError {
+        kind: IpcErrorKind::Connection,
+        message: format!(
+            "{} The session could not be returned to \"{prior}\" and is now connected to \"{landed_on}\": {}",
+            drop_error.message.trim_end(),
+            restore_error.message.trim_end()
+        ),
+        position: None,
+    }
+}
+
 fn is_connection_kind(err: &MappedIpcError) -> bool {
     err.kind == IpcErrorKind::Connection
 }
@@ -2127,6 +2166,38 @@ fn sample_query_result() -> QueryResultData {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn failed_drop_with_failed_restore_reports_the_database_the_session_landed_on() {
+        let drop_error = MappedIpcError {
+            kind: IpcErrorKind::Permission,
+            message: "must be owner of database shop".into(),
+            position: None,
+        };
+        let restore_error = MappedIpcError {
+            kind: IpcErrorKind::Connection,
+            message: "connection refused".into(),
+            position: None,
+        };
+        let combined =
+            combine_drop_and_restore_errors(drop_error, &restore_error, "shop", "postgres");
+        assert_eq!(combined.kind, IpcErrorKind::Connection);
+        assert!(
+            combined.message.contains("must be owner of database shop"),
+            "the original DROP failure must not be lost: {}",
+            combined.message
+        );
+        assert!(
+            combined.message.contains("connection refused"),
+            "the restore failure must not be swallowed: {}",
+            combined.message
+        );
+        assert!(
+            combined.message.contains("shop") && combined.message.contains("postgres"),
+            "the caller needs both the intended and the actual database: {}",
+            combined.message
+        );
+    }
 
     #[tokio::test]
     async fn disconnect_clears_session_and_rejects_list_without_silent_reconnect() {

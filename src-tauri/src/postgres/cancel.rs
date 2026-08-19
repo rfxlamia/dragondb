@@ -107,7 +107,11 @@ impl CancelRegistry {
         if run_id == 0 {
             return Ok(());
         }
-        self.mark_run_cancelled(run_id);
+        // Validate the registration before mutating the run. A rejected cancel
+        // must leave no marker behind: a queued run_query reads the marker when
+        // it finally takes the session mutex and would abort a run whose cancel
+        // request was refused. The registry lock is held across the check and
+        // the mark so the registration cannot change in between.
         let should_cancel_pg = {
             let guard = self.inner.read().map_err(|_| registry_error())?;
             let registration = match guard.as_ref() {
@@ -119,8 +123,13 @@ impl CancelRegistry {
                         position: None,
                     });
                 }
+                // Nothing is registered, so there is no run to cancel. Marking
+                // here would leak the id into the next session's registry.
                 None => return Ok(()),
             };
+            // Marking a merely queued run is the feature: it is how a run still
+            // waiting on the session mutex gets cancelled without a PG cancel.
+            self.mark_run_cancelled(run_id);
             let active = self
                 .active_run_id
                 .read()
@@ -294,6 +303,32 @@ mod tests {
             .expect("pending cancel ok");
         assert!(registry.is_run_cancelled(7));
         assert_eq!(registry.active_run_id(), None);
+    }
+
+    #[tokio::test]
+    async fn rejected_cancel_for_a_foreign_connection_id_leaves_the_run_untouched() {
+        // A cancel that is rejected must not mutate the target run: the queued
+        // run_query would otherwise read the marker and abort itself even
+        // though the cancel request was refused.
+        let registry = CancelRegistry::default();
+        registry.register_without_network("connection-a");
+        let rejected = registry.cancel_run("connection-b", 7).await;
+        assert!(rejected.is_err(), "foreign connection id must be rejected");
+        assert!(
+            !registry.is_run_cancelled(7),
+            "a rejected cancel must not mark the run cancelled"
+        );
+    }
+
+    #[tokio::test]
+    async fn cancel_without_any_registration_does_not_mark_the_run() {
+        let registry = CancelRegistry::default();
+        let result = registry.cancel_run("connection-a", 7).await;
+        assert!(result.is_ok(), "no live session is not an error");
+        assert!(
+            !registry.is_run_cancelled(7),
+            "there is no run to cancel when nothing is registered"
+        );
     }
 
     #[test]

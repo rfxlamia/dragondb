@@ -38,6 +38,48 @@ describe("ConnectionDatabasePicker", () => {
     expect(screen.getByText("postgres")).toBeInTheDocument();
   });
 
+  it("surfaces a failed switch and keeps the previous selection", async () => {
+    // The parent starts an async switchDatabase; a rejection must reach the
+    // picker rather than escaping as an unhandled rejection with no UI change.
+    const user = userEvent.setup();
+    const onSelect = vi.fn(async () => {
+      throw new Error("switch failed");
+    });
+    render(
+      <ConnectionDatabasePicker
+        isConnected={true}
+        databases={["postgres", "shop"]}
+        selected="postgres"
+        onSelect={onSelect}
+        profileDatabase="postgres"
+      />,
+    );
+    await user.selectOptions(screen.getByRole("combobox"), "shop");
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent(ConnectionCopy.databaseSwitchError);
+    });
+    expect(screen.getByRole("combobox")).toHaveValue("postgres");
+  });
+
+  it("disables the picker while a switch is in flight", async () => {
+    const user = userEvent.setup();
+    const gate: Array<() => void> = [];
+    const onSelect = vi.fn(() => new Promise<void>((resolve) => gate.push(resolve)));
+    render(
+      <ConnectionDatabasePicker
+        isConnected={true}
+        databases={["postgres", "shop"]}
+        selected="postgres"
+        onSelect={onSelect}
+        profileDatabase="postgres"
+      />,
+    );
+    await user.selectOptions(screen.getByRole("combobox"), "shop");
+    await waitFor(() => expect(screen.getByRole("combobox")).toBeDisabled());
+    for (const release of gate) release();
+    await waitFor(() => expect(screen.getByRole("combobox")).toBeEnabled());
+  });
+
   it("missing selected database shows pulse Select DB", () => {
     render(
       <ConnectionDatabasePicker

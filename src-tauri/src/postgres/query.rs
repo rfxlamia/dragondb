@@ -260,13 +260,26 @@ pub fn split_sql_statements(sql: &str) -> Vec<String> {
 pub fn should_wrap_transaction(statements: &[&str]) -> bool {
     !statements.iter().any(|sql| {
         let s = normalize_for_keyword_match(sql);
+        // END and ABORT are spelling aliases of COMMIT and ROLLBACK. They are
+        // matched on the whole first token, not as a prefix: `SELECT * FROM
+        // endpoints` normalises to a string starting with "end" but is an
+        // ordinary statement.
+        let first_token = s.split(' ').next().unwrap_or("");
         let user_txn = ["begin", "start transaction", "commit", "rollback"]
             .iter()
-            .any(|k| s.starts_with(k));
+            .any(|k| s.starts_with(k))
+            || matches!(first_token, "end" | "abort");
         // REINDEX and VACUUM are matched on the bare verb: their object-type
         // keyword is mandatory and varies (REINDEX TABLE / INDEX / SCHEMA /
         // DATABASE / SYSTEM), and neither belongs in an implicit transaction.
-        let illegal_in_txn = s.starts_with("vacuum")
+        // Verified against PostgreSQL 17: bare CLUSTER is rejected in a
+        // transaction block while `CLUSTER tbl USING idx` is accepted, and of
+        // the DISCARD forms only DISCARD ALL is rejected. CHECKPOINT is legal
+        // inside a transaction block and deliberately stays off this list —
+        // listing it would drop the wrapper for the whole script.
+        let illegal_in_txn = s == "cluster"
+            || s == "discard all"
+            || s.starts_with("vacuum")
             || s.starts_with("reindex")
             || s.starts_with("create database")
             || s.starts_with("drop database")
@@ -622,6 +635,63 @@ mod tests {
         assert!(
             !should_wrap_transaction(&["CREATE SUBSCRIPTION sub CONNECTION '' PUBLICATION pub", "SELECT 1"]),
             "CREATE SUBSCRIPTION cannot run inside a transaction block"
+        );
+    }
+
+    #[test]
+    fn no_wrap_for_discard_all_cluster_and_transaction_control_aliases() {
+        // Verified against PostgreSQL 17 locally:
+        //   BEGIN; DISCARD ALL; -> ERROR: DISCARD ALL cannot run inside a transaction block
+        //   BEGIN; CLUSTER;     -> ERROR: CLUSTER cannot run inside a transaction block
+        assert!(
+            !should_wrap_transaction(&["DISCARD ALL", "SELECT 1"]),
+            "DISCARD ALL cannot run inside a transaction block"
+        );
+        assert!(
+            !should_wrap_transaction(&["CLUSTER", "SELECT 1"]),
+            "argument-less CLUSTER cannot run inside a transaction block"
+        );
+        // END and ABORT are spelling aliases of COMMIT and ROLLBACK: a script
+        // using them is already managing its own transaction.
+        assert!(
+            !should_wrap_transaction(&["BEGIN", "SELECT 1", "END"]),
+            "END is an alias of COMMIT and marks a user-managed transaction"
+        );
+        assert!(
+            !should_wrap_transaction(&["BEGIN", "SELECT 1", "ABORT"]),
+            "ABORT is an alias of ROLLBACK and marks a user-managed transaction"
+        );
+    }
+
+    #[test]
+    fn wrap_is_kept_for_commands_that_are_legal_inside_a_transaction_block() {
+        // Verified against PostgreSQL 17 locally: each of these commits cleanly
+        // inside BEGIN/COMMIT, so suppressing the wrapper would needlessly drop
+        // atomicity from the rest of the script.
+        assert!(
+            should_wrap_transaction(&["CHECKPOINT", "SELECT 1"]),
+            "CHECKPOINT is legal inside a transaction block"
+        );
+        assert!(
+            should_wrap_transaction(&["DISCARD PLANS", "SELECT 1"]),
+            "only DISCARD ALL is prohibited; DISCARD PLANS is legal"
+        );
+        assert!(
+            should_wrap_transaction(&["DISCARD SEQUENCES", "SELECT 1"]),
+            "only DISCARD ALL is prohibited; DISCARD SEQUENCES is legal"
+        );
+        assert!(
+            should_wrap_transaction(&["CLUSTER users USING users_pkey", "SELECT 1"]),
+            "CLUSTER with a table argument is legal inside a transaction block"
+        );
+        // Prefix-matching traps: these are ordinary statements on user objects.
+        assert!(
+            should_wrap_transaction(&["SELECT * FROM endpoints", "SELECT 1"]),
+            "a table named endpoints must not read as the END alias"
+        );
+        assert!(
+            should_wrap_transaction(&["INSERT INTO aborted_jobs VALUES (1)", "SELECT 1"]),
+            "a table named aborted_jobs must not read as the ABORT alias"
         );
     }
 

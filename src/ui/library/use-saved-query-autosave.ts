@@ -22,6 +22,14 @@ export type SavedQueryAutosaveArgs = {
 export function useSavedQueryAutosave(args: SavedQueryAutosaveArgs): void {
   const { stores, queryText, isRestoring } = args;
   const skipAfterRestoreRef = useRef(isRestoring);
+  /**
+   * Per-tab save queue. Debounces are cancelled on every keystroke, but a save
+   * already in flight is not: without this chain a second debounce firing
+   * before the first `saveSavedQuery` resolves would still read
+   * `savedQueryId === null` and auto-create a second SavedQuery, leaving an
+   * orphan row in the library.
+   */
+  const queueRef = useRef(new Map<string, Promise<void>>());
 
   useEffect(() => {
     if (isRestoring) {
@@ -36,10 +44,19 @@ export function useSavedQueryAutosave(args: SavedQueryAutosaveArgs): void {
 
     const tabs = stores.tabs.getState();
     const tabId = tabs.activeTabId;
+    if (tabId === null) return;
     const savedQueryId = tabs.tabs.find((item) => item.id === tabId)?.savedQueryId ?? null;
 
     const timer = window.setTimeout(() => {
-      void persistHatchText(stores, queryText, tabId, savedQueryId);
+      const queue = queueRef.current;
+      const previous = queue.get(tabId) ?? Promise.resolve();
+      const next = previous
+        .then(() => persistHatchText(stores, queryText, tabId, savedQueryId))
+        .catch(() => undefined)
+        .finally(() => {
+          if (queue.get(tabId) === next) queue.delete(tabId);
+        });
+      queue.set(tabId, next);
     }, AUTOSAVE_MS);
 
     return () => window.clearTimeout(timer);
@@ -49,13 +66,18 @@ export function useSavedQueryAutosave(args: SavedQueryAutosaveArgs): void {
 async function persistHatchText(
   stores: AppStores,
   queryText: string,
-  tabId: string | null,
-  savedQueryId: string | null,
+  tabId: string,
+  scheduledSavedQueryId: string | null,
 ): Promise<void> {
-  if (tabId === null) return;
   const tab = stores.tabs.getState().tabs.find((item) => item.id === tabId);
   if (tab === undefined) return;
-  if (tab.savedQueryId !== savedQueryId) return;
+  // Re-read at persist time rather than trusting the value captured when the
+  // debounce was scheduled: an earlier queued save for this tab may have just
+  // created the SavedQuery and stamped its id, and this text belongs to that
+  // same query. Selecting a different saved query pulses `isRestoring`, which
+  // cancels the pending debounce, so only a genuine switch trips this guard.
+  const savedQueryId = tab.savedQueryId;
+  if (scheduledSavedQueryId !== null && savedQueryId !== scheduledSavedQueryId) return;
 
   if (savedQueryId !== null) {
     const existing = stores.library.getState().queries.find((query) => query.id === savedQueryId);

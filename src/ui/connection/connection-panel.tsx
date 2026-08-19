@@ -504,7 +504,7 @@ export function ConnectionPanel(props: ConnectionPanelProps): React.JSX.Element 
           isConnected={sessionClaimed}
           databases={databases}
           selected={pickerSelected}
-          onSelect={(name) => void handleSelectDatabase(name)}
+          onSelect={handleSelectDatabase}
           profileDatabase={form.profile.database}
           missingFromList={
             missingDatabase || (pickerSelected !== null && !databases.includes(pickerSelected))
