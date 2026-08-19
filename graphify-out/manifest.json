@@ -1135,8 +1135,8 @@
     "semantic_hash": ""
   },
   "src-tauri/src/postgres/table_admin.rs": {
-    "mtime": 1787111974.1356032,
-    "ast_hash": "4847d91685c42ca5ea02d6c06971133d",
+    "mtime": 1787127786.7037854,
+    "ast_hash": "4a85b28db7103258b2ef8926dd6d3195",
     "semantic_hash": ""
   },
   "src/stores/run-browse-on-active-tab.ts": {

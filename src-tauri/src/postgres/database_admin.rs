@@ -16,8 +16,12 @@ pub fn drop_database_sql(name: &str) -> String {
     format!("DROP DATABASE {}", quote_identifier(name))
 }
 
-pub fn maintenance_database(_current: &str) -> &str {
-    "postgres"
+pub fn maintenance_database(target: &str) -> &str {
+    if target.eq_ignore_ascii_case("postgres") {
+        "template1"
+    } else {
+        "postgres"
+    }
 }
 
 pub fn set_session_database_name(name: &str) -> &str {
@@ -79,7 +83,13 @@ mod tests {
     #[test]
     fn maintenance_database_is_postgres_unless_already_on_postgres() {
         assert_eq!(maintenance_database("shop"), "postgres");
-        assert_eq!(maintenance_database("postgres"), "postgres");
+        // When dropping "postgres" itself, maintenance must be a DIFFERENT database
+        assert_ne!(
+            maintenance_database("postgres"),
+            "postgres",
+            "Cannot use 'postgres' as maintenance DB when dropping 'postgres' — \
+             the active connection would prevent DROP DATABASE"
+        );
     }
 
     #[test]

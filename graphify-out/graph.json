@@ -782,26 +782,26 @@
   },
   "nodes": [
     {
-      "label": "query.rs",
+      "label": "table_admin.rs",
       "file_type": "code",
-      "source_file": "src-tauri/src/postgres/query.rs",
+      "source_file": "src-tauri/src/postgres/table_admin.rs",
       "source_location": "L1",
       "_origin": "ast",
-      "id": "src_tauri_src_postgres_query",
+      "id": "src_tauri_src_postgres_table_admin",
       "community": 0,
       "community_name": "Rust Postgres Connection Core",
-      "norm_label": "query.rs"
+      "norm_label": "table_admin.rs"
     },
     {
-      "label": "Value",
+      "label": "quote_identifier()",
       "file_type": "code",
-      "source_file": "src-tauri/src/postgres/query.rs",
-      "source_location": "L15",
+      "source_file": "src-tauri/src/postgres/table_admin.rs",
+      "source_location": "L7",
       "_origin": "ast",
-      "id": "src_tauri_src_postgres_query_value",
+      "id": "src_tauri_src_postgres_table_admin_quote_identifier",
       "community": 0,
       "community_name": "Rust Postgres Connection Core",
-      "norm_label": "value"
+      "norm_label": "quote_identifier()"
     },
     {
       "label": "String",
@@ -815,37 +815,26 @@
       "norm_label": "string"
     },
     {
-      "label": "MappedRowSet",
+      "label": "truncate_table_sql()",
       "file_type": "code",
-      "source_file": "src-tauri/src/postgres/query.rs",
-      "source_location": "L25",
+      "source_file": "src-tauri/src/postgres/table_admin.rs",
+      "source_location": "L11",
       "_origin": "ast",
-      "id": "src_tauri_src_postgres_query_mappedrowset",
+      "id": "src_tauri_src_postgres_table_admin_truncate_table_sql",
       "community": 0,
       "community_name": "Rust Postgres Connection Core",
-      "norm_label": "mappedrowset"
+      "norm_label": "truncate_table_sql()"
     },
     {
-      "label": "Vec",
+      "label": "drop_table_sql()",
       "file_type": "code",
-      "source_file": "",
-      "source_location": "",
+      "source_file": "src-tauri/src/postgres/table_admin.rs",
+      "source_location": "L19",
       "_origin": "ast",
-      "id": "vec",
-      "community": 26,
-      "community_name": "Session Mock Postgres Tests",
-      "norm_label": "vec"
-    },
-    {
-      "label": "QueryResultData",
-      "file_type": "code",
-      "source_file": "src-tauri/src/postgres/query.rs",
-      "source_location": "L33",
-      "_origin": "ast",
-      "id": "src_tauri_src_postgres_query_queryresultdata",
+      "id": "src_tauri_src_postgres_table_admin_drop_table_sql",
       "community": 0,
       "community_name": "Rust Postgres Connection Core",
-      "norm_label": "queryresultdata"
+      "norm_label": "drop_table_sql()"
     },
     {
       "label": "Option",
@@ -859,37 +848,37 @@
       "norm_label": "option"
     },
     {
-      "label": "map_query_rows()",
+      "label": "generate_table_ddl_sql()",
       "file_type": "code",
-      "source_file": "src-tauri/src/postgres/query.rs",
-      "source_location": "L41",
+      "source_file": "src-tauri/src/postgres/table_admin.rs",
+      "source_location": "L33",
       "_origin": "ast",
-      "id": "src_tauri_src_postgres_query_map_query_rows",
+      "id": "src_tauri_src_postgres_table_admin_generate_table_ddl_sql",
       "community": 0,
       "community_name": "Rust Postgres Connection Core",
-      "norm_label": "map_query_rows()"
+      "norm_label": "generate_table_ddl_sql()"
     },
     {
-      "label": "Duration",
+      "label": "set_search_path_sql()",
       "file_type": "code",
-      "source_file": "",
-      "source_location": "",
+      "source_file": "src-tauri/src/postgres/table_admin.rs",
+      "source_location": "L119",
       "_origin": "ast",
-      "id": "duration",
+      "id": "src_tauri_src_postgres_table_admin_set_search_path_sql",
       "community": 0,
       "community_name": "Rust Postgres Connection Core",
-      "norm_label": "duration"
+      "norm_label": "set_search_path_sql()"
     },
     {
-      "label": "run_query()",
+      "label": "truncate_table()",
       "file_type": "code",
-      "source_file": "src-tauri/src/postgres/query.rs",
-      "source_location": "L51",
+      "source_file": "src-tauri/src/postgres/table_admin.rs",
+      "source_location": "L126",
       "_origin": "ast",
-      "id": "src_tauri_src_postgres_query_run_query",
+      "id": "src_tauri_src_postgres_table_admin_truncate_table",
       "community": 0,
       "community_name": "Rust Postgres Connection Core",
-      "norm_label": "run_query()"
+      "norm_label": "truncate_table()"
     },
     {
       "label": "Client",
@@ -901,17 +890,6 @@
       "community": 0,
       "community_name": "Rust Postgres Connection Core",
       "norm_label": "client"
-    },
-    {
-      "label": "JsonValue",
-      "file_type": "code",
-      "source_file": "",
-      "source_location": "",
-      "_origin": "ast",
-      "id": "jsonvalue",
-      "community": 0,
-      "community_name": "Rust Postgres Connection Core",
-      "norm_label": "jsonvalue"
     },
     {
       "label": "Result",
@@ -936,15 +914,202 @@
       "norm_label": "mappedipcerror"
     },
     {
+      "label": "drop_table()",
+      "file_type": "code",
+      "source_file": "src-tauri/src/postgres/table_admin.rs",
+      "source_location": "L137",
+      "_origin": "ast",
+      "id": "src_tauri_src_postgres_table_admin_drop_table",
+      "community": 0,
+      "community_name": "Rust Postgres Connection Core",
+      "norm_label": "drop_table()"
+    },
+    {
+      "label": "generate_table_ddl()",
+      "file_type": "code",
+      "source_file": "src-tauri/src/postgres/table_admin.rs",
+      "source_location": "L149",
+      "_origin": "ast",
+      "id": "src_tauri_src_postgres_table_admin_generate_table_ddl",
+      "community": 0,
+      "community_name": "Rust Postgres Connection Core",
+      "norm_label": "generate_table_ddl()"
+    },
+    {
+      "label": "set_search_path()",
+      "file_type": "code",
+      "source_file": "src-tauri/src/postgres/table_admin.rs",
+      "source_location": "L176",
+      "_origin": "ast",
+      "id": "src_tauri_src_postgres_table_admin_set_search_path",
+      "community": 0,
+      "community_name": "Rust Postgres Connection Core",
+      "norm_label": "set_search_path()"
+    },
+    {
+      "label": "truncate_and_drop_sql_quote_schema_and_table()",
+      "file_type": "code",
+      "source_file": "src-tauri/src/postgres/table_admin.rs",
+      "source_location": "L188",
+      "_origin": "ast",
+      "id": "src_tauri_src_postgres_table_admin_truncate_and_drop_sql_quote_schema_and_table",
+      "community": 0,
+      "community_name": "Rust Postgres Connection Core",
+      "norm_label": "truncate_and_drop_sql_quote_schema_and_table()"
+    },
+    {
+      "label": "set_search_path_named_vs_all_schemas()",
+      "file_type": "code",
+      "source_file": "src-tauri/src/postgres/table_admin.rs",
+      "source_location": "L205",
+      "_origin": "ast",
+      "id": "src_tauri_src_postgres_table_admin_set_search_path_named_vs_all_schemas",
+      "community": 0,
+      "community_name": "Rust Postgres Connection Core",
+      "norm_label": "set_search_path_named_vs_all_schemas()"
+    },
+    {
+      "label": "generate_table_ddl_sql_targets_quoted_table()",
+      "file_type": "code",
+      "source_file": "src-tauri/src/postgres/table_admin.rs",
+      "source_location": "L214",
+      "_origin": "ast",
+      "id": "src_tauri_src_postgres_table_admin_generate_table_ddl_sql_targets_quoted_table",
+      "community": 0,
+      "community_name": "Rust Postgres Connection Core",
+      "norm_label": "generate_table_ddl_sql_targets_quoted_table()"
+    },
+    {
+      "label": "generate_table_ddl_sql_includes_defaults_and_constraints()",
+      "file_type": "code",
+      "source_file": "src-tauri/src/postgres/table_admin.rs",
+      "source_location": "L223",
+      "_origin": "ast",
+      "id": "src_tauri_src_postgres_table_admin_generate_table_ddl_sql_includes_defaults_and_constraints",
+      "community": 0,
+      "community_name": "Rust Postgres Connection Core",
+      "norm_label": "generate_table_ddl_sql_includes_defaults_and_constraints()"
+    },
+    {
+      "label": "generate_table_ddl_sql_must_not_hardcode_create_table()",
+      "file_type": "code",
+      "source_file": "src-tauri/src/postgres/table_admin.rs",
+      "source_location": "L243",
+      "_origin": "ast",
+      "id": "src_tauri_src_postgres_table_admin_generate_table_ddl_sql_must_not_hardcode_create_table",
+      "community": 0,
+      "community_name": "Rust Postgres Connection Core",
+      "norm_label": "generate_table_ddl_sql_must_not_hardcode_create_table()"
+    },
+    {
+      "label": "query.rs",
+      "file_type": "code",
+      "source_file": "src-tauri/src/postgres/query.rs",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 0,
+      "community_name": "Rust Postgres Connection Core",
+      "norm_label": "query.rs",
+      "id": "src_tauri_src_postgres_query"
+    },
+    {
+      "label": "Value",
+      "file_type": "code",
+      "source_file": "src-tauri/src/postgres/query.rs",
+      "source_location": "L15",
+      "_origin": "ast",
+      "community": 0,
+      "community_name": "Rust Postgres Connection Core",
+      "norm_label": "value",
+      "id": "src_tauri_src_postgres_query_value"
+    },
+    {
+      "label": "MappedRowSet",
+      "file_type": "code",
+      "source_file": "src-tauri/src/postgres/query.rs",
+      "source_location": "L25",
+      "_origin": "ast",
+      "community": 0,
+      "community_name": "Rust Postgres Connection Core",
+      "norm_label": "mappedrowset",
+      "id": "src_tauri_src_postgres_query_mappedrowset"
+    },
+    {
+      "label": "Vec",
+      "file_type": "code",
+      "source_file": "",
+      "source_location": "",
+      "_origin": "ast",
+      "community": 26,
+      "community_name": "Session Mock Postgres Tests",
+      "norm_label": "vec",
+      "id": "vec"
+    },
+    {
+      "label": "QueryResultData",
+      "file_type": "code",
+      "source_file": "src-tauri/src/postgres/query.rs",
+      "source_location": "L33",
+      "_origin": "ast",
+      "community": 0,
+      "community_name": "Rust Postgres Connection Core",
+      "norm_label": "queryresultdata",
+      "id": "src_tauri_src_postgres_query_queryresultdata"
+    },
+    {
+      "label": "map_query_rows()",
+      "file_type": "code",
+      "source_file": "src-tauri/src/postgres/query.rs",
+      "source_location": "L41",
+      "_origin": "ast",
+      "community": 0,
+      "community_name": "Rust Postgres Connection Core",
+      "norm_label": "map_query_rows()",
+      "id": "src_tauri_src_postgres_query_map_query_rows"
+    },
+    {
+      "label": "Duration",
+      "file_type": "code",
+      "source_file": "",
+      "source_location": "",
+      "_origin": "ast",
+      "community": 0,
+      "community_name": "Rust Postgres Connection Core",
+      "norm_label": "duration",
+      "id": "duration"
+    },
+    {
+      "label": "run_query()",
+      "file_type": "code",
+      "source_file": "src-tauri/src/postgres/query.rs",
+      "source_location": "L51",
+      "_origin": "ast",
+      "community": 0,
+      "community_name": "Rust Postgres Connection Core",
+      "norm_label": "run_query()",
+      "id": "src_tauri_src_postgres_query_run_query"
+    },
+    {
+      "label": "JsonValue",
+      "file_type": "code",
+      "source_file": "",
+      "source_location": "",
+      "_origin": "ast",
+      "community": 0,
+      "community_name": "Rust Postgres Connection Core",
+      "norm_label": "jsonvalue",
+      "id": "jsonvalue"
+    },
+    {
       "label": "run_single_query()",
       "file_type": "code",
       "source_file": "src-tauri/src/postgres/query.rs",
       "source_location": "L110",
       "_origin": "ast",
-      "id": "src_tauri_src_postgres_query_run_single_query",
       "community": 0,
       "community_name": "Rust Postgres Connection Core",
-      "norm_label": "run_single_query()"
+      "norm_label": "run_single_query()",
+      "id": "src_tauri_src_postgres_query_run_single_query"
     },
     {
       "label": "Instant",
@@ -952,10 +1117,10 @@
       "source_file": "",
       "source_location": "",
       "_origin": "ast",
-      "id": "instant",
       "community": 0,
       "community_name": "Rust Postgres Connection Core",
-      "norm_label": "instant"
+      "norm_label": "instant",
+      "id": "instant"
     },
     {
       "label": "split_sql_statements()",
@@ -963,10 +1128,10 @@
       "source_file": "src-tauri/src/postgres/query.rs",
       "source_location": "L164",
       "_origin": "ast",
-      "id": "src_tauri_src_postgres_query_split_sql_statements",
       "community": 0,
       "community_name": "Rust Postgres Connection Core",
-      "norm_label": "split_sql_statements()"
+      "norm_label": "split_sql_statements()",
+      "id": "src_tauri_src_postgres_query_split_sql_statements"
     },
     {
       "label": "should_wrap_transaction()",
@@ -974,10 +1139,10 @@
       "source_file": "src-tauri/src/postgres/query.rs",
       "source_location": "L253",
       "_origin": "ast",
-      "id": "src_tauri_src_postgres_query_should_wrap_transaction",
       "community": 0,
       "community_name": "Rust Postgres Connection Core",
-      "norm_label": "should_wrap_transaction()"
+      "norm_label": "should_wrap_transaction()",
+      "id": "src_tauri_src_postgres_query_should_wrap_transaction"
     },
     {
       "label": "dollar_tag_end()",
@@ -985,10 +1150,10 @@
       "source_file": "src-tauri/src/postgres/query.rs",
       "source_location": "L270",
       "_origin": "ast",
-      "id": "src_tauri_src_postgres_query_dollar_tag_end",
       "community": 0,
       "community_name": "Rust Postgres Connection Core",
-      "norm_label": "dollar_tag_end()"
+      "norm_label": "dollar_tag_end()",
+      "id": "src_tauri_src_postgres_query_dollar_tag_end"
     },
     {
       "label": "push_statement()",
@@ -996,10 +1161,10 @@
       "source_file": "src-tauri/src/postgres/query.rs",
       "source_location": "L278",
       "_origin": "ast",
-      "id": "src_tauri_src_postgres_query_push_statement",
       "community": 0,
       "community_name": "Rust Postgres Connection Core",
-      "norm_label": "push_statement()"
+      "norm_label": "push_statement()",
+      "id": "src_tauri_src_postgres_query_push_statement"
     },
     {
       "label": "json_params_to_owned()",
@@ -1007,10 +1172,10 @@
       "source_file": "src-tauri/src/postgres/query.rs",
       "source_location": "L287",
       "_origin": "ast",
-      "id": "src_tauri_src_postgres_query_json_params_to_owned",
       "community": 0,
       "community_name": "Rust Postgres Connection Core",
-      "norm_label": "json_params_to_owned()"
+      "norm_label": "json_params_to_owned()",
+      "id": "src_tauri_src_postgres_query_json_params_to_owned"
     },
     {
       "label": "Box",
@@ -1018,10 +1183,10 @@
       "source_file": "",
       "source_location": "",
       "_origin": "ast",
-      "id": "box",
       "community": 0,
       "community_name": "Rust Postgres Connection Core",
-      "norm_label": "box"
+      "norm_label": "box",
+      "id": "box"
     },
     {
       "label": "ToSql",
@@ -1029,10 +1194,10 @@
       "source_file": "",
       "source_location": "",
       "_origin": "ast",
-      "id": "tosql",
       "community": 0,
       "community_name": "Rust Postgres Connection Core",
-      "norm_label": "tosql"
+      "norm_label": "tosql",
+      "id": "tosql"
     },
     {
       "label": "Sync",
@@ -1040,10 +1205,10 @@
       "source_file": "",
       "source_location": "",
       "_origin": "ast",
-      "id": "sync",
       "community": 0,
       "community_name": "Rust Postgres Connection Core",
-      "norm_label": "sync"
+      "norm_label": "sync",
+      "id": "sync"
     },
     {
       "label": "Send",
@@ -1051,10 +1216,10 @@
       "source_file": "",
       "source_location": "",
       "_origin": "ast",
-      "id": "send",
       "community": 0,
       "community_name": "Rust Postgres Connection Core",
-      "norm_label": "send"
+      "norm_label": "send",
+      "id": "send"
     },
     {
       "label": "json_to_sql()",
@@ -1062,10 +1227,10 @@
       "source_file": "src-tauri/src/postgres/query.rs",
       "source_location": "L293",
       "_origin": "ast",
-      "id": "src_tauri_src_postgres_query_json_to_sql",
       "community": 0,
       "community_name": "Rust Postgres Connection Core",
-      "norm_label": "json_to_sql()"
+      "norm_label": "json_to_sql()",
+      "id": "src_tauri_src_postgres_query_json_to_sql"
     },
     {
       "label": "looks_like_select()",
@@ -1073,10 +1238,10 @@
       "source_file": "src-tauri/src/postgres/query.rs",
       "source_location": "L320",
       "_origin": "ast",
-      "id": "src_tauri_src_postgres_query_looks_like_select",
       "community": 0,
       "community_name": "Rust Postgres Connection Core",
-      "norm_label": "looks_like_select()"
+      "norm_label": "looks_like_select()",
+      "id": "src_tauri_src_postgres_query_looks_like_select"
     },
     {
       "label": "strip_leading_sql_noise()",
@@ -1084,10 +1249,10 @@
       "source_file": "src-tauri/src/postgres/query.rs",
       "source_location": "L325",
       "_origin": "ast",
-      "id": "src_tauri_src_postgres_query_strip_leading_sql_noise",
       "community": 0,
       "community_name": "Rust Postgres Connection Core",
-      "norm_label": "strip_leading_sql_noise()"
+      "norm_label": "strip_leading_sql_noise()",
+      "id": "src_tauri_src_postgres_query_strip_leading_sql_noise"
     },
     {
       "label": "keyword_at()",
@@ -1095,10 +1260,10 @@
       "source_file": "src-tauri/src/postgres/query.rs",
       "source_location": "L351",
       "_origin": "ast",
-      "id": "src_tauri_src_postgres_query_keyword_at",
       "community": 0,
       "community_name": "Rust Postgres Connection Core",
-      "norm_label": "keyword_at()"
+      "norm_label": "keyword_at()",
+      "id": "src_tauri_src_postgres_query_keyword_at"
     },
     {
       "label": "cell_value()",
@@ -1106,10 +1271,10 @@
       "source_file": "src-tauri/src/postgres/query.rs",
       "source_location": "L362",
       "_origin": "ast",
-      "id": "src_tauri_src_postgres_query_cell_value",
       "community": 0,
       "community_name": "Rust Postgres Connection Core",
-      "norm_label": "cell_value()"
+      "norm_label": "cell_value()",
+      "id": "src_tauri_src_postgres_query_cell_value"
     },
     {
       "label": "Row",
@@ -1117,10 +1282,10 @@
       "source_file": "",
       "source_location": "",
       "_origin": "ast",
-      "id": "row",
       "community": 0,
       "community_name": "Rust Postgres Connection Core",
-      "norm_label": "row"
+      "norm_label": "row",
+      "id": "row"
     },
     {
       "label": "query_result_mapper_uses_rows_len_for_select_count_semantics()",
@@ -1128,10 +1293,10 @@
       "source_file": "src-tauri/src/postgres/query.rs",
       "source_location": "L422",
       "_origin": "ast",
-      "id": "src_tauri_src_postgres_query_query_result_mapper_uses_rows_len_for_select_count_semantics",
       "community": 0,
       "community_name": "Rust Postgres Connection Core",
-      "norm_label": "query_result_mapper_uses_rows_len_for_select_count_semantics()"
+      "norm_label": "query_result_mapper_uses_rows_len_for_select_count_semantics()",
+      "id": "src_tauri_src_postgres_query_query_result_mapper_uses_rows_len_for_select_count_semantics"
     },
     {
       "label": "query_result_mapper_zero_rows_is_explicit_empty()",
@@ -1139,10 +1304,10 @@
       "source_file": "src-tauri/src/postgres/query.rs",
       "source_location": "L438",
       "_origin": "ast",
-      "id": "src_tauri_src_postgres_query_query_result_mapper_zero_rows_is_explicit_empty",
       "community": 0,
       "community_name": "Rust Postgres Connection Core",
-      "norm_label": "query_result_mapper_zero_rows_is_explicit_empty()"
+      "norm_label": "query_result_mapper_zero_rows_is_explicit_empty()",
+      "id": "src_tauri_src_postgres_query_query_result_mapper_zero_rows_is_explicit_empty"
     },
     {
       "label": "empty_select_row_set_keeps_column_names()",
@@ -1150,10 +1315,10 @@
       "source_file": "src-tauri/src/postgres/query.rs",
       "source_location": "L451",
       "_origin": "ast",
-      "id": "src_tauri_src_postgres_query_empty_select_row_set_keeps_column_names",
       "community": 0,
       "community_name": "Rust Postgres Connection Core",
-      "norm_label": "empty_select_row_set_keeps_column_names()"
+      "norm_label": "empty_select_row_set_keeps_column_names()",
+      "id": "src_tauri_src_postgres_query_empty_select_row_set_keeps_column_names"
     },
     {
       "label": "looks_like_select_handles_comments_and_with()",
@@ -1161,10 +1326,10 @@
       "source_file": "src-tauri/src/postgres/query.rs",
       "source_location": "L464",
       "_origin": "ast",
-      "id": "src_tauri_src_postgres_query_looks_like_select_handles_comments_and_with",
       "community": 0,
       "community_name": "Rust Postgres Connection Core",
-      "norm_label": "looks_like_select_handles_comments_and_with()"
+      "norm_label": "looks_like_select_handles_comments_and_with()",
+      "id": "src_tauri_src_postgres_query_looks_like_select_handles_comments_and_with"
     },
     {
       "label": "json_params_to_owned_accepts_string_bool_number_null()",
@@ -1172,10 +1337,10 @@
       "source_file": "src-tauri/src/postgres/query.rs",
       "source_location": "L478",
       "_origin": "ast",
-      "id": "src_tauri_src_postgres_query_json_params_to_owned_accepts_string_bool_number_null",
       "community": 0,
       "community_name": "Rust Postgres Connection Core",
-      "norm_label": "json_params_to_owned_accepts_string_bool_number_null()"
+      "norm_label": "json_params_to_owned_accepts_string_bool_number_null()",
+      "id": "src_tauri_src_postgres_query_json_params_to_owned_accepts_string_bool_number_null"
     },
     {
       "label": "json_params_to_owned_rejects_object_and_array()",
@@ -1183,10 +1348,10 @@
       "source_file": "src-tauri/src/postgres/query.rs",
       "source_location": "L490",
       "_origin": "ast",
-      "id": "src_tauri_src_postgres_query_json_params_to_owned_rejects_object_and_array",
       "community": 0,
       "community_name": "Rust Postgres Connection Core",
-      "norm_label": "json_params_to_owned_rejects_object_and_array()"
+      "norm_label": "json_params_to_owned_rejects_object_and_array()",
+      "id": "src_tauri_src_postgres_query_json_params_to_owned_rejects_object_and_array"
     },
     {
       "label": "split_sql_statements_last_select_wins()",
@@ -1194,10 +1359,10 @@
       "source_file": "src-tauri/src/postgres/query.rs",
       "source_location": "L496",
       "_origin": "ast",
-      "id": "src_tauri_src_postgres_query_split_sql_statements_last_select_wins",
       "community": 0,
       "community_name": "Rust Postgres Connection Core",
-      "norm_label": "split_sql_statements_last_select_wins()"
+      "norm_label": "split_sql_statements_last_select_wins()",
+      "id": "src_tauri_src_postgres_query_split_sql_statements_last_select_wins"
     },
     {
       "label": "wrap_transaction_unless_user_already_has_begin()",
@@ -1205,10 +1370,10 @@
       "source_file": "src-tauri/src/postgres/query.rs",
       "source_location": "L502",
       "_origin": "ast",
-      "id": "src_tauri_src_postgres_query_wrap_transaction_unless_user_already_has_begin",
       "community": 0,
       "community_name": "Rust Postgres Connection Core",
-      "norm_label": "wrap_transaction_unless_user_already_has_begin()"
+      "norm_label": "wrap_transaction_unless_user_already_has_begin()",
+      "id": "src_tauri_src_postgres_query_wrap_transaction_unless_user_already_has_begin"
     },
     {
       "label": "no_wrap_for_statements_illegal_inside_transaction_block()",
@@ -1216,10 +1381,10 @@
       "source_file": "src-tauri/src/postgres/query.rs",
       "source_location": "L508",
       "_origin": "ast",
-      "id": "src_tauri_src_postgres_query_no_wrap_for_statements_illegal_inside_transaction_block",
       "community": 0,
       "community_name": "Rust Postgres Connection Core",
-      "norm_label": "no_wrap_for_statements_illegal_inside_transaction_block()"
+      "norm_label": "no_wrap_for_statements_illegal_inside_transaction_block()",
+      "id": "src_tauri_src_postgres_query_no_wrap_for_statements_illegal_inside_transaction_block"
     },
     {
       "label": "split_sql_statements_mirrors_ts_quote_and_comment_cases()",
@@ -1227,10 +1392,10 @@
       "source_file": "src-tauri/src/postgres/query.rs",
       "source_location": "L537",
       "_origin": "ast",
-      "id": "src_tauri_src_postgres_query_split_sql_statements_mirrors_ts_quote_and_comment_cases",
       "community": 0,
       "community_name": "Rust Postgres Connection Core",
-      "norm_label": "split_sql_statements_mirrors_ts_quote_and_comment_cases()"
+      "norm_label": "split_sql_statements_mirrors_ts_quote_and_comment_cases()",
+      "id": "src_tauri_src_postgres_query_split_sql_statements_mirrors_ts_quote_and_comment_cases"
     },
     {
       "label": "App.tsx",
@@ -2855,8 +3020,8 @@
       "source_file": "src-tauri/src/postgres/mod.rs",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 112,
-      "community_name": "table-export-sheet.tsx",
+      "community": 131,
+      "community_name": "splitSqlStatements",
       "norm_label": "postgres/mod.rs",
       "id": "src_tauri_src_postgres_mod"
     },
@@ -5154,8 +5319,8 @@
       "source_file": "src-tauri/src/postgres/connection_test.rs",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 112,
-      "community_name": "table-export-sheet.tsx",
+      "community": 2,
+      "community_name": "Async Runtime Primitives",
       "norm_label": "connection_test.rs",
       "id": "src_tauri_src_postgres_connection_test"
     },
@@ -5165,8 +5330,8 @@
       "source_file": "src-tauri/src/postgres/connection_test.rs",
       "source_location": "L9",
       "_origin": "ast",
-      "community": 112,
-      "community_name": "table-export-sheet.tsx",
+      "community": 2,
+      "community_name": "Async Runtime Primitives",
       "norm_label": "probeconfig",
       "id": "src_tauri_src_postgres_connection_test_probeconfig"
     },
@@ -5176,8 +5341,8 @@
       "source_file": "",
       "source_location": "",
       "_origin": "ast",
-      "community": 112,
-      "community_name": "table-export-sheet.tsx",
+      "community": 2,
+      "community_name": "Async Runtime Primitives",
       "norm_label": "string",
       "id": "src_tauri_src_postgres_connection_test_rs_string"
     },
@@ -5187,8 +5352,8 @@
       "source_file": "",
       "source_location": "",
       "_origin": "ast",
-      "community": 112,
-      "community_name": "table-export-sheet.tsx",
+      "community": 2,
+      "community_name": "Async Runtime Primitives",
       "norm_label": "option",
       "id": "src_tauri_src_postgres_connection_test_rs_option"
     },
@@ -5198,8 +5363,8 @@
       "source_file": "src-tauri/src/postgres/connection_test.rs",
       "source_location": "L30",
       "_origin": "ast",
-      "community": 112,
-      "community_name": "table-export-sheet.tsx",
+      "community": 2,
+      "community_name": "Async Runtime Primitives",
       "norm_label": "probe()",
       "id": "src_tauri_src_postgres_connection_test_probe"
     },
@@ -5209,8 +5374,8 @@
       "source_file": "",
       "source_location": "",
       "_origin": "ast",
-      "community": 112,
-      "community_name": "table-export-sheet.tsx",
+      "community": 2,
+      "community_name": "Async Runtime Primitives",
       "norm_label": "result",
       "id": "src_tauri_src_postgres_connection_test_rs_result"
     },
@@ -5220,8 +5385,8 @@
       "source_file": "src-tauri/src/postgres/connection_test.rs",
       "source_location": "L37",
       "_origin": "ast",
-      "community": 112,
-      "community_name": "table-export-sheet.tsx",
+      "community": 2,
+      "community_name": "Async Runtime Primitives",
       "norm_label": "probe_config()",
       "id": "src_tauri_src_postgres_connection_test_probe_config"
     },
@@ -5231,8 +5396,8 @@
       "source_file": "src-tauri/src/postgres/connection_test.rs",
       "source_location": "L94",
       "_origin": "ast",
-      "community": 112,
-      "community_name": "table-export-sheet.tsx",
+      "community": 2,
+      "community_name": "Async Runtime Primitives",
       "norm_label": "connection_error()",
       "id": "src_tauri_src_postgres_connection_test_connection_error"
     },
@@ -5242,8 +5407,8 @@
       "source_file": "src-tauri/src/postgres/connection_test.rs",
       "source_location": "L105",
       "_origin": "ast",
-      "community": 112,
-      "community_name": "table-export-sheet.tsx",
+      "community": 2,
+      "community_name": "Async Runtime Primitives",
       "norm_label": "probe_module_does_not_depend_on_app_session()",
       "id": "src_tauri_src_postgres_connection_test_probe_module_does_not_depend_on_app_session"
     },
@@ -5814,8 +5979,8 @@
       "source_file": "src-tauri/src/postgres/ssl.rs",
       "source_location": "L8",
       "_origin": "ast",
-      "community": 131,
-      "community_name": "splitSqlStatements",
+      "community": 63,
+      "community_name": "ProfileRow",
       "norm_label": "effectivetls",
       "id": "src_tauri_src_postgres_ssl_effectivetls"
     },
@@ -5825,8 +5990,8 @@
       "source_file": "src-tauri/src/postgres/ssl.rs",
       "source_location": "L21",
       "_origin": "ast",
-      "community": 38,
-      "community_name": "Query Editability Analysis",
+      "community": 44,
+      "community_name": "Query Results Grid",
       "norm_label": "collapse_ssl_mode()",
       "id": "src_tauri_src_postgres_ssl_collapse_ssl_mode"
     },
@@ -5897,59 +6062,15 @@
       "id": "src_tauri_src_postgres_ssl_collapse_ssl_mode_matches_spec_table"
     },
     {
-      "label": "table_admin.rs",
-      "file_type": "code",
-      "source_file": "src-tauri/src/postgres/table_admin.rs",
-      "source_location": "L1",
-      "_origin": "ast",
-      "community": 109,
-      "community_name": "error.rs",
-      "norm_label": "table_admin.rs",
-      "id": "src_tauri_src_postgres_table_admin"
-    },
-    {
-      "label": "quote_identifier()",
-      "file_type": "code",
-      "source_file": "src-tauri/src/postgres/table_admin.rs",
-      "source_location": "L7",
-      "_origin": "ast",
-      "community": 109,
-      "community_name": "error.rs",
-      "norm_label": "quote_identifier()",
-      "id": "src_tauri_src_postgres_table_admin_quote_identifier"
-    },
-    {
       "label": "String",
       "file_type": "code",
       "source_file": "",
       "source_location": "",
       "_origin": "ast",
-      "community": 109,
-      "community_name": "error.rs",
+      "community": 178,
+      "community_name": "String",
       "norm_label": "string",
       "id": "src_tauri_src_postgres_table_admin_rs_string"
-    },
-    {
-      "label": "truncate_table_sql()",
-      "file_type": "code",
-      "source_file": "src-tauri/src/postgres/table_admin.rs",
-      "source_location": "L11",
-      "_origin": "ast",
-      "community": 109,
-      "community_name": "error.rs",
-      "norm_label": "truncate_table_sql()",
-      "id": "src_tauri_src_postgres_table_admin_truncate_table_sql"
-    },
-    {
-      "label": "drop_table_sql()",
-      "file_type": "code",
-      "source_file": "src-tauri/src/postgres/table_admin.rs",
-      "source_location": "L19",
-      "_origin": "ast",
-      "community": 109,
-      "community_name": "error.rs",
-      "norm_label": "drop_table_sql()",
-      "id": "src_tauri_src_postgres_table_admin_drop_table_sql"
     },
     {
       "label": "Option",
@@ -5957,43 +6078,10 @@
       "source_file": "",
       "source_location": "",
       "_origin": "ast",
-      "community": 109,
-      "community_name": "error.rs",
+      "community": 112,
+      "community_name": "table-export-sheet.tsx",
       "norm_label": "option",
       "id": "src_tauri_src_postgres_table_admin_rs_option"
-    },
-    {
-      "label": "generate_table_ddl_sql()",
-      "file_type": "code",
-      "source_file": "src-tauri/src/postgres/table_admin.rs",
-      "source_location": "L33",
-      "_origin": "ast",
-      "community": 109,
-      "community_name": "error.rs",
-      "norm_label": "generate_table_ddl_sql()",
-      "id": "src_tauri_src_postgres_table_admin_generate_table_ddl_sql"
-    },
-    {
-      "label": "set_search_path_sql()",
-      "file_type": "code",
-      "source_file": "src-tauri/src/postgres/table_admin.rs",
-      "source_location": "L48",
-      "_origin": "ast",
-      "community": 109,
-      "community_name": "error.rs",
-      "norm_label": "set_search_path_sql()",
-      "id": "src_tauri_src_postgres_table_admin_set_search_path_sql"
-    },
-    {
-      "label": "truncate_table()",
-      "file_type": "code",
-      "source_file": "src-tauri/src/postgres/table_admin.rs",
-      "source_location": "L55",
-      "_origin": "ast",
-      "community": 109,
-      "community_name": "error.rs",
-      "norm_label": "truncate_table()",
-      "id": "src_tauri_src_postgres_table_admin_truncate_table"
     },
     {
       "label": "Client",
@@ -6012,76 +6100,10 @@
       "source_file": "",
       "source_location": "",
       "_origin": "ast",
-      "community": 109,
-      "community_name": "error.rs",
+      "community": 177,
+      "community_name": "Result",
       "norm_label": "result",
       "id": "src_tauri_src_postgres_table_admin_rs_result"
-    },
-    {
-      "label": "drop_table()",
-      "file_type": "code",
-      "source_file": "src-tauri/src/postgres/table_admin.rs",
-      "source_location": "L66",
-      "_origin": "ast",
-      "community": 109,
-      "community_name": "error.rs",
-      "norm_label": "drop_table()",
-      "id": "src_tauri_src_postgres_table_admin_drop_table"
-    },
-    {
-      "label": "generate_table_ddl()",
-      "file_type": "code",
-      "source_file": "src-tauri/src/postgres/table_admin.rs",
-      "source_location": "L78",
-      "_origin": "ast",
-      "community": 109,
-      "community_name": "error.rs",
-      "norm_label": "generate_table_ddl()",
-      "id": "src_tauri_src_postgres_table_admin_generate_table_ddl"
-    },
-    {
-      "label": "set_search_path()",
-      "file_type": "code",
-      "source_file": "src-tauri/src/postgres/table_admin.rs",
-      "source_location": "L105",
-      "_origin": "ast",
-      "community": 109,
-      "community_name": "error.rs",
-      "norm_label": "set_search_path()",
-      "id": "src_tauri_src_postgres_table_admin_set_search_path"
-    },
-    {
-      "label": "truncate_and_drop_sql_quote_schema_and_table()",
-      "file_type": "code",
-      "source_file": "src-tauri/src/postgres/table_admin.rs",
-      "source_location": "L117",
-      "_origin": "ast",
-      "community": 109,
-      "community_name": "error.rs",
-      "norm_label": "truncate_and_drop_sql_quote_schema_and_table()",
-      "id": "src_tauri_src_postgres_table_admin_truncate_and_drop_sql_quote_schema_and_table"
-    },
-    {
-      "label": "set_search_path_named_vs_all_schemas()",
-      "file_type": "code",
-      "source_file": "src-tauri/src/postgres/table_admin.rs",
-      "source_location": "L134",
-      "_origin": "ast",
-      "community": 109,
-      "community_name": "error.rs",
-      "norm_label": "set_search_path_named_vs_all_schemas()",
-      "id": "src_tauri_src_postgres_table_admin_set_search_path_named_vs_all_schemas"
-    },
-    {
-      "label": "generate_table_ddl_sql_targets_quoted_table()",
-      "file_type": "code",
-      "source_file": "src-tauri/src/postgres/table_admin.rs",
-      "source_location": "L143",
-      "_origin": "ast",
-      "community": 109,
-      "community_name": "error.rs",
-      "norm_label": "generate_table_ddl_sql_targets_quoted_table()",
-      "id": "src_tauri_src_postgres_table_admin_generate_table_ddl_sql_targets_quoted_table"
     },
     {
       "label": "keyring_store.rs",
@@ -6122,8 +6144,8 @@
       "source_file": "src-tauri/src/secrets/keyring_store.rs",
       "source_location": "L39",
       "_origin": "ast",
-      "community": 13,
-      "community_name": "Keyring Secrets Store",
+      "community": 44,
+      "community_name": "Query Results Grid",
       "norm_label": "profilesecrets",
       "id": "src_tauri_src_secrets_keyring_store_profilesecrets"
     },
@@ -6144,8 +6166,8 @@
       "source_file": "",
       "source_location": "",
       "_origin": "ast",
-      "community": 13,
-      "community_name": "Keyring Secrets Store",
+      "community": 44,
+      "community_name": "Query Results Grid",
       "norm_label": "debug",
       "id": "src_tauri_src_secrets_keyring_store_rs_debug"
     },
@@ -6430,8 +6452,8 @@
       "source_file": "src-tauri/src/session/mod.rs",
       "source_location": "L54",
       "_origin": "ast",
-      "community": 48,
-      "community_name": "app-workspace.test.tsx",
+      "community": 8,
+      "community_name": "Session Management Tests",
       "norm_label": "executablesql",
       "id": "src_tauri_src_session_mod_executablesql"
     },
@@ -6463,8 +6485,8 @@
       "source_file": "",
       "source_location": "",
       "_origin": "ast",
-      "community": 48,
-      "community_name": "app-workspace.test.tsx",
+      "community": 21,
+      "community_name": "CSV Export Utilities",
       "norm_label": "value",
       "id": "src_tauri_src_session_mod_rs_value"
     },
@@ -6573,8 +6595,8 @@
       "source_file": "src-tauri/src/session/mod.rs",
       "source_location": "L131",
       "_origin": "ast",
-      "community": 38,
-      "community_name": "Query Editability Analysis",
+      "community": 48,
+      "community_name": "app-workspace.test.tsx",
       "norm_label": "tablerefarg",
       "id": "src_tauri_src_session_mod_tablerefarg"
     },
@@ -6727,8 +6749,8 @@
       "source_file": "src-tauri/src/session/mod.rs",
       "source_location": "L209",
       "_origin": "ast",
-      "community": 54,
-      "community_name": "Tab Bar UI",
+      "community": 8,
+      "community_name": "Session Management Tests",
       "norm_label": ".active_profile_id()",
       "id": "src_tauri_src_session_mod_appsession_active_profile_id"
     },
@@ -6738,8 +6760,8 @@
       "source_file": "src-tauri/src/session/mod.rs",
       "source_location": "L213",
       "_origin": "ast",
-      "community": 48,
-      "community_name": "app-workspace.test.tsx",
+      "community": 21,
+      "community_name": "CSV Export Utilities",
       "norm_label": ".fake_postgres()",
       "id": "src_tauri_src_session_mod_appsession_fake_postgres"
     },
@@ -6749,8 +6771,8 @@
       "source_file": "src-tauri/src/session/mod.rs",
       "source_location": "L220",
       "_origin": "ast",
-      "community": 48,
-      "community_name": "app-workspace.test.tsx",
+      "community": 21,
+      "community_name": "CSV Export Utilities",
       "norm_label": ".fake_ssh()",
       "id": "src_tauri_src_session_mod_appsession_fake_ssh"
     },
@@ -6771,8 +6793,8 @@
       "source_file": "src-tauri/src/session/mod.rs",
       "source_location": "L234",
       "_origin": "ast",
-      "community": 54,
-      "community_name": "Tab Bar UI",
+      "community": 8,
+      "community_name": "Session Management Tests",
       "norm_label": ".fake_keyring()",
       "id": "src_tauri_src_session_mod_appsession_fake_keyring"
     },
@@ -6815,8 +6837,8 @@
       "source_file": "src-tauri/src/session/mod.rs",
       "source_location": "L262",
       "_origin": "ast",
-      "community": 38,
-      "community_name": "Query Editability Analysis",
+      "community": 48,
+      "community_name": "app-workspace.test.tsx",
       "norm_label": ".list_profiles()",
       "id": "src_tauri_src_session_mod_appsession_list_profiles"
     },
@@ -6826,8 +6848,8 @@
       "source_file": "src-tauri/src/session/mod.rs",
       "source_location": "L276",
       "_origin": "ast",
-      "community": 38,
-      "community_name": "Query Editability Analysis",
+      "community": 54,
+      "community_name": "Tab Bar UI",
       "norm_label": ".get_profile()",
       "id": "src_tauri_src_session_mod_appsession_get_profile"
     },
@@ -6903,8 +6925,8 @@
       "source_file": "src-tauri/src/session/mod.rs",
       "source_location": "L535",
       "_origin": "ast",
-      "community": 38,
-      "community_name": "Query Editability Analysis",
+      "community": 44,
+      "community_name": "Query Results Grid",
       "norm_label": ".switch_database()",
       "id": "src_tauri_src_session_mod_appsession_switch_database"
     },
@@ -7013,8 +7035,8 @@
       "source_file": "src-tauri/src/session/mod.rs",
       "source_location": "L733",
       "_origin": "ast",
-      "community": 38,
-      "community_name": "Query Editability Analysis",
+      "community": 48,
+      "community_name": "app-workspace.test.tsx",
       "norm_label": ".truncate_table()",
       "id": "src_tauri_src_session_mod_appsession_truncate_table"
     },
@@ -7024,8 +7046,8 @@
       "source_file": "src-tauri/src/session/mod.rs",
       "source_location": "L762",
       "_origin": "ast",
-      "community": 38,
-      "community_name": "Query Editability Analysis",
+      "community": 48,
+      "community_name": "app-workspace.test.tsx",
       "norm_label": ".drop_table()",
       "id": "src_tauri_src_session_mod_appsession_drop_table"
     },
@@ -7035,8 +7057,8 @@
       "source_file": "src-tauri/src/session/mod.rs",
       "source_location": "L785",
       "_origin": "ast",
-      "community": 38,
-      "community_name": "Query Editability Analysis",
+      "community": 48,
+      "community_name": "app-workspace.test.tsx",
       "norm_label": ".generate_table_ddl()",
       "id": "src_tauri_src_session_mod_appsession_generate_table_ddl"
     },
@@ -7068,8 +7090,8 @@
       "source_file": "",
       "source_location": "",
       "_origin": "ast",
-      "community": 48,
-      "community_name": "app-workspace.test.tsx",
+      "community": 21,
+      "community_name": "CSV Export Utilities",
       "norm_label": "queryresultdata",
       "id": "src_tauri_src_session_mod_rs_queryresultdata"
     },
@@ -7079,8 +7101,8 @@
       "source_file": "src-tauri/src/session/mod.rs",
       "source_location": "L874",
       "_origin": "ast",
-      "community": 48,
-      "community_name": "app-workspace.test.tsx",
+      "community": 21,
+      "community_name": "CSV Export Utilities",
       "norm_label": ".execute_query_with_oneshot_reconnect()",
       "id": "src_tauri_src_session_mod_appsession_execute_query_with_oneshot_reconnect"
     },
@@ -7090,8 +7112,8 @@
       "source_file": "src-tauri/src/session/mod.rs",
       "source_location": "L890",
       "_origin": "ast",
-      "community": 48,
-      "community_name": "app-workspace.test.tsx",
+      "community": 21,
+      "community_name": "CSV Export Utilities",
       "norm_label": ".query_once()",
       "id": "src_tauri_src_session_mod_appsession_query_once"
     },
@@ -7189,8 +7211,8 @@
       "source_file": "src-tauri/src/session/mod.rs",
       "source_location": "L1094",
       "_origin": "ast",
-      "community": 38,
-      "community_name": "Query Editability Analysis",
+      "community": 48,
+      "community_name": "app-workspace.test.tsx",
       "norm_label": ".require_live()",
       "id": "src_tauri_src_session_mod_appsession_require_live"
     },
@@ -7211,8 +7233,8 @@
       "source_file": "src-tauri/src/session/mod.rs",
       "source_location": "L1121",
       "_origin": "ast",
-      "community": 21,
-      "community_name": "CSV Export Utilities",
+      "community": 54,
+      "community_name": "Tab Bar UI",
       "norm_label": ".insert_history_row()",
       "id": "src_tauri_src_session_mod_appsession_insert_history_row"
     },
@@ -7222,8 +7244,8 @@
       "source_file": "",
       "source_location": "",
       "_origin": "ast",
-      "community": 21,
-      "community_name": "CSV Export Utilities",
+      "community": 54,
+      "community_name": "Tab Bar UI",
       "norm_label": "historyinsert",
       "id": "historyinsert"
     },
@@ -7519,8 +7541,8 @@
       "source_file": "src-tauri/src/session/mod.rs",
       "source_location": "L1449",
       "_origin": "ast",
-      "community": 38,
-      "community_name": "Query Editability Analysis",
+      "community": 44,
+      "community_name": "Query Results Grid",
       "norm_label": "establish_live()",
       "id": "src_tauri_src_session_mod_establish_live"
     },
@@ -7530,8 +7552,8 @@
       "source_file": "",
       "source_location": "",
       "_origin": "ast",
-      "community": 38,
-      "community_name": "Query Editability Analysis",
+      "community": 44,
+      "community_name": "Query Results Grid",
       "norm_label": "aborthandle",
       "id": "src_tauri_src_session_mod_rs_aborthandle"
     },
@@ -7629,8 +7651,8 @@
       "source_file": "src-tauri/src/session/mod.rs",
       "source_location": "L1618",
       "_origin": "ast",
-      "community": 38,
-      "community_name": "Query Editability Analysis",
+      "community": 54,
+      "community_name": "Tab Bar UI",
       "norm_label": "keyring_err()",
       "id": "src_tauri_src_session_mod_keyring_err"
     },
@@ -7651,8 +7673,8 @@
       "source_file": "src-tauri/src/session/mod.rs",
       "source_location": "L1637",
       "_origin": "ast",
-      "community": 8,
-      "community_name": "Session Management Tests",
+      "community": 44,
+      "community_name": "Query Results Grid",
       "norm_label": "fakeseed",
       "id": "src_tauri_src_session_mod_fakeseed"
     },
@@ -7772,8 +7794,8 @@
       "source_file": "src-tauri/src/session/mod.rs",
       "source_location": "L1829",
       "_origin": "ast",
-      "community": 54,
-      "community_name": "Tab Bar UI",
+      "community": 8,
+      "community_name": "Session Management Tests",
       "norm_label": "sample_profile_fields()",
       "id": "src_tauri_src_session_mod_sample_profile_fields"
     },
@@ -7783,8 +7805,8 @@
       "source_file": "src-tauri/src/session/mod.rs",
       "source_location": "L1848",
       "_origin": "ast",
-      "community": 48,
-      "community_name": "app-workspace.test.tsx",
+      "community": 21,
+      "community_name": "CSV Export Utilities",
       "norm_label": "fakepostgres",
       "id": "src_tauri_src_session_mod_fakepostgres"
     },
@@ -7794,8 +7816,8 @@
       "source_file": "",
       "source_location": "",
       "_origin": "ast",
-      "community": 48,
-      "community_name": "app-workspace.test.tsx",
+      "community": 21,
+      "community_name": "CSV Export Utilities",
       "norm_label": "atomicu32",
       "id": "atomicu32"
     },
@@ -7805,8 +7827,8 @@
       "source_file": "src-tauri/src/session/mod.rs",
       "source_location": "L1862",
       "_origin": "ast",
-      "community": 48,
-      "community_name": "app-workspace.test.tsx",
+      "community": 21,
+      "community_name": "CSV Export Utilities",
       "norm_label": ".connect_calls()",
       "id": "src_tauri_src_session_mod_fakepostgres_connect_calls"
     },
@@ -7816,8 +7838,8 @@
       "source_file": "src-tauri/src/session/mod.rs",
       "source_location": "L1866",
       "_origin": "ast",
-      "community": 48,
-      "community_name": "app-workspace.test.tsx",
+      "community": 21,
+      "community_name": "CSV Export Utilities",
       "norm_label": ".query_attempts()",
       "id": "src_tauri_src_session_mod_fakepostgres_query_attempts"
     },
@@ -7827,8 +7849,8 @@
       "source_file": "src-tauri/src/session/mod.rs",
       "source_location": "L1870",
       "_origin": "ast",
-      "community": 44,
-      "community_name": "Query Results Grid",
+      "community": 21,
+      "community_name": "CSV Export Utilities",
       "norm_label": ".last_sql()",
       "id": "src_tauri_src_session_mod_fakepostgres_last_sql"
     },
@@ -7838,8 +7860,8 @@
       "source_file": "src-tauri/src/session/mod.rs",
       "source_location": "L1874",
       "_origin": "ast",
-      "community": 48,
-      "community_name": "app-workspace.test.tsx",
+      "community": 21,
+      "community_name": "CSV Export Utilities",
       "norm_label": ".last_params()",
       "id": "src_tauri_src_session_mod_fakepostgres_last_params"
     },
@@ -7849,8 +7871,8 @@
       "source_file": "src-tauri/src/session/mod.rs",
       "source_location": "L1881",
       "_origin": "ast",
-      "community": 48,
-      "community_name": "app-workspace.test.tsx",
+      "community": 21,
+      "community_name": "CSV Export Utilities",
       "norm_label": ".record_query()",
       "id": "src_tauri_src_session_mod_fakepostgres_record_query"
     },
@@ -7871,8 +7893,8 @@
       "source_file": "src-tauri/src/session/mod.rs",
       "source_location": "L1905",
       "_origin": "ast",
-      "community": 48,
-      "community_name": "app-workspace.test.tsx",
+      "community": 21,
+      "community_name": "CSV Export Utilities",
       "norm_label": ".clear_dead_socket()",
       "id": "src_tauri_src_session_mod_fakepostgres_clear_dead_socket"
     },
@@ -7882,8 +7904,8 @@
       "source_file": "src-tauri/src/session/mod.rs",
       "source_location": "L1911",
       "_origin": "ast",
-      "community": 48,
-      "community_name": "app-workspace.test.tsx",
+      "community": 21,
+      "community_name": "CSV Export Utilities",
       "norm_label": ".query_attempt()",
       "id": "src_tauri_src_session_mod_fakepostgres_query_attempt"
     },
@@ -7893,8 +7915,8 @@
       "source_file": "src-tauri/src/session/mod.rs",
       "source_location": "L1933",
       "_origin": "ast",
-      "community": 48,
-      "community_name": "app-workspace.test.tsx",
+      "community": 21,
+      "community_name": "CSV Export Utilities",
       "norm_label": "fakessh",
       "id": "src_tauri_src_session_mod_fakessh"
     },
@@ -7904,8 +7926,8 @@
       "source_file": "src-tauri/src/session/mod.rs",
       "source_location": "L1938",
       "_origin": "ast",
-      "community": 48,
-      "community_name": "app-workspace.test.tsx",
+      "community": 21,
+      "community_name": "CSV Export Utilities",
       "norm_label": ".open_calls()",
       "id": "src_tauri_src_session_mod_fakessh_open_calls"
     },
@@ -7926,8 +7948,8 @@
       "source_file": "src-tauri/src/session/mod.rs",
       "source_location": "L1949",
       "_origin": "ast",
-      "community": 21,
-      "community_name": "CSV Export Utilities",
+      "community": 54,
+      "community_name": "Tab Bar UI",
       "norm_label": "fakestorage",
       "id": "src_tauri_src_session_mod_fakestorage"
     },
@@ -7948,8 +7970,8 @@
       "source_file": "src-tauri/src/session/mod.rs",
       "source_location": "L1955",
       "_origin": "ast",
-      "community": 21,
-      "community_name": "CSV Export Utilities",
+      "community": 54,
+      "community_name": "Tab Bar UI",
       "norm_label": ".profile_count()",
       "id": "src_tauri_src_session_mod_fakestorage_profile_count"
     },
@@ -7959,8 +7981,8 @@
       "source_file": "src-tauri/src/session/mod.rs",
       "source_location": "L1959",
       "_origin": "ast",
-      "community": 21,
-      "community_name": "CSV Export Utilities",
+      "community": 54,
+      "community_name": "Tab Bar UI",
       "norm_label": ".history_count()",
       "id": "src_tauri_src_session_mod_fakestorage_history_count"
     },
@@ -7970,8 +7992,8 @@
       "source_file": "src-tauri/src/session/mod.rs",
       "source_location": "L1963",
       "_origin": "ast",
-      "community": 21,
-      "community_name": "CSV Export Utilities",
+      "community": 8,
+      "community_name": "Session Management Tests",
       "norm_label": ".last_history()",
       "id": "src_tauri_src_session_mod_fakestorage_last_history"
     },
@@ -7981,8 +8003,8 @@
       "source_file": "src-tauri/src/session/mod.rs",
       "source_location": "L1967",
       "_origin": "ast",
-      "community": 21,
-      "community_name": "CSV Export Utilities",
+      "community": 48,
+      "community_name": "app-workspace.test.tsx",
       "norm_label": ".list_profiles()",
       "id": "src_tauri_src_session_mod_fakestorage_list_profiles"
     },
@@ -7992,8 +8014,8 @@
       "source_file": "src-tauri/src/session/mod.rs",
       "source_location": "L1974",
       "_origin": "ast",
-      "community": 21,
-      "community_name": "CSV Export Utilities",
+      "community": 54,
+      "community_name": "Tab Bar UI",
       "norm_label": ".get_profile()",
       "id": "src_tauri_src_session_mod_fakestorage_get_profile"
     },
@@ -8014,8 +8036,8 @@
       "source_file": "src-tauri/src/session/mod.rs",
       "source_location": "L1984",
       "_origin": "ast",
-      "community": 21,
-      "community_name": "CSV Export Utilities",
+      "community": 54,
+      "community_name": "Tab Bar UI",
       "norm_label": ".delete()",
       "id": "src_tauri_src_session_mod_fakestorage_delete"
     },
@@ -8025,8 +8047,8 @@
       "source_file": "src-tauri/src/session/mod.rs",
       "source_location": "L1990",
       "_origin": "ast",
-      "community": 21,
-      "community_name": "CSV Export Utilities",
+      "community": 54,
+      "community_name": "Tab Bar UI",
       "norm_label": ".insert_history()",
       "id": "src_tauri_src_session_mod_fakestorage_insert_history"
     },
@@ -8091,8 +8113,8 @@
       "source_file": "src-tauri/src/session/mod.rs",
       "source_location": "L2089",
       "_origin": "ast",
-      "community": 13,
-      "community_name": "Keyring Secrets Store",
+      "community": 44,
+      "community_name": "Query Results Grid",
       "norm_label": "count_secret_slots()",
       "id": "src_tauri_src_session_mod_count_secret_slots"
     },
@@ -8113,8 +8135,8 @@
       "source_file": "src-tauri/src/session/mod.rs",
       "source_location": "L2118",
       "_origin": "ast",
-      "community": 48,
-      "community_name": "app-workspace.test.tsx",
+      "community": 21,
+      "community_name": "CSV Export Utilities",
       "norm_label": "sample_query_result()",
       "id": "src_tauri_src_session_mod_sample_query_result"
     },
@@ -8223,8 +8245,8 @@
       "source_file": "src-tauri/src/session/mod.rs",
       "source_location": "L2297",
       "_origin": "ast",
-      "community": 54,
-      "community_name": "Tab Bar UI",
+      "community": 8,
+      "community_name": "Session Management Tests",
       "norm_label": "save_profile_update_rolls_back_keyring_after_partial_write_failure()",
       "id": "src_tauri_src_session_mod_save_profile_update_rolls_back_keyring_after_partial_write_failure"
     },
@@ -8245,8 +8267,8 @@
       "source_file": "src-tauri/src/session/mod.rs",
       "source_location": "L2352",
       "_origin": "ast",
-      "community": 54,
-      "community_name": "Tab Bar UI",
+      "community": 8,
+      "community_name": "Session Management Tests",
       "norm_label": "save_profile_while_connected_refreshes_active_cache()",
       "id": "src_tauri_src_session_mod_save_profile_while_connected_refreshes_active_cache"
     },
@@ -8256,8 +8278,8 @@
       "source_file": "src-tauri/src/session/mod.rs",
       "source_location": "L2385",
       "_origin": "ast",
-      "community": 54,
-      "community_name": "Tab Bar UI",
+      "community": 8,
+      "community_name": "Session Management Tests",
       "norm_label": "save_profile_empty_secret_strings_do_not_wipe_keyring()",
       "id": "src_tauri_src_session_mod_save_profile_empty_secret_strings_do_not_wipe_keyring"
     },
@@ -8894,8 +8916,8 @@
       "source_file": "src-tauri/src/ssh/tunnel.rs",
       "source_location": "L232",
       "_origin": "ast",
-      "community": 112,
-      "community_name": "table-export-sheet.tsx",
+      "community": 2,
+      "community_name": "Async Runtime Primitives",
       "norm_label": ".drop()",
       "id": "src_tauri_src_ssh_tunnel_tunnelhandle_drop"
     },
@@ -9323,8 +9345,8 @@
       "source_file": "src-tauri/src/storage/profiles.rs",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 21,
-      "community_name": "CSV Export Utilities",
+      "community": 58,
+      "community_name": "SQL Statement Splitter",
       "norm_label": "profiles.rs",
       "id": "src_tauri_src_storage_profiles"
     },
@@ -9334,8 +9356,8 @@
       "source_file": "src-tauri/src/storage/profiles.rs",
       "source_location": "L7",
       "_origin": "ast",
-      "community": 21,
-      "community_name": "CSV Export Utilities",
+      "community": 54,
+      "community_name": "Tab Bar UI",
       "norm_label": "profilerow",
       "id": "src_tauri_src_storage_profiles_profilerow"
     },
@@ -9345,8 +9367,8 @@
       "source_file": "",
       "source_location": "",
       "_origin": "ast",
-      "community": 21,
-      "community_name": "CSV Export Utilities",
+      "community": 54,
+      "community_name": "Tab Bar UI",
       "norm_label": "string",
       "id": "src_tauri_src_storage_profiles_rs_string"
     },
@@ -9356,8 +9378,8 @@
       "source_file": "",
       "source_location": "",
       "_origin": "ast",
-      "community": 21,
-      "community_name": "CSV Export Utilities",
+      "community": 58,
+      "community_name": "SQL Statement Splitter",
       "norm_label": "option",
       "id": "src_tauri_src_storage_profiles_rs_option"
     },
@@ -9367,8 +9389,8 @@
       "source_file": "src-tauri/src/storage/profiles.rs",
       "source_location": "L24",
       "_origin": "ast",
-      "community": 21,
-      "community_name": "CSV Export Utilities",
+      "community": 58,
+      "community_name": "SQL Statement Splitter",
       "norm_label": "map_profile_row()",
       "id": "src_tauri_src_storage_profiles_map_profile_row"
     },
@@ -9378,8 +9400,8 @@
       "source_file": "",
       "source_location": "",
       "_origin": "ast",
-      "community": 21,
-      "community_name": "CSV Export Utilities",
+      "community": 58,
+      "community_name": "SQL Statement Splitter",
       "norm_label": "row",
       "id": "src_tauri_src_storage_profiles_rs_row"
     },
@@ -9389,8 +9411,8 @@
       "source_file": "",
       "source_location": "",
       "_origin": "ast",
-      "community": 21,
-      "community_name": "CSV Export Utilities",
+      "community": 58,
+      "community_name": "SQL Statement Splitter",
       "norm_label": "sqliteresult",
       "id": "src_tauri_src_storage_profiles_rs_sqliteresult"
     },
@@ -9400,8 +9422,8 @@
       "source_file": "src-tauri/src/storage/profiles.rs",
       "source_location": "L47",
       "_origin": "ast",
-      "community": 21,
-      "community_name": "CSV Export Utilities",
+      "community": 58,
+      "community_name": "SQL Statement Splitter",
       "norm_label": "upsert_profile()",
       "id": "src_tauri_src_storage_profiles_upsert_profile"
     },
@@ -9411,8 +9433,8 @@
       "source_file": "",
       "source_location": "",
       "_origin": "ast",
-      "community": 21,
-      "community_name": "CSV Export Utilities",
+      "community": 58,
+      "community_name": "SQL Statement Splitter",
       "norm_label": "connection",
       "id": "src_tauri_src_storage_profiles_rs_connection"
     },
@@ -9422,8 +9444,8 @@
       "source_file": "src-tauri/src/storage/profiles.rs",
       "source_location": "L91",
       "_origin": "ast",
-      "community": 21,
-      "community_name": "CSV Export Utilities",
+      "community": 58,
+      "community_name": "SQL Statement Splitter",
       "norm_label": "get_profile()",
       "id": "src_tauri_src_storage_profiles_get_profile"
     },
@@ -9433,8 +9455,8 @@
       "source_file": "src-tauri/src/storage/profiles.rs",
       "source_location": "L98",
       "_origin": "ast",
-      "community": 21,
-      "community_name": "CSV Export Utilities",
+      "community": 58,
+      "community_name": "SQL Statement Splitter",
       "norm_label": "list_profiles()",
       "id": "src_tauri_src_storage_profiles_list_profiles"
     },
@@ -9444,8 +9466,8 @@
       "source_file": "",
       "source_location": "",
       "_origin": "ast",
-      "community": 21,
-      "community_name": "CSV Export Utilities",
+      "community": 58,
+      "community_name": "SQL Statement Splitter",
       "norm_label": "vec",
       "id": "src_tauri_src_storage_profiles_rs_vec"
     },
@@ -9455,8 +9477,8 @@
       "source_file": "src-tauri/src/storage/profiles.rs",
       "source_location": "L108",
       "_origin": "ast",
-      "community": 21,
-      "community_name": "CSV Export Utilities",
+      "community": 58,
+      "community_name": "SQL Statement Splitter",
       "norm_label": "delete_profile()",
       "id": "src_tauri_src_storage_profiles_delete_profile"
     },
@@ -9466,8 +9488,8 @@
       "source_file": "src-tauri/src/storage/profiles.rs",
       "source_location": "L119",
       "_origin": "ast",
-      "community": 21,
-      "community_name": "CSV Export Utilities",
+      "community": 58,
+      "community_name": "SQL Statement Splitter",
       "norm_label": "sample_profile()",
       "id": "src_tauri_src_storage_profiles_sample_profile"
     },
@@ -9477,8 +9499,8 @@
       "source_file": "src-tauri/src/storage/profiles.rs",
       "source_location": "L139",
       "_origin": "ast",
-      "community": 21,
-      "community_name": "CSV Export Utilities",
+      "community": 58,
+      "community_name": "SQL Statement Splitter",
       "norm_label": "profile_crud_round_trips_without_secrets()",
       "id": "src_tauri_src_storage_profiles_profile_crud_round_trips_without_secrets"
     },
@@ -27565,6 +27587,772 @@
       "relation": "imports_from",
       "confidence": "EXTRACTED",
       "source_file": "src-tauri/src/postgres/mod.rs",
+      "source_location": "L37",
+      "weight": 1.0,
+      "context": "import",
+      "_origin": "ast",
+      "confidence_score": 1.0,
+      "source": "src_tauri_src_postgres_mod",
+      "target": "src_tauri_src_postgres_table_admin"
+    },
+    {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src-tauri/src/postgres/table_admin.rs",
+      "source_location": "L3",
+      "weight": 1.0,
+      "context": "import",
+      "_origin": "ast",
+      "source": "src_tauri_src_postgres_table_admin",
+      "target": "client",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src-tauri/src/postgres/table_admin.rs",
+      "source_location": "L137",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "src_tauri_src_postgres_table_admin",
+      "target": "src_tauri_src_postgres_table_admin_drop_table",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src-tauri/src/postgres/table_admin.rs",
+      "source_location": "L19",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "src_tauri_src_postgres_table_admin",
+      "target": "src_tauri_src_postgres_table_admin_drop_table_sql",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src-tauri/src/postgres/table_admin.rs",
+      "source_location": "L149",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "src_tauri_src_postgres_table_admin",
+      "target": "src_tauri_src_postgres_table_admin_generate_table_ddl",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src-tauri/src/postgres/table_admin.rs",
+      "source_location": "L33",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "src_tauri_src_postgres_table_admin",
+      "target": "src_tauri_src_postgres_table_admin_generate_table_ddl_sql",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src-tauri/src/postgres/table_admin.rs",
+      "source_location": "L223",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "src_tauri_src_postgres_table_admin",
+      "target": "src_tauri_src_postgres_table_admin_generate_table_ddl_sql_includes_defaults_and_constraints",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src-tauri/src/postgres/table_admin.rs",
+      "source_location": "L243",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "src_tauri_src_postgres_table_admin",
+      "target": "src_tauri_src_postgres_table_admin_generate_table_ddl_sql_must_not_hardcode_create_table",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src-tauri/src/postgres/table_admin.rs",
+      "source_location": "L214",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "src_tauri_src_postgres_table_admin",
+      "target": "src_tauri_src_postgres_table_admin_generate_table_ddl_sql_targets_quoted_table",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src-tauri/src/postgres/table_admin.rs",
+      "source_location": "L7",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "src_tauri_src_postgres_table_admin",
+      "target": "src_tauri_src_postgres_table_admin_quote_identifier",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src-tauri/src/postgres/table_admin.rs",
+      "source_location": "L176",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "src_tauri_src_postgres_table_admin",
+      "target": "src_tauri_src_postgres_table_admin_set_search_path",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src-tauri/src/postgres/table_admin.rs",
+      "source_location": "L205",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "src_tauri_src_postgres_table_admin",
+      "target": "src_tauri_src_postgres_table_admin_set_search_path_named_vs_all_schemas",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src-tauri/src/postgres/table_admin.rs",
+      "source_location": "L119",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "src_tauri_src_postgres_table_admin",
+      "target": "src_tauri_src_postgres_table_admin_set_search_path_sql",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src-tauri/src/postgres/table_admin.rs",
+      "source_location": "L188",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "src_tauri_src_postgres_table_admin",
+      "target": "src_tauri_src_postgres_table_admin_truncate_and_drop_sql_quote_schema_and_table",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src-tauri/src/postgres/table_admin.rs",
+      "source_location": "L126",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "src_tauri_src_postgres_table_admin",
+      "target": "src_tauri_src_postgres_table_admin_truncate_table",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src-tauri/src/postgres/table_admin.rs",
+      "source_location": "L11",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "src_tauri_src_postgres_table_admin",
+      "target": "src_tauri_src_postgres_table_admin_truncate_table_sql",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src-tauri/src/postgres/table_admin.rs",
+      "source_location": "L7",
+      "weight": 1.0,
+      "context": "return_type",
+      "_origin": "ast",
+      "source": "src_tauri_src_postgres_table_admin_quote_identifier",
+      "target": "string",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src-tauri/src/postgres/query.rs",
+      "source_location": "L26",
+      "weight": 1.0,
+      "context": "generic_arg",
+      "_origin": "ast",
+      "confidence_score": 1.0,
+      "source": "src_tauri_src_postgres_query_mappedrowset",
+      "target": "string"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src-tauri/src/postgres/query.rs",
+      "source_location": "L278",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "_origin": "ast",
+      "confidence_score": 1.0,
+      "source": "src_tauri_src_postgres_query_push_statement",
+      "target": "string"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src-tauri/src/postgres/query.rs",
+      "source_location": "L34",
+      "weight": 1.0,
+      "context": "generic_arg",
+      "_origin": "ast",
+      "confidence_score": 1.0,
+      "source": "src_tauri_src_postgres_query_queryresultdata",
+      "target": "string"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src-tauri/src/postgres/query.rs",
+      "source_location": "L164",
+      "weight": 1.0,
+      "context": "generic_arg",
+      "_origin": "ast",
+      "confidence_score": 1.0,
+      "source": "src_tauri_src_postgres_query_split_sql_statements",
+      "target": "string"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src-tauri/src/postgres/query.rs",
+      "source_location": "L325",
+      "weight": 1.0,
+      "context": "return_type",
+      "_origin": "ast",
+      "confidence_score": 1.0,
+      "source": "src_tauri_src_postgres_query_strip_leading_sql_noise",
+      "target": "string"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src-tauri/src/postgres/query.rs",
+      "source_location": "L20",
+      "weight": 1.0,
+      "context": "field",
+      "_origin": "ast",
+      "confidence_score": 1.0,
+      "source": "src_tauri_src_postgres_query_value",
+      "target": "string"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src-tauri/src/postgres/table_admin.rs",
+      "source_location": "L19",
+      "weight": 1.0,
+      "context": "return_type",
+      "_origin": "ast",
+      "source": "src_tauri_src_postgres_table_admin_drop_table_sql",
+      "target": "string",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src-tauri/src/postgres/table_admin.rs",
+      "source_location": "L149",
+      "weight": 1.0,
+      "context": "generic_arg",
+      "_origin": "ast",
+      "source": "src_tauri_src_postgres_table_admin_generate_table_ddl",
+      "target": "string",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src-tauri/src/postgres/table_admin.rs",
+      "source_location": "L33",
+      "weight": 1.0,
+      "context": "return_type",
+      "_origin": "ast",
+      "source": "src_tauri_src_postgres_table_admin_generate_table_ddl_sql",
+      "target": "string",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src-tauri/src/postgres/table_admin.rs",
+      "source_location": "L119",
+      "weight": 1.0,
+      "context": "return_type",
+      "_origin": "ast",
+      "source": "src_tauri_src_postgres_table_admin_set_search_path_sql",
+      "target": "string",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src-tauri/src/postgres/table_admin.rs",
+      "source_location": "L11",
+      "weight": 1.0,
+      "context": "return_type",
+      "_origin": "ast",
+      "source": "src_tauri_src_postgres_table_admin_truncate_table_sql",
+      "target": "string",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "src-tauri/src/postgres/table_admin.rs",
+      "source_location": "L132",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "src_tauri_src_postgres_table_admin_truncate_table",
+      "target": "src_tauri_src_postgres_table_admin_truncate_table_sql",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "src-tauri/src/postgres/table_admin.rs",
+      "source_location": "L144",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "src_tauri_src_postgres_table_admin_drop_table",
+      "target": "src_tauri_src_postgres_table_admin_drop_table_sql",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src-tauri/src/postgres/table_admin.rs",
+      "source_location": "L19",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "_origin": "ast",
+      "source": "src_tauri_src_postgres_table_admin_drop_table_sql",
+      "target": "option",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src-tauri/src/postgres/query.rs",
+      "source_location": "L270",
+      "weight": 1.0,
+      "context": "return_type",
+      "_origin": "ast",
+      "confidence_score": 1.0,
+      "source": "src_tauri_src_postgres_query_dollar_tag_end",
+      "target": "option"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src-tauri/src/postgres/query.rs",
+      "source_location": "L36",
+      "weight": 1.0,
+      "context": "field",
+      "_origin": "ast",
+      "confidence_score": 1.0,
+      "source": "src_tauri_src_postgres_query_queryresultdata",
+      "target": "option"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src-tauri/src/postgres/table_admin.rs",
+      "source_location": "L137",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "_origin": "ast",
+      "source": "src_tauri_src_postgres_table_admin_drop_table",
+      "target": "option",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src-tauri/src/postgres/table_admin.rs",
+      "source_location": "L176",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "_origin": "ast",
+      "source": "src_tauri_src_postgres_table_admin_set_search_path",
+      "target": "option",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src-tauri/src/postgres/table_admin.rs",
+      "source_location": "L119",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "_origin": "ast",
+      "source": "src_tauri_src_postgres_table_admin_set_search_path_sql",
+      "target": "option",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "src-tauri/src/postgres/table_admin.rs",
+      "source_location": "L155",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "src_tauri_src_postgres_table_admin_generate_table_ddl",
+      "target": "src_tauri_src_postgres_table_admin_generate_table_ddl_sql",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "src-tauri/src/postgres/table_admin.rs",
+      "source_location": "L224",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "src_tauri_src_postgres_table_admin_generate_table_ddl_sql_includes_defaults_and_constraints",
+      "target": "src_tauri_src_postgres_table_admin_generate_table_ddl_sql",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "src-tauri/src/postgres/table_admin.rs",
+      "source_location": "L244",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "src_tauri_src_postgres_table_admin_generate_table_ddl_sql_must_not_hardcode_create_table",
+      "target": "src_tauri_src_postgres_table_admin_generate_table_ddl_sql",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "src-tauri/src/postgres/table_admin.rs",
+      "source_location": "L215",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "src_tauri_src_postgres_table_admin_generate_table_ddl_sql_targets_quoted_table",
+      "target": "src_tauri_src_postgres_table_admin_generate_table_ddl_sql",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "src-tauri/src/postgres/table_admin.rs",
+      "source_location": "L178",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "src_tauri_src_postgres_table_admin_set_search_path",
+      "target": "src_tauri_src_postgres_table_admin_set_search_path_sql",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src-tauri/src/postgres/table_admin.rs",
+      "source_location": "L126",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "_origin": "ast",
+      "source": "src_tauri_src_postgres_table_admin_truncate_table",
+      "target": "client",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src-tauri/src/postgres/table_admin.rs",
+      "source_location": "L126",
+      "weight": 1.0,
+      "context": "generic_arg",
+      "_origin": "ast",
+      "source": "src_tauri_src_postgres_table_admin_truncate_table",
+      "target": "mappedipcerror",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src-tauri/src/postgres/table_admin.rs",
+      "source_location": "L126",
+      "weight": 1.0,
+      "context": "return_type",
+      "_origin": "ast",
+      "source": "src_tauri_src_postgres_table_admin_truncate_table",
+      "target": "result",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src-tauri/src/postgres/query.rs",
+      "source_location": "L8",
+      "weight": 1.0,
+      "context": "import",
+      "_origin": "ast",
+      "confidence_score": 1.0,
+      "source": "src_tauri_src_postgres_query",
+      "target": "client"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src-tauri/src/postgres/query.rs",
+      "source_location": "L51",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "_origin": "ast",
+      "confidence_score": 1.0,
+      "source": "src_tauri_src_postgres_query_run_query",
+      "target": "client"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src-tauri/src/postgres/query.rs",
+      "source_location": "L110",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "_origin": "ast",
+      "confidence_score": 1.0,
+      "source": "src_tauri_src_postgres_query_run_single_query",
+      "target": "client"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src-tauri/src/postgres/table_admin.rs",
+      "source_location": "L137",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "_origin": "ast",
+      "source": "src_tauri_src_postgres_table_admin_drop_table",
+      "target": "client",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src-tauri/src/postgres/table_admin.rs",
+      "source_location": "L149",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "_origin": "ast",
+      "source": "src_tauri_src_postgres_table_admin_generate_table_ddl",
+      "target": "client",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src-tauri/src/postgres/table_admin.rs",
+      "source_location": "L176",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "_origin": "ast",
+      "source": "src_tauri_src_postgres_table_admin_set_search_path",
+      "target": "client",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src-tauri/src/lib.rs",
+      "source_location": "L16",
+      "weight": 1.0,
+      "context": "return_type",
+      "_origin": "ast",
+      "confidence_score": 1.0,
+      "source": "src_tauri_src_lib_install_native_menu",
+      "target": "result"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src-tauri/src/postgres/query.rs",
+      "source_location": "L287",
+      "weight": 1.0,
+      "context": "return_type",
+      "_origin": "ast",
+      "confidence_score": 1.0,
+      "source": "src_tauri_src_postgres_query_json_params_to_owned",
+      "target": "result"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src-tauri/src/postgres/query.rs",
+      "source_location": "L293",
+      "weight": 1.0,
+      "context": "return_type",
+      "_origin": "ast",
+      "confidence_score": 1.0,
+      "source": "src_tauri_src_postgres_query_json_to_sql",
+      "target": "result"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src-tauri/src/postgres/query.rs",
+      "source_location": "L51",
+      "weight": 1.0,
+      "context": "return_type",
+      "_origin": "ast",
+      "confidence_score": 1.0,
+      "source": "src_tauri_src_postgres_query_run_query",
+      "target": "result"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src-tauri/src/postgres/query.rs",
+      "source_location": "L110",
+      "weight": 1.0,
+      "context": "return_type",
+      "_origin": "ast",
+      "confidence_score": 1.0,
+      "source": "src_tauri_src_postgres_query_run_single_query",
+      "target": "result"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src-tauri/src/postgres/table_admin.rs",
+      "source_location": "L137",
+      "weight": 1.0,
+      "context": "return_type",
+      "_origin": "ast",
+      "source": "src_tauri_src_postgres_table_admin_drop_table",
+      "target": "result",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src-tauri/src/postgres/table_admin.rs",
+      "source_location": "L149",
+      "weight": 1.0,
+      "context": "return_type",
+      "_origin": "ast",
+      "source": "src_tauri_src_postgres_table_admin_generate_table_ddl",
+      "target": "result",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src-tauri/src/postgres/table_admin.rs",
+      "source_location": "L176",
+      "weight": 1.0,
+      "context": "return_type",
+      "_origin": "ast",
+      "source": "src_tauri_src_postgres_table_admin_set_search_path",
+      "target": "result",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src-tauri/src/postgres/query.rs",
+      "source_location": "L287",
+      "weight": 1.0,
+      "context": "generic_arg",
+      "_origin": "ast",
+      "confidence_score": 1.0,
+      "source": "src_tauri_src_postgres_query_json_params_to_owned",
+      "target": "mappedipcerror"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src-tauri/src/postgres/query.rs",
+      "source_location": "L293",
+      "weight": 1.0,
+      "context": "generic_arg",
+      "_origin": "ast",
+      "confidence_score": 1.0,
+      "source": "src_tauri_src_postgres_query_json_to_sql",
+      "target": "mappedipcerror"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src-tauri/src/postgres/query.rs",
+      "source_location": "L51",
+      "weight": 1.0,
+      "context": "generic_arg",
+      "_origin": "ast",
+      "confidence_score": 1.0,
+      "source": "src_tauri_src_postgres_query_run_query",
+      "target": "mappedipcerror"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src-tauri/src/postgres/query.rs",
+      "source_location": "L110",
+      "weight": 1.0,
+      "context": "generic_arg",
+      "_origin": "ast",
+      "confidence_score": 1.0,
+      "source": "src_tauri_src_postgres_query_run_single_query",
+      "target": "mappedipcerror"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src-tauri/src/postgres/table_admin.rs",
+      "source_location": "L137",
+      "weight": 1.0,
+      "context": "generic_arg",
+      "_origin": "ast",
+      "source": "src_tauri_src_postgres_table_admin_drop_table",
+      "target": "mappedipcerror",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src-tauri/src/postgres/table_admin.rs",
+      "source_location": "L149",
+      "weight": 1.0,
+      "context": "generic_arg",
+      "_origin": "ast",
+      "source": "src_tauri_src_postgres_table_admin_generate_table_ddl",
+      "target": "mappedipcerror",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src-tauri/src/postgres/table_admin.rs",
+      "source_location": "L176",
+      "weight": 1.0,
+      "context": "generic_arg",
+      "_origin": "ast",
+      "source": "src_tauri_src_postgres_table_admin_set_search_path",
+      "target": "mappedipcerror",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src-tauri/src/postgres/mod.rs",
       "source_location": "L29",
       "weight": 1.0,
       "context": "import",
@@ -27577,25 +28365,13 @@
       "relation": "imports_from",
       "confidence": "EXTRACTED",
       "source_file": "src-tauri/src/postgres/query.rs",
-      "source_location": "L8",
-      "weight": 1.0,
-      "context": "import",
-      "_origin": "ast",
-      "source": "src_tauri_src_postgres_query",
-      "target": "client",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "imports_from",
-      "confidence": "EXTRACTED",
-      "source_file": "src-tauri/src/postgres/query.rs",
       "source_location": "L10",
       "weight": 1.0,
       "context": "import",
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_tauri_src_postgres_query",
-      "target": "src_tauri_src_postgres_error",
-      "confidence_score": 1.0
+      "target": "src_tauri_src_postgres_error"
     },
     {
       "relation": "contains",
@@ -27604,9 +28380,9 @@
       "source_location": "L362",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_tauri_src_postgres_query",
-      "target": "src_tauri_src_postgres_query_cell_value",
-      "confidence_score": 1.0
+      "target": "src_tauri_src_postgres_query_cell_value"
     },
     {
       "relation": "contains",
@@ -27615,9 +28391,9 @@
       "source_location": "L270",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_tauri_src_postgres_query",
-      "target": "src_tauri_src_postgres_query_dollar_tag_end",
-      "confidence_score": 1.0
+      "target": "src_tauri_src_postgres_query_dollar_tag_end"
     },
     {
       "relation": "contains",
@@ -27626,9 +28402,9 @@
       "source_location": "L451",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_tauri_src_postgres_query",
-      "target": "src_tauri_src_postgres_query_empty_select_row_set_keeps_column_names",
-      "confidence_score": 1.0
+      "target": "src_tauri_src_postgres_query_empty_select_row_set_keeps_column_names"
     },
     {
       "relation": "contains",
@@ -27637,9 +28413,9 @@
       "source_location": "L287",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_tauri_src_postgres_query",
-      "target": "src_tauri_src_postgres_query_json_params_to_owned",
-      "confidence_score": 1.0
+      "target": "src_tauri_src_postgres_query_json_params_to_owned"
     },
     {
       "relation": "contains",
@@ -27648,9 +28424,9 @@
       "source_location": "L478",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_tauri_src_postgres_query",
-      "target": "src_tauri_src_postgres_query_json_params_to_owned_accepts_string_bool_number_null",
-      "confidence_score": 1.0
+      "target": "src_tauri_src_postgres_query_json_params_to_owned_accepts_string_bool_number_null"
     },
     {
       "relation": "contains",
@@ -27659,9 +28435,9 @@
       "source_location": "L490",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_tauri_src_postgres_query",
-      "target": "src_tauri_src_postgres_query_json_params_to_owned_rejects_object_and_array",
-      "confidence_score": 1.0
+      "target": "src_tauri_src_postgres_query_json_params_to_owned_rejects_object_and_array"
     },
     {
       "relation": "contains",
@@ -27670,9 +28446,9 @@
       "source_location": "L293",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_tauri_src_postgres_query",
-      "target": "src_tauri_src_postgres_query_json_to_sql",
-      "confidence_score": 1.0
+      "target": "src_tauri_src_postgres_query_json_to_sql"
     },
     {
       "relation": "contains",
@@ -27681,9 +28457,9 @@
       "source_location": "L351",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_tauri_src_postgres_query",
-      "target": "src_tauri_src_postgres_query_keyword_at",
-      "confidence_score": 1.0
+      "target": "src_tauri_src_postgres_query_keyword_at"
     },
     {
       "relation": "contains",
@@ -27692,9 +28468,9 @@
       "source_location": "L320",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_tauri_src_postgres_query",
-      "target": "src_tauri_src_postgres_query_looks_like_select",
-      "confidence_score": 1.0
+      "target": "src_tauri_src_postgres_query_looks_like_select"
     },
     {
       "relation": "contains",
@@ -27703,9 +28479,9 @@
       "source_location": "L464",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_tauri_src_postgres_query",
-      "target": "src_tauri_src_postgres_query_looks_like_select_handles_comments_and_with",
-      "confidence_score": 1.0
+      "target": "src_tauri_src_postgres_query_looks_like_select_handles_comments_and_with"
     },
     {
       "relation": "contains",
@@ -27714,9 +28490,9 @@
       "source_location": "L41",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_tauri_src_postgres_query",
-      "target": "src_tauri_src_postgres_query_map_query_rows",
-      "confidence_score": 1.0
+      "target": "src_tauri_src_postgres_query_map_query_rows"
     },
     {
       "relation": "contains",
@@ -27725,9 +28501,9 @@
       "source_location": "L25",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_tauri_src_postgres_query",
-      "target": "src_tauri_src_postgres_query_mappedrowset",
-      "confidence_score": 1.0
+      "target": "src_tauri_src_postgres_query_mappedrowset"
     },
     {
       "relation": "contains",
@@ -27736,9 +28512,9 @@
       "source_location": "L508",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_tauri_src_postgres_query",
-      "target": "src_tauri_src_postgres_query_no_wrap_for_statements_illegal_inside_transaction_block",
-      "confidence_score": 1.0
+      "target": "src_tauri_src_postgres_query_no_wrap_for_statements_illegal_inside_transaction_block"
     },
     {
       "relation": "contains",
@@ -27747,9 +28523,9 @@
       "source_location": "L278",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_tauri_src_postgres_query",
-      "target": "src_tauri_src_postgres_query_push_statement",
-      "confidence_score": 1.0
+      "target": "src_tauri_src_postgres_query_push_statement"
     },
     {
       "relation": "contains",
@@ -27758,9 +28534,9 @@
       "source_location": "L422",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_tauri_src_postgres_query",
-      "target": "src_tauri_src_postgres_query_query_result_mapper_uses_rows_len_for_select_count_semantics",
-      "confidence_score": 1.0
+      "target": "src_tauri_src_postgres_query_query_result_mapper_uses_rows_len_for_select_count_semantics"
     },
     {
       "relation": "contains",
@@ -27769,9 +28545,9 @@
       "source_location": "L438",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_tauri_src_postgres_query",
-      "target": "src_tauri_src_postgres_query_query_result_mapper_zero_rows_is_explicit_empty",
-      "confidence_score": 1.0
+      "target": "src_tauri_src_postgres_query_query_result_mapper_zero_rows_is_explicit_empty"
     },
     {
       "relation": "contains",
@@ -27780,9 +28556,9 @@
       "source_location": "L33",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_tauri_src_postgres_query",
-      "target": "src_tauri_src_postgres_query_queryresultdata",
-      "confidence_score": 1.0
+      "target": "src_tauri_src_postgres_query_queryresultdata"
     },
     {
       "relation": "contains",
@@ -27791,9 +28567,9 @@
       "source_location": "L51",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_tauri_src_postgres_query",
-      "target": "src_tauri_src_postgres_query_run_query",
-      "confidence_score": 1.0
+      "target": "src_tauri_src_postgres_query_run_query"
     },
     {
       "relation": "contains",
@@ -27802,9 +28578,9 @@
       "source_location": "L110",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_tauri_src_postgres_query",
-      "target": "src_tauri_src_postgres_query_run_single_query",
-      "confidence_score": 1.0
+      "target": "src_tauri_src_postgres_query_run_single_query"
     },
     {
       "relation": "contains",
@@ -27813,9 +28589,9 @@
       "source_location": "L253",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_tauri_src_postgres_query",
-      "target": "src_tauri_src_postgres_query_should_wrap_transaction",
-      "confidence_score": 1.0
+      "target": "src_tauri_src_postgres_query_should_wrap_transaction"
     },
     {
       "relation": "contains",
@@ -27824,9 +28600,9 @@
       "source_location": "L164",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_tauri_src_postgres_query",
-      "target": "src_tauri_src_postgres_query_split_sql_statements",
-      "confidence_score": 1.0
+      "target": "src_tauri_src_postgres_query_split_sql_statements"
     },
     {
       "relation": "contains",
@@ -27835,9 +28611,9 @@
       "source_location": "L496",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_tauri_src_postgres_query",
-      "target": "src_tauri_src_postgres_query_split_sql_statements_last_select_wins",
-      "confidence_score": 1.0
+      "target": "src_tauri_src_postgres_query_split_sql_statements_last_select_wins"
     },
     {
       "relation": "contains",
@@ -27846,9 +28622,9 @@
       "source_location": "L537",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_tauri_src_postgres_query",
-      "target": "src_tauri_src_postgres_query_split_sql_statements_mirrors_ts_quote_and_comment_cases",
-      "confidence_score": 1.0
+      "target": "src_tauri_src_postgres_query_split_sql_statements_mirrors_ts_quote_and_comment_cases"
     },
     {
       "relation": "contains",
@@ -27857,9 +28633,9 @@
       "source_location": "L325",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_tauri_src_postgres_query",
-      "target": "src_tauri_src_postgres_query_strip_leading_sql_noise",
-      "confidence_score": 1.0
+      "target": "src_tauri_src_postgres_query_strip_leading_sql_noise"
     },
     {
       "relation": "contains",
@@ -27868,9 +28644,9 @@
       "source_location": "L15",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_tauri_src_postgres_query",
-      "target": "src_tauri_src_postgres_query_value",
-      "confidence_score": 1.0
+      "target": "src_tauri_src_postgres_query_value"
     },
     {
       "relation": "contains",
@@ -27879,9 +28655,9 @@
       "source_location": "L502",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_tauri_src_postgres_query",
-      "target": "src_tauri_src_postgres_query_wrap_transaction_unless_user_already_has_begin",
-      "confidence_score": 1.0
+      "target": "src_tauri_src_postgres_query_wrap_transaction_unless_user_already_has_begin"
     },
     {
       "relation": "references",
@@ -27891,9 +28667,9 @@
       "weight": 1.0,
       "context": "return_type",
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_tauri_src_postgres_query_cell_value",
-      "target": "src_tauri_src_postgres_query_value",
-      "confidence_score": 1.0
+      "target": "src_tauri_src_postgres_query_value"
     },
     {
       "relation": "references",
@@ -27903,9 +28679,9 @@
       "weight": 1.0,
       "context": "generic_arg",
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_tauri_src_postgres_query_mappedrowset",
-      "target": "src_tauri_src_postgres_query_value",
-      "confidence_score": 1.0
+      "target": "src_tauri_src_postgres_query_value"
     },
     {
       "relation": "references",
@@ -27915,81 +28691,9 @@
       "weight": 1.0,
       "context": "generic_arg",
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_tauri_src_postgres_query_queryresultdata",
-      "target": "src_tauri_src_postgres_query_value",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "src-tauri/src/postgres/query.rs",
-      "source_location": "L20",
-      "weight": 1.0,
-      "context": "field",
-      "_origin": "ast",
-      "source": "src_tauri_src_postgres_query_value",
-      "target": "string",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "src-tauri/src/postgres/query.rs",
-      "source_location": "L26",
-      "weight": 1.0,
-      "context": "generic_arg",
-      "_origin": "ast",
-      "source": "src_tauri_src_postgres_query_mappedrowset",
-      "target": "string",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "src-tauri/src/postgres/query.rs",
-      "source_location": "L278",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "_origin": "ast",
-      "source": "src_tauri_src_postgres_query_push_statement",
-      "target": "string",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "src-tauri/src/postgres/query.rs",
-      "source_location": "L34",
-      "weight": 1.0,
-      "context": "generic_arg",
-      "_origin": "ast",
-      "source": "src_tauri_src_postgres_query_queryresultdata",
-      "target": "string",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "src-tauri/src/postgres/query.rs",
-      "source_location": "L164",
-      "weight": 1.0,
-      "context": "generic_arg",
-      "_origin": "ast",
-      "source": "src_tauri_src_postgres_query_split_sql_statements",
-      "target": "string",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "src-tauri/src/postgres/query.rs",
-      "source_location": "L325",
-      "weight": 1.0,
-      "context": "return_type",
-      "_origin": "ast",
-      "source": "src_tauri_src_postgres_query_strip_leading_sql_noise",
-      "target": "string",
-      "confidence_score": 1.0
+      "target": "src_tauri_src_postgres_query_value"
     },
     {
       "relation": "references",
@@ -27999,9 +28703,9 @@
       "weight": 1.0,
       "context": "parameter_type",
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_tauri_src_postgres_query_map_query_rows",
-      "target": "src_tauri_src_postgres_query_mappedrowset",
-      "confidence_score": 1.0
+      "target": "src_tauri_src_postgres_query_mappedrowset"
     },
     {
       "relation": "references",
@@ -28011,9 +28715,9 @@
       "weight": 1.0,
       "context": "generic_arg",
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_tauri_src_postgres_query_mappedrowset",
-      "target": "vec",
-      "confidence_score": 1.0
+      "target": "vec"
     },
     {
       "relation": "references",
@@ -28167,9 +28871,9 @@
       "weight": 1.0,
       "context": "generic_arg",
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_tauri_src_postgres_query_json_params_to_owned",
-      "target": "vec",
-      "confidence_score": 1.0
+      "target": "vec"
     },
     {
       "relation": "references",
@@ -28179,9 +28883,9 @@
       "weight": 1.0,
       "context": "parameter_type",
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_tauri_src_postgres_query_push_statement",
-      "target": "vec",
-      "confidence_score": 1.0
+      "target": "vec"
     },
     {
       "relation": "references",
@@ -28191,9 +28895,9 @@
       "weight": 1.0,
       "context": "generic_arg",
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_tauri_src_postgres_query_queryresultdata",
-      "target": "vec",
-      "confidence_score": 1.0
+      "target": "vec"
     },
     {
       "relation": "references",
@@ -28203,9 +28907,9 @@
       "weight": 1.0,
       "context": "return_type",
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_tauri_src_postgres_query_split_sql_statements",
-      "target": "vec",
-      "confidence_score": 1.0
+      "target": "vec"
     },
     {
       "relation": "references",
@@ -28215,21 +28919,9 @@
       "weight": 1.0,
       "context": "return_type",
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_tauri_src_postgres_query_map_query_rows",
-      "target": "src_tauri_src_postgres_query_queryresultdata",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "src-tauri/src/postgres/query.rs",
-      "source_location": "L36",
-      "weight": 1.0,
-      "context": "field",
-      "_origin": "ast",
-      "source": "src_tauri_src_postgres_query_queryresultdata",
-      "target": "option",
-      "confidence_score": 1.0
+      "target": "src_tauri_src_postgres_query_queryresultdata"
     },
     {
       "relation": "references",
@@ -28239,9 +28931,9 @@
       "weight": 1.0,
       "context": "generic_arg",
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_tauri_src_postgres_query_run_query",
-      "target": "src_tauri_src_postgres_query_queryresultdata",
-      "confidence_score": 1.0
+      "target": "src_tauri_src_postgres_query_queryresultdata"
     },
     {
       "relation": "references",
@@ -28251,21 +28943,9 @@
       "weight": 1.0,
       "context": "generic_arg",
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_tauri_src_postgres_query_run_single_query",
-      "target": "src_tauri_src_postgres_query_queryresultdata",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "src-tauri/src/postgres/query.rs",
-      "source_location": "L270",
-      "weight": 1.0,
-      "context": "return_type",
-      "_origin": "ast",
-      "source": "src_tauri_src_postgres_query_dollar_tag_end",
-      "target": "option",
-      "confidence_score": 1.0
+      "target": "src_tauri_src_postgres_query_queryresultdata"
     },
     {
       "relation": "calls",
@@ -28275,9 +28955,9 @@
       "source_location": "L452",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_tauri_src_postgres_query_empty_select_row_set_keeps_column_names",
-      "target": "src_tauri_src_postgres_query_map_query_rows",
-      "confidence_score": 1.0
+      "target": "src_tauri_src_postgres_query_map_query_rows"
     },
     {
       "relation": "references",
@@ -28287,9 +28967,9 @@
       "weight": 1.0,
       "context": "parameter_type",
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_tauri_src_postgres_query_map_query_rows",
-      "target": "duration",
-      "confidence_score": 1.0
+      "target": "duration"
     },
     {
       "relation": "calls",
@@ -28299,9 +28979,9 @@
       "source_location": "L423",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_tauri_src_postgres_query_query_result_mapper_uses_rows_len_for_select_count_semantics",
-      "target": "src_tauri_src_postgres_query_map_query_rows",
-      "confidence_score": 1.0
+      "target": "src_tauri_src_postgres_query_map_query_rows"
     },
     {
       "relation": "calls",
@@ -28311,9 +28991,9 @@
       "source_location": "L439",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_tauri_src_postgres_query_query_result_mapper_zero_rows_is_explicit_empty",
-      "target": "src_tauri_src_postgres_query_map_query_rows",
-      "confidence_score": 1.0
+      "target": "src_tauri_src_postgres_query_map_query_rows"
     },
     {
       "relation": "calls",
@@ -28323,9 +29003,9 @@
       "source_location": "L142",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_tauri_src_postgres_query_run_single_query",
-      "target": "src_tauri_src_postgres_query_map_query_rows",
-      "confidence_score": 1.0
+      "target": "src_tauri_src_postgres_query_map_query_rows"
     },
     {
       "relation": "imports_from",
@@ -28347,45 +29027,9 @@
       "weight": 1.0,
       "context": "parameter_type",
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_tauri_src_postgres_query_run_query",
-      "target": "client",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "src-tauri/src/postgres/query.rs",
-      "source_location": "L51",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "_origin": "ast",
-      "source": "src_tauri_src_postgres_query_run_query",
-      "target": "jsonvalue",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "src-tauri/src/postgres/query.rs",
-      "source_location": "L51",
-      "weight": 1.0,
-      "context": "generic_arg",
-      "_origin": "ast",
-      "source": "src_tauri_src_postgres_query_run_query",
-      "target": "mappedipcerror",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "src-tauri/src/postgres/query.rs",
-      "source_location": "L51",
-      "weight": 1.0,
-      "context": "return_type",
-      "_origin": "ast",
-      "source": "src_tauri_src_postgres_query_run_query",
-      "target": "result",
-      "confidence_score": 1.0
+      "target": "jsonvalue"
     },
     {
       "relation": "calls",
@@ -28395,9 +29039,9 @@
       "source_location": "L83",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_tauri_src_postgres_query_run_query",
-      "target": "src_tauri_src_postgres_query_run_single_query",
-      "confidence_score": 1.0
+      "target": "src_tauri_src_postgres_query_run_single_query"
     },
     {
       "relation": "calls",
@@ -28407,9 +29051,9 @@
       "source_location": "L67",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_tauri_src_postgres_query_run_query",
-      "target": "src_tauri_src_postgres_query_should_wrap_transaction",
-      "confidence_score": 1.0
+      "target": "src_tauri_src_postgres_query_should_wrap_transaction"
     },
     {
       "relation": "calls",
@@ -28419,21 +29063,9 @@
       "source_location": "L57",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_tauri_src_postgres_query_run_query",
-      "target": "src_tauri_src_postgres_query_split_sql_statements",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "src-tauri/src/postgres/query.rs",
-      "source_location": "L110",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "_origin": "ast",
-      "source": "src_tauri_src_postgres_query_run_single_query",
-      "target": "client",
-      "confidence_score": 1.0
+      "target": "src_tauri_src_postgres_query_split_sql_statements"
     },
     {
       "relation": "references",
@@ -28442,58 +29074,10 @@
       "source_location": "L287",
       "weight": 1.0,
       "context": "parameter_type",
-      "_origin": "ast",
-      "source": "src_tauri_src_postgres_query_json_params_to_owned",
-      "target": "jsonvalue",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "src-tauri/src/postgres/query.rs",
-      "source_location": "L293",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "_origin": "ast",
-      "source": "src_tauri_src_postgres_query_json_to_sql",
-      "target": "jsonvalue",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "src-tauri/src/postgres/query.rs",
-      "source_location": "L110",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "_origin": "ast",
-      "source": "src_tauri_src_postgres_query_run_single_query",
-      "target": "jsonvalue",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "src-tauri/src/lib.rs",
-      "source_location": "L16",
-      "weight": 1.0,
-      "context": "return_type",
       "_origin": "ast",
       "confidence_score": 1.0,
-      "source": "src_tauri_src_lib_install_native_menu",
-      "target": "result"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "src-tauri/src/postgres/query.rs",
-      "source_location": "L287",
-      "weight": 1.0,
-      "context": "return_type",
-      "_origin": "ast",
       "source": "src_tauri_src_postgres_query_json_params_to_owned",
-      "target": "result",
-      "confidence_score": 1.0
+      "target": "jsonvalue"
     },
     {
       "relation": "references",
@@ -28501,59 +29085,11 @@
       "source_file": "src-tauri/src/postgres/query.rs",
       "source_location": "L293",
       "weight": 1.0,
-      "context": "return_type",
+      "context": "parameter_type",
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_tauri_src_postgres_query_json_to_sql",
-      "target": "result",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "src-tauri/src/postgres/query.rs",
-      "source_location": "L110",
-      "weight": 1.0,
-      "context": "return_type",
-      "_origin": "ast",
-      "source": "src_tauri_src_postgres_query_run_single_query",
-      "target": "result",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "src-tauri/src/postgres/query.rs",
-      "source_location": "L287",
-      "weight": 1.0,
-      "context": "generic_arg",
-      "_origin": "ast",
-      "source": "src_tauri_src_postgres_query_json_params_to_owned",
-      "target": "mappedipcerror",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "src-tauri/src/postgres/query.rs",
-      "source_location": "L293",
-      "weight": 1.0,
-      "context": "generic_arg",
-      "_origin": "ast",
-      "source": "src_tauri_src_postgres_query_json_to_sql",
-      "target": "mappedipcerror",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "src-tauri/src/postgres/query.rs",
-      "source_location": "L110",
-      "weight": 1.0,
-      "context": "generic_arg",
-      "_origin": "ast",
-      "source": "src_tauri_src_postgres_query_run_single_query",
-      "target": "mappedipcerror",
-      "confidence_score": 1.0
+      "target": "jsonvalue"
     },
     {
       "relation": "references",
@@ -28563,9 +29099,21 @@
       "weight": 1.0,
       "context": "parameter_type",
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_tauri_src_postgres_query_run_single_query",
-      "target": "instant",
-      "confidence_score": 1.0
+      "target": "jsonvalue"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "src-tauri/src/postgres/query.rs",
+      "source_location": "L110",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "_origin": "ast",
+      "confidence_score": 1.0,
+      "source": "src_tauri_src_postgres_query_run_single_query",
+      "target": "instant"
     },
     {
       "relation": "calls",
@@ -28575,9 +29123,9 @@
       "source_location": "L140",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_tauri_src_postgres_query_run_single_query",
-      "target": "src_tauri_src_postgres_query_cell_value",
-      "confidence_score": 1.0
+      "target": "src_tauri_src_postgres_query_cell_value"
     },
     {
       "relation": "calls",
@@ -28587,9 +29135,9 @@
       "source_location": "L116",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_tauri_src_postgres_query_run_single_query",
-      "target": "src_tauri_src_postgres_query_json_params_to_owned",
-      "confidence_score": 1.0
+      "target": "src_tauri_src_postgres_query_json_params_to_owned"
     },
     {
       "relation": "calls",
@@ -28599,9 +29147,9 @@
       "source_location": "L122",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_tauri_src_postgres_query_run_single_query",
-      "target": "src_tauri_src_postgres_query_looks_like_select",
-      "confidence_score": 1.0
+      "target": "src_tauri_src_postgres_query_looks_like_select"
     },
     {
       "relation": "imports_from",
@@ -28623,9 +29171,9 @@
       "source_location": "L172",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_tauri_src_postgres_query_split_sql_statements",
-      "target": "src_tauri_src_postgres_query_dollar_tag_end",
-      "confidence_score": 1.0
+      "target": "src_tauri_src_postgres_query_dollar_tag_end"
     },
     {
       "relation": "calls",
@@ -28635,9 +29183,9 @@
       "source_location": "L242",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_tauri_src_postgres_query_split_sql_statements",
-      "target": "src_tauri_src_postgres_query_push_statement",
-      "confidence_score": 1.0
+      "target": "src_tauri_src_postgres_query_push_statement"
     },
     {
       "relation": "calls",
@@ -28647,9 +29195,9 @@
       "source_location": "L497",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_tauri_src_postgres_query_split_sql_statements_last_select_wins",
-      "target": "src_tauri_src_postgres_query_split_sql_statements",
-      "confidence_score": 1.0
+      "target": "src_tauri_src_postgres_query_split_sql_statements"
     },
     {
       "relation": "calls",
@@ -28659,9 +29207,9 @@
       "source_location": "L255",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_tauri_src_postgres_query_should_wrap_transaction",
-      "target": "src_tauri_src_postgres_query_strip_leading_sql_noise",
-      "confidence_score": 1.0
+      "target": "src_tauri_src_postgres_query_strip_leading_sql_noise"
     },
     {
       "relation": "calls",
@@ -28671,9 +29219,9 @@
       "source_location": "L279",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_tauri_src_postgres_query_push_statement",
-      "target": "src_tauri_src_postgres_query_strip_leading_sql_noise",
-      "confidence_score": 1.0
+      "target": "src_tauri_src_postgres_query_strip_leading_sql_noise"
     },
     {
       "relation": "references",
@@ -28683,9 +29231,9 @@
       "weight": 1.0,
       "context": "generic_arg",
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_tauri_src_postgres_query_json_params_to_owned",
-      "target": "box",
-      "confidence_score": 1.0
+      "target": "box"
     },
     {
       "relation": "references",
@@ -28695,9 +29243,9 @@
       "weight": 1.0,
       "context": "generic_arg",
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_tauri_src_postgres_query_json_params_to_owned",
-      "target": "send",
-      "confidence_score": 1.0
+      "target": "send"
     },
     {
       "relation": "references",
@@ -28707,9 +29255,9 @@
       "weight": 1.0,
       "context": "generic_arg",
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_tauri_src_postgres_query_json_params_to_owned",
-      "target": "sync",
-      "confidence_score": 1.0
+      "target": "sync"
     },
     {
       "relation": "references",
@@ -28719,9 +29267,9 @@
       "weight": 1.0,
       "context": "generic_arg",
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_tauri_src_postgres_query_json_params_to_owned",
-      "target": "tosql",
-      "confidence_score": 1.0
+      "target": "tosql"
     },
     {
       "relation": "calls",
@@ -28731,9 +29279,9 @@
       "source_location": "L479",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_tauri_src_postgres_query_json_params_to_owned_accepts_string_bool_number_null",
-      "target": "src_tauri_src_postgres_query_json_params_to_owned",
-      "confidence_score": 1.0
+      "target": "src_tauri_src_postgres_query_json_params_to_owned"
     },
     {
       "relation": "references",
@@ -28743,9 +29291,9 @@
       "weight": 1.0,
       "context": "generic_arg",
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_tauri_src_postgres_query_json_to_sql",
-      "target": "box",
-      "confidence_score": 1.0
+      "target": "box"
     },
     {
       "relation": "references",
@@ -28779,9 +29327,9 @@
       "weight": 1.0,
       "context": "generic_arg",
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_tauri_src_postgres_query_json_to_sql",
-      "target": "tosql",
-      "confidence_score": 1.0
+      "target": "tosql"
     },
     {
       "relation": "imports_from",
@@ -28839,9 +29387,9 @@
       "weight": 1.0,
       "context": "generic_arg",
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_tauri_src_postgres_query_json_to_sql",
-      "target": "sync",
-      "confidence_score": 1.0
+      "target": "sync"
     },
     {
       "relation": "references",
@@ -28887,9 +29435,9 @@
       "weight": 1.0,
       "context": "generic_arg",
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_tauri_src_postgres_query_json_to_sql",
-      "target": "send",
-      "confidence_score": 1.0
+      "target": "send"
     },
     {
       "relation": "references",
@@ -28923,9 +29471,9 @@
       "source_location": "L322",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_tauri_src_postgres_query_looks_like_select",
-      "target": "src_tauri_src_postgres_query_keyword_at",
-      "confidence_score": 1.0
+      "target": "src_tauri_src_postgres_query_keyword_at"
     },
     {
       "relation": "calls",
@@ -28935,9 +29483,9 @@
       "source_location": "L321",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_tauri_src_postgres_query_looks_like_select",
-      "target": "src_tauri_src_postgres_query_strip_leading_sql_noise",
-      "confidence_score": 1.0
+      "target": "src_tauri_src_postgres_query_strip_leading_sql_noise"
     },
     {
       "relation": "references",
@@ -28947,9 +29495,9 @@
       "weight": 1.0,
       "context": "parameter_type",
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "src_tauri_src_postgres_query_cell_value",
-      "target": "row",
-      "confidence_score": 1.0
+      "target": "row"
     },
     {
       "relation": "contains",
@@ -34939,18 +35487,6 @@
       "target": "src_tauri_src_postgres_ssl"
     },
     {
-      "relation": "imports_from",
-      "confidence": "EXTRACTED",
-      "source_file": "src-tauri/src/postgres/mod.rs",
-      "source_location": "L37",
-      "weight": 1.0,
-      "context": "import",
-      "_origin": "ast",
-      "confidence_score": 1.0,
-      "source": "src_tauri_src_postgres_mod",
-      "target": "src_tauri_src_postgres_table_admin"
-    },
-    {
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/ipc/contract.ts",
@@ -40876,54 +41412,6 @@
     {
       "relation": "references",
       "confidence": "EXTRACTED",
-      "source_file": "src-tauri/src/postgres/table_admin.rs",
-      "source_location": "L66",
-      "weight": 1.0,
-      "context": "generic_arg",
-      "_origin": "ast",
-      "confidence_score": 1.0,
-      "source": "src_tauri_src_postgres_table_admin_drop_table",
-      "target": "src_tauri_src_postgres_error_mappedipcerror"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "src-tauri/src/postgres/table_admin.rs",
-      "source_location": "L78",
-      "weight": 1.0,
-      "context": "generic_arg",
-      "_origin": "ast",
-      "confidence_score": 1.0,
-      "source": "src_tauri_src_postgres_table_admin_generate_table_ddl",
-      "target": "src_tauri_src_postgres_error_mappedipcerror"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "src-tauri/src/postgres/table_admin.rs",
-      "source_location": "L105",
-      "weight": 1.0,
-      "context": "generic_arg",
-      "_origin": "ast",
-      "confidence_score": 1.0,
-      "source": "src_tauri_src_postgres_table_admin_set_search_path",
-      "target": "src_tauri_src_postgres_error_mappedipcerror"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "src-tauri/src/postgres/table_admin.rs",
-      "source_location": "L55",
-      "weight": 1.0,
-      "context": "generic_arg",
-      "_origin": "ast",
-      "confidence_score": 1.0,
-      "source": "src_tauri_src_postgres_table_admin_truncate_table",
-      "target": "src_tauri_src_postgres_error_mappedipcerror"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
       "source_file": "src-tauri/src/session/mod.rs",
       "source_location": "L1308",
       "weight": 1.0,
@@ -41904,54 +42392,6 @@
       "confidence_score": 1.0,
       "source": "src_tauri_src_postgres_error_map_tokio_postgres_error",
       "target": "src_tauri_src_postgres_error_rs_error"
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "INFERRED",
-      "confidence_score": 0.8,
-      "source_file": "src-tauri/src/postgres/table_admin.rs",
-      "source_location": "L75",
-      "weight": 1.0,
-      "_origin": "ast",
-      "source": "src_tauri_src_postgres_table_admin_drop_table",
-      "target": "src_tauri_src_postgres_error_map_tokio_postgres_error"
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "INFERRED",
-      "confidence_score": 0.8,
-      "source_file": "src-tauri/src/postgres/table_admin.rs",
-      "source_location": "L86",
-      "weight": 1.0,
-      "_origin": "ast",
-      "source": "src_tauri_src_postgres_table_admin_generate_table_ddl",
-      "target": "src_tauri_src_postgres_error_map_tokio_postgres_error"
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "INFERRED",
-      "confidence_score": 0.8,
-      "source_file": "src-tauri/src/postgres/table_admin.rs",
-      "source_location": "L109",
-      "weight": 1.0,
-      "_origin": "ast",
-      "source": "src_tauri_src_postgres_table_admin_set_search_path",
-      "target": "src_tauri_src_postgres_error_map_tokio_postgres_error"
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "INFERRED",
-      "confidence_score": 0.8,
-      "source_file": "src-tauri/src/postgres/table_admin.rs",
-      "source_location": "L63",
-      "weight": 1.0,
-      "_origin": "ast",
-      "source": "src_tauri_src_postgres_table_admin_truncate_table",
-      "target": "src_tauri_src_postgres_error_map_tokio_postgres_error"
     },
     {
       "relation": "contains",
@@ -43533,426 +43973,6 @@
       "confidence_score": 1.0,
       "source": "src_tauri_src_postgres_ssl_make_tls_connector",
       "target": "src_tauri_src_postgres_ssl_rs_result"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "src-tauri/src/postgres/table_admin.rs",
-      "source_location": "L66",
-      "weight": 1.0,
-      "_origin": "ast",
-      "confidence_score": 1.0,
-      "source": "src_tauri_src_postgres_table_admin",
-      "target": "src_tauri_src_postgres_table_admin_drop_table"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "src-tauri/src/postgres/table_admin.rs",
-      "source_location": "L19",
-      "weight": 1.0,
-      "_origin": "ast",
-      "confidence_score": 1.0,
-      "source": "src_tauri_src_postgres_table_admin",
-      "target": "src_tauri_src_postgres_table_admin_drop_table_sql"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "src-tauri/src/postgres/table_admin.rs",
-      "source_location": "L78",
-      "weight": 1.0,
-      "_origin": "ast",
-      "confidence_score": 1.0,
-      "source": "src_tauri_src_postgres_table_admin",
-      "target": "src_tauri_src_postgres_table_admin_generate_table_ddl"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "src-tauri/src/postgres/table_admin.rs",
-      "source_location": "L33",
-      "weight": 1.0,
-      "_origin": "ast",
-      "confidence_score": 1.0,
-      "source": "src_tauri_src_postgres_table_admin",
-      "target": "src_tauri_src_postgres_table_admin_generate_table_ddl_sql"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "src-tauri/src/postgres/table_admin.rs",
-      "source_location": "L143",
-      "weight": 1.0,
-      "_origin": "ast",
-      "confidence_score": 1.0,
-      "source": "src_tauri_src_postgres_table_admin",
-      "target": "src_tauri_src_postgres_table_admin_generate_table_ddl_sql_targets_quoted_table"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "src-tauri/src/postgres/table_admin.rs",
-      "source_location": "L7",
-      "weight": 1.0,
-      "_origin": "ast",
-      "confidence_score": 1.0,
-      "source": "src_tauri_src_postgres_table_admin",
-      "target": "src_tauri_src_postgres_table_admin_quote_identifier"
-    },
-    {
-      "relation": "imports_from",
-      "confidence": "EXTRACTED",
-      "source_file": "src-tauri/src/postgres/table_admin.rs",
-      "source_location": "L3",
-      "weight": 1.0,
-      "context": "import",
-      "_origin": "ast",
-      "confidence_score": 1.0,
-      "source": "src_tauri_src_postgres_table_admin",
-      "target": "src_tauri_src_postgres_table_admin_rs_client"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "src-tauri/src/postgres/table_admin.rs",
-      "source_location": "L105",
-      "weight": 1.0,
-      "_origin": "ast",
-      "confidence_score": 1.0,
-      "source": "src_tauri_src_postgres_table_admin",
-      "target": "src_tauri_src_postgres_table_admin_set_search_path"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "src-tauri/src/postgres/table_admin.rs",
-      "source_location": "L134",
-      "weight": 1.0,
-      "_origin": "ast",
-      "confidence_score": 1.0,
-      "source": "src_tauri_src_postgres_table_admin",
-      "target": "src_tauri_src_postgres_table_admin_set_search_path_named_vs_all_schemas"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "src-tauri/src/postgres/table_admin.rs",
-      "source_location": "L48",
-      "weight": 1.0,
-      "_origin": "ast",
-      "confidence_score": 1.0,
-      "source": "src_tauri_src_postgres_table_admin",
-      "target": "src_tauri_src_postgres_table_admin_set_search_path_sql"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "src-tauri/src/postgres/table_admin.rs",
-      "source_location": "L117",
-      "weight": 1.0,
-      "_origin": "ast",
-      "confidence_score": 1.0,
-      "source": "src_tauri_src_postgres_table_admin",
-      "target": "src_tauri_src_postgres_table_admin_truncate_and_drop_sql_quote_schema_and_table"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "src-tauri/src/postgres/table_admin.rs",
-      "source_location": "L55",
-      "weight": 1.0,
-      "_origin": "ast",
-      "confidence_score": 1.0,
-      "source": "src_tauri_src_postgres_table_admin",
-      "target": "src_tauri_src_postgres_table_admin_truncate_table"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "src-tauri/src/postgres/table_admin.rs",
-      "source_location": "L11",
-      "weight": 1.0,
-      "_origin": "ast",
-      "confidence_score": 1.0,
-      "source": "src_tauri_src_postgres_table_admin",
-      "target": "src_tauri_src_postgres_table_admin_truncate_table_sql"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "src-tauri/src/postgres/table_admin.rs",
-      "source_location": "L7",
-      "weight": 1.0,
-      "context": "return_type",
-      "_origin": "ast",
-      "confidence_score": 1.0,
-      "source": "src_tauri_src_postgres_table_admin_quote_identifier",
-      "target": "src_tauri_src_postgres_table_admin_rs_string"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "src-tauri/src/postgres/table_admin.rs",
-      "source_location": "L19",
-      "weight": 1.0,
-      "context": "return_type",
-      "_origin": "ast",
-      "confidence_score": 1.0,
-      "source": "src_tauri_src_postgres_table_admin_drop_table_sql",
-      "target": "src_tauri_src_postgres_table_admin_rs_string"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "src-tauri/src/postgres/table_admin.rs",
-      "source_location": "L78",
-      "weight": 1.0,
-      "context": "generic_arg",
-      "_origin": "ast",
-      "confidence_score": 1.0,
-      "source": "src_tauri_src_postgres_table_admin_generate_table_ddl",
-      "target": "src_tauri_src_postgres_table_admin_rs_string"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "src-tauri/src/postgres/table_admin.rs",
-      "source_location": "L33",
-      "weight": 1.0,
-      "context": "return_type",
-      "_origin": "ast",
-      "confidence_score": 1.0,
-      "source": "src_tauri_src_postgres_table_admin_generate_table_ddl_sql",
-      "target": "src_tauri_src_postgres_table_admin_rs_string"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "src-tauri/src/postgres/table_admin.rs",
-      "source_location": "L48",
-      "weight": 1.0,
-      "context": "return_type",
-      "_origin": "ast",
-      "confidence_score": 1.0,
-      "source": "src_tauri_src_postgres_table_admin_set_search_path_sql",
-      "target": "src_tauri_src_postgres_table_admin_rs_string"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "src-tauri/src/postgres/table_admin.rs",
-      "source_location": "L11",
-      "weight": 1.0,
-      "context": "return_type",
-      "_origin": "ast",
-      "confidence_score": 1.0,
-      "source": "src_tauri_src_postgres_table_admin_truncate_table_sql",
-      "target": "src_tauri_src_postgres_table_admin_rs_string"
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "src-tauri/src/postgres/table_admin.rs",
-      "source_location": "L61",
-      "weight": 1.0,
-      "_origin": "ast",
-      "confidence_score": 1.0,
-      "source": "src_tauri_src_postgres_table_admin_truncate_table",
-      "target": "src_tauri_src_postgres_table_admin_truncate_table_sql"
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "src-tauri/src/postgres/table_admin.rs",
-      "source_location": "L73",
-      "weight": 1.0,
-      "_origin": "ast",
-      "confidence_score": 1.0,
-      "source": "src_tauri_src_postgres_table_admin_drop_table",
-      "target": "src_tauri_src_postgres_table_admin_drop_table_sql"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "src-tauri/src/postgres/table_admin.rs",
-      "source_location": "L19",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "_origin": "ast",
-      "confidence_score": 1.0,
-      "source": "src_tauri_src_postgres_table_admin_drop_table_sql",
-      "target": "src_tauri_src_postgres_table_admin_rs_option"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "src-tauri/src/postgres/table_admin.rs",
-      "source_location": "L66",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "_origin": "ast",
-      "confidence_score": 1.0,
-      "source": "src_tauri_src_postgres_table_admin_drop_table",
-      "target": "src_tauri_src_postgres_table_admin_rs_option"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "src-tauri/src/postgres/table_admin.rs",
-      "source_location": "L105",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "_origin": "ast",
-      "confidence_score": 1.0,
-      "source": "src_tauri_src_postgres_table_admin_set_search_path",
-      "target": "src_tauri_src_postgres_table_admin_rs_option"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "src-tauri/src/postgres/table_admin.rs",
-      "source_location": "L48",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "_origin": "ast",
-      "confidence_score": 1.0,
-      "source": "src_tauri_src_postgres_table_admin_set_search_path_sql",
-      "target": "src_tauri_src_postgres_table_admin_rs_option"
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "src-tauri/src/postgres/table_admin.rs",
-      "source_location": "L84",
-      "weight": 1.0,
-      "_origin": "ast",
-      "confidence_score": 1.0,
-      "source": "src_tauri_src_postgres_table_admin_generate_table_ddl",
-      "target": "src_tauri_src_postgres_table_admin_generate_table_ddl_sql"
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "src-tauri/src/postgres/table_admin.rs",
-      "source_location": "L144",
-      "weight": 1.0,
-      "_origin": "ast",
-      "confidence_score": 1.0,
-      "source": "src_tauri_src_postgres_table_admin_generate_table_ddl_sql_targets_quoted_table",
-      "target": "src_tauri_src_postgres_table_admin_generate_table_ddl_sql"
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "src-tauri/src/postgres/table_admin.rs",
-      "source_location": "L107",
-      "weight": 1.0,
-      "_origin": "ast",
-      "confidence_score": 1.0,
-      "source": "src_tauri_src_postgres_table_admin_set_search_path",
-      "target": "src_tauri_src_postgres_table_admin_set_search_path_sql"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "src-tauri/src/postgres/table_admin.rs",
-      "source_location": "L55",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "_origin": "ast",
-      "confidence_score": 1.0,
-      "source": "src_tauri_src_postgres_table_admin_truncate_table",
-      "target": "src_tauri_src_postgres_table_admin_rs_client"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "src-tauri/src/postgres/table_admin.rs",
-      "source_location": "L55",
-      "weight": 1.0,
-      "context": "return_type",
-      "_origin": "ast",
-      "confidence_score": 1.0,
-      "source": "src_tauri_src_postgres_table_admin_truncate_table",
-      "target": "src_tauri_src_postgres_table_admin_rs_result"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "src-tauri/src/postgres/table_admin.rs",
-      "source_location": "L66",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "_origin": "ast",
-      "confidence_score": 1.0,
-      "source": "src_tauri_src_postgres_table_admin_drop_table",
-      "target": "src_tauri_src_postgres_table_admin_rs_client"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "src-tauri/src/postgres/table_admin.rs",
-      "source_location": "L78",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "_origin": "ast",
-      "confidence_score": 1.0,
-      "source": "src_tauri_src_postgres_table_admin_generate_table_ddl",
-      "target": "src_tauri_src_postgres_table_admin_rs_client"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "src-tauri/src/postgres/table_admin.rs",
-      "source_location": "L105",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "_origin": "ast",
-      "confidence_score": 1.0,
-      "source": "src_tauri_src_postgres_table_admin_set_search_path",
-      "target": "src_tauri_src_postgres_table_admin_rs_client"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "src-tauri/src/postgres/table_admin.rs",
-      "source_location": "L66",
-      "weight": 1.0,
-      "context": "return_type",
-      "_origin": "ast",
-      "confidence_score": 1.0,
-      "source": "src_tauri_src_postgres_table_admin_drop_table",
-      "target": "src_tauri_src_postgres_table_admin_rs_result"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "src-tauri/src/postgres/table_admin.rs",
-      "source_location": "L78",
-      "weight": 1.0,
-      "context": "return_type",
-      "_origin": "ast",
-      "confidence_score": 1.0,
-      "source": "src_tauri_src_postgres_table_admin_generate_table_ddl",
-      "target": "src_tauri_src_postgres_table_admin_rs_result"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "src-tauri/src/postgres/table_admin.rs",
-      "source_location": "L105",
-      "weight": 1.0,
-      "context": "return_type",
-      "_origin": "ast",
-      "confidence_score": 1.0,
-      "source": "src_tauri_src_postgres_table_admin_set_search_path",
-      "target": "src_tauri_src_postgres_table_admin_rs_result"
     },
     {
       "relation": "contains",
@@ -81580,5 +81600,5 @@
       "source_file": "README.md"
     }
   ],
-  "built_at_commit": "a5d7ff6a868c457688d905d9fb31b1e9be52a41b"
+  "built_at_commit": "7b4d96dadbd25430b908b86cf240522e8b99aad5"
 }
