@@ -81,7 +81,7 @@ export function createSchemaStore(ipc: DragonIpc): StoreApi<SchemaState> {
     },
 
     async setSearchPath(connectionId, schema) {
-      await ipc.setSearchPath(schema);
+      await ipc.setSearchPath(connectionId, schema);
       await get().loadTables(connectionId);
     },
 

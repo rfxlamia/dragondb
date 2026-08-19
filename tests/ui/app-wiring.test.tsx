@@ -2757,7 +2757,7 @@ describe("App table browser host wiring", () => {
     await user.click(screen.getByRole("menuitem", { name: TablesCopy.drop }));
     await user.click(screen.getByRole("button", { name: TablesCopy.confirmDrop }));
     await waitFor(() => expect(dropTable).toHaveBeenCalled());
-    expect(dropTable.mock.calls[0]?.[0]).toMatchObject({ schema: "public", name: "users" });
+    expect(dropTable.mock.calls[0]?.[1]).toMatchObject({ schema: "public", name: "users" });
     expect(runQuery).not.toHaveBeenCalled();
     await waitFor(() => expect(listTables.mock.calls.length).toBeGreaterThan(tablesAfterConnect));
   });

@@ -300,11 +300,11 @@ export interface DragonIpc {
   createDatabase(name: string): Promise<void>;
   deleteDatabase(name: string): Promise<void>;
   /** Quoted-identifier mutations + DDL sheet source (Rust-side quoting). */
-  truncateTable(table: TableRef): Promise<void>;
-  dropTable(table: TableRef): Promise<void>;
-  generateTableDdl(table: TableRef): Promise<string>;
+  truncateTable(connectionId: ConnectionId, table: TableRef): Promise<void>;
+  dropTable(connectionId: ConnectionId, table: TableRef): Promise<void>;
+  generateTableDdl(connectionId: ConnectionId, table: TableRef): Promise<string>;
   /** Named schema → `TO schema, public`; null (All Schemas) → `TO public`. */
-  setSearchPath(schema: string | null): Promise<void>;
+  setSearchPath(connectionId: ConnectionId, schema: string | null): Promise<void>;
   /** Wipe ALL profiles' history rows (clearHistory stays per-profile). */
   clearAllHistory(): Promise<void>;
 }

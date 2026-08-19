@@ -67,9 +67,11 @@ describe("mock DragonIpc", () => {
     expect(typeof ipc.setSearchPath).toBe("function");
     expect(typeof ipc.clearAllHistory).toBe("function");
     const users = { schema: "public", name: "users", tableType: "regular" as const };
-    await expect(ipc.truncateTable(users)).resolves.toBeUndefined();
-    await expect(ipc.dropTable(users)).resolves.toBeUndefined();
-    await expect(ipc.generateTableDdl(users)).resolves.toEqual(expect.stringContaining("CREATE"));
+    await expect(ipc.truncateTable(FIXTURE_CONNECTION_ID, users)).resolves.toBeUndefined();
+    await expect(ipc.dropTable(FIXTURE_CONNECTION_ID, users)).resolves.toBeUndefined();
+    await expect(ipc.generateTableDdl(FIXTURE_CONNECTION_ID, users)).resolves.toEqual(
+      expect.stringContaining("CREATE"),
+    );
     expect(await ipc.listDatabases(FIXTURE_CONNECTION_ID)).toEqual(["app"]);
     const tables = await ipc.listTables(FIXTURE_CONNECTION_ID);
     expect(tables.length).toBeGreaterThan(0);

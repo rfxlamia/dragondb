@@ -241,17 +241,17 @@ export function createTauriDragonIpc(): DragonIpc {
     deleteDatabase(name: string): Promise<void> {
       return invokeCommand("delete_database", { name });
     },
-    truncateTable(table: TableRef): Promise<void> {
-      return invokeCommand("truncate_table", { table });
+    truncateTable(c: ConnectionId, table: TableRef): Promise<void> {
+      return invokeCommand("truncate_table", { connectionId: c, table });
     },
-    dropTable(table: TableRef): Promise<void> {
-      return invokeCommand("drop_table", { table });
+    dropTable(c: ConnectionId, table: TableRef): Promise<void> {
+      return invokeCommand("drop_table", { connectionId: c, table });
     },
-    generateTableDdl(table: TableRef): Promise<string> {
-      return invokeCommand("generate_table_ddl", { table });
+    generateTableDdl(c: ConnectionId, table: TableRef): Promise<string> {
+      return invokeCommand("generate_table_ddl", { connectionId: c, table });
     },
-    setSearchPath(schema: string | null): Promise<void> {
-      return invokeCommand("set_search_path", { schema });
+    setSearchPath(c: ConnectionId, schema: string | null): Promise<void> {
+      return invokeCommand("set_search_path", { connectionId: c, schema });
     },
     clearAllHistory(): Promise<void> {
       return invokeCommand("clear_all_history");

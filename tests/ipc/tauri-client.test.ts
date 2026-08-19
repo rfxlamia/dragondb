@@ -461,21 +461,22 @@ describe("createTauriDragonIpc", () => {
     expect(invoke).toHaveBeenCalledWith("delete_database", { name: "shop" });
 
     const table = { schema: "public", name: "temp", tableType: "regular" as const };
+    const connectionId = "c-uuid";
     invoke.mockResolvedValueOnce(undefined);
-    await ipc.truncateTable(table);
-    expect(invoke).toHaveBeenCalledWith("truncate_table", { table });
+    await ipc.truncateTable(connectionId, table);
+    expect(invoke).toHaveBeenCalledWith("truncate_table", { connectionId, table });
 
     invoke.mockResolvedValueOnce(undefined);
-    await ipc.dropTable(table);
-    expect(invoke).toHaveBeenCalledWith("drop_table", { table });
+    await ipc.dropTable(connectionId, table);
+    expect(invoke).toHaveBeenCalledWith("drop_table", { connectionId, table });
 
     invoke.mockResolvedValueOnce("CREATE TABLE public.temp ();");
-    expect(await ipc.generateTableDdl(table)).toContain("CREATE TABLE");
-    expect(invoke).toHaveBeenCalledWith("generate_table_ddl", { table });
+    expect(await ipc.generateTableDdl(connectionId, table)).toContain("CREATE TABLE");
+    expect(invoke).toHaveBeenCalledWith("generate_table_ddl", { connectionId, table });
 
     invoke.mockResolvedValueOnce(undefined);
-    await ipc.setSearchPath("audit");
-    expect(invoke).toHaveBeenCalledWith("set_search_path", { schema: "audit" });
+    await ipc.setSearchPath(connectionId, "audit");
+    expect(invoke).toHaveBeenCalledWith("set_search_path", { connectionId, schema: "audit" });
 
     invoke.mockResolvedValueOnce(undefined);
     await ipc.clearAllHistory();

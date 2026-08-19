@@ -1042,4 +1042,61 @@ mod tests {
             "cancel_query must use Client cancel token then cancel_query"
         );
     }
+
+    /// Mirrors Tauri camelCase command arg maps for table-admin IPC.
+    mod table_admin_ipc_args {
+        use crate::session::TableRefArg;
+        use serde::Deserialize;
+
+        #[derive(Debug, Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct TruncateTableArgs {
+            connection_id: String,
+            table: TableRefArg,
+        }
+
+        #[derive(Debug, Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct SetSearchPathArgs {
+            connection_id: String,
+            schema: Option<String>,
+        }
+
+        const TABLE_JSON: &str = r#"{"schema":"public","name":"temp","tableType":"regular"}"#;
+
+        #[test]
+        fn tauri_client_truncate_payload_missing_connection_id_fails() {
+            let payload = serde_json::json!({ "table": serde_json::from_str::<TableRefArg>(TABLE_JSON).unwrap() });
+            let err = serde_json::from_value::<TruncateTableArgs>(payload).unwrap_err();
+            assert!(
+                err.to_string().contains("connectionId"),
+                "expected missing connectionId error, got: {err}"
+            );
+        }
+
+        #[test]
+        fn truncate_payload_with_connection_id_deserializes() {
+            let payload = serde_json::json!({
+                "connectionId": "c-uuid",
+                "table": serde_json::from_str::<TableRefArg>(TABLE_JSON).unwrap(),
+            });
+            assert!(serde_json::from_value::<TruncateTableArgs>(payload).is_ok());
+        }
+
+        #[test]
+        fn tauri_client_set_search_path_payload_missing_connection_id_fails() {
+            let payload = serde_json::json!({ "schema": "audit" });
+            let err = serde_json::from_value::<SetSearchPathArgs>(payload).unwrap_err();
+            assert!(
+                err.to_string().contains("connectionId"),
+                "expected missing connectionId error, got: {err}"
+            );
+        }
+
+        #[test]
+        fn set_search_path_payload_with_connection_id_deserializes() {
+            let payload = serde_json::json!({ "connectionId": "c-uuid", "schema": "audit" });
+            assert!(serde_json::from_value::<SetSearchPathArgs>(payload).is_ok());
+        }
+    }
 }

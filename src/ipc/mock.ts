@@ -312,13 +312,13 @@ export function createMockDragonIpc(mode: MockMode = "happy"): DragonIpc {
     async deleteDatabase(name: string): Promise<void> {
       databases = databases.filter((item) => item !== name);
     },
-    async truncateTable(_table: TableRef): Promise<void> {},
-    async dropTable(_table: TableRef): Promise<void> {},
-    async generateTableDdl(table: TableRef): Promise<string> {
+    async truncateTable(_c: ConnectionId, _table: TableRef): Promise<void> {},
+    async dropTable(_c: ConnectionId, _table: TableRef): Promise<void> {},
+    async generateTableDdl(_c: ConnectionId, table: TableRef): Promise<string> {
       const schema = table.schema ?? "public";
       return `CREATE TABLE ${schema}.${table.name} ();`;
     },
-    async setSearchPath(_schema: string | null): Promise<void> {
+    async setSearchPath(_c: ConnectionId, _schema: string | null): Promise<void> {
       throw notImplemented("setSearchPath");
     },
     async clearAllHistory(): Promise<void> {

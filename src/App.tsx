@@ -714,23 +714,22 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
   }
 
   async function handleDropTable(table: TableRef): Promise<void> {
-    await ipc.dropTable(table);
+    const liveId = stores.session.getState().connectionId;
+    if (liveId === null) return;
+    await ipc.dropTable(liveId, table);
     const identity = stores.browse.getState().identity;
     if (identity !== null && sameTableRef(identity.table, table)) {
       stores.browse.getState().invalidate();
       stores.tabs.getState().clearBrowseResults();
     }
-    const liveId = stores.session.getState().connectionId;
-    if (liveId === null) return;
     await stores.schema.getState().reloadTables(liveId);
   }
 
   async function handleTruncateTable(table: TableRef): Promise<void> {
-    await ipc.truncateTable(table);
     const liveId = stores.session.getState().connectionId;
-    if (liveId !== null) {
-      await stores.schema.getState().reloadTables(liveId);
-    }
+    if (liveId === null) return;
+    await ipc.truncateTable(liveId, table);
+    await stores.schema.getState().reloadTables(liveId);
     const identity = stores.browse.getState().identity;
     if (identity !== null && sameTableRef(identity.table, table)) {
       await reloadBrowseOnActiveTab(stores, ipc).catch(() => undefined);
@@ -738,7 +737,11 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
   }
 
   function handleGenerateTableDdl(table: TableRef): Promise<string> {
-    return ipc.generateTableDdl(table);
+    const liveId = stores.session.getState().connectionId;
+    if (liveId === null) {
+      return Promise.reject(new Error("Not connected"));
+    }
+    return ipc.generateTableDdl(liveId, table);
   }
 
   function handleRefreshTables(table: TableRef): void {

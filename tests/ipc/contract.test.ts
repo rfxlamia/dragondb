@@ -299,10 +299,10 @@ describe("DragonIpc contract delta (SP-3 library/tab/history/row/csv)", () => {
       switchDatabase: async (_connectionId: ConnectionId, _name: string) => {},
       createDatabase: async (_name: string) => {},
       deleteDatabase: async (_name: string) => {},
-      truncateTable: async (_table: TableRef) => {},
-      dropTable: async (_table: TableRef) => {},
-      generateTableDdl: async (_table: TableRef) => "",
-      setSearchPath: async (_schema: string | null) => {},
+      truncateTable: async (_connectionId: ConnectionId, _table: TableRef) => {},
+      dropTable: async (_connectionId: ConnectionId, _table: TableRef) => {},
+      generateTableDdl: async (_connectionId: ConnectionId, _table: TableRef) => "",
+      setSearchPath: async (_connectionId: ConnectionId, _schema: string | null) => {},
       clearAllHistory: async () => {},
     };
     expectTypeOf(stub).toMatchTypeOf<DragonIpc>();

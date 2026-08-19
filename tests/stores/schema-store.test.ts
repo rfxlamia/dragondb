@@ -240,9 +240,9 @@ describe("schema-store", () => {
     const ipc = { listTables, setSearchPath } as unknown as DragonIpc;
     const store = createSchemaStore(ipc);
     await store.getState().setSearchPath("c1", "audit");
-    expect(setSearchPath).toHaveBeenCalledWith("audit");
+    expect(setSearchPath).toHaveBeenCalledWith("c1", "audit");
     await store.getState().setSearchPath("c1", null);
-    expect(setSearchPath).toHaveBeenCalledWith(null);
+    expect(setSearchPath).toHaveBeenCalledWith("c1", null);
   });
 
   it("loadColumns keeps columnNames and stores full ColumnInfo in columnsByTable keyed schema.name", async () => {

@@ -35,8 +35,8 @@
     "semantic_hash": "fea2c09b116a57d28360f14cc69d30fd"
   },
   "src-tauri/src/commands.rs": {
-    "mtime": 1786901367.9476528,
-    "ast_hash": "fa8bbffb8b25d3cf8c9000d920289490",
+    "mtime": 1787112214.3479862,
+    "ast_hash": "97a8ebb108c13cba99913fe914981f17",
     "semantic_hash": ""
   },
   "src-tauri/src/lib.rs": {
@@ -50,18 +50,18 @@
     "semantic_hash": "e0b7bb7f3de90004262c797349a7e932"
   },
   "src-tauri/src/postgres/connection.rs": {
-    "mtime": 1786460024.642807,
-    "ast_hash": "d7edeb75abe3d6ca179d701b1287fe57",
-    "semantic_hash": "d7edeb75abe3d6ca179d701b1287fe57"
+    "mtime": 1787112708.0297184,
+    "ast_hash": "3d5053c244f733a65fded906a0399427",
+    "semantic_hash": ""
   },
   "src-tauri/src/postgres/error.rs": {
-    "mtime": 1786460024.6431773,
-    "ast_hash": "ecc12a6ffccdf7f80256390fb4ddea94",
-    "semantic_hash": "ecc12a6ffccdf7f80256390fb4ddea94"
+    "mtime": 1787112708.0313163,
+    "ast_hash": "fffbef734f1b05e130c1df6ea6e7574a",
+    "semantic_hash": ""
   },
   "src-tauri/src/postgres/mod.rs": {
-    "mtime": 1786901367.9485424,
-    "ast_hash": "e10a37ee2c7ec2e11b6e9a13659cbfee",
+    "mtime": 1787112708.0316646,
+    "ast_hash": "07402da84ce7e6a2a0860afbd5e1089b",
     "semantic_hash": ""
   },
   "src-tauri/src/postgres/query.rs": {
@@ -70,19 +70,19 @@
     "semantic_hash": ""
   },
   "src-tauri/src/postgres/row_ops.rs": {
-    "mtime": 1786673618.2901077,
-    "ast_hash": "f724b038145cabf5c8a7936f92345884",
-    "semantic_hash": "f724b038145cabf5c8a7936f92345884"
+    "mtime": 1787112708.0349019,
+    "ast_hash": "4d10dab0613fa0d18d3fddbb3e93b18c",
+    "semantic_hash": ""
   },
   "src-tauri/src/postgres/ssl.rs": {
-    "mtime": 1786460024.6441758,
-    "ast_hash": "68fbd3d00b721cfd6e5f21a1d5918fed",
-    "semantic_hash": "68fbd3d00b721cfd6e5f21a1d5918fed"
+    "mtime": 1787112708.0354042,
+    "ast_hash": "a1767befd8e2a030a6a9f4f0b11832e0",
+    "semantic_hash": ""
   },
   "src-tauri/src/secrets/keyring_store.rs": {
-    "mtime": 1786460024.6450307,
-    "ast_hash": "b1c2ec7637af36bb2a6f26c56694020b",
-    "semantic_hash": "b1c2ec7637af36bb2a6f26c56694020b"
+    "mtime": 1787112708.0370708,
+    "ast_hash": "de457cada45781ab7bb7be8742652266",
+    "semantic_hash": ""
   },
   "src-tauri/src/secrets/mod.rs": {
     "mtime": 1786460024.6453307,
@@ -90,14 +90,14 @@
     "semantic_hash": "f0bede53cf2de6112a10dea6dfe781af"
   },
   "src-tauri/src/session/mod.rs": {
-    "mtime": 1787053378.2038932,
-    "ast_hash": "8bbacc156c542a3c00bdd0ce917a8fad",
+    "mtime": 1787112708.0462968,
+    "ast_hash": "7a4068d0fcc5e4b996812cfb4f6306b2",
     "semantic_hash": ""
   },
   "src-tauri/src/ssh/auth.rs": {
-    "mtime": 1786460024.6458516,
-    "ast_hash": "8b43fe375e2b711ea8ca123c150a0b2c",
-    "semantic_hash": "8b43fe375e2b711ea8ca123c150a0b2c"
+    "mtime": 1787112708.0470915,
+    "ast_hash": "25c76578b717dbde0eeebd07da5588c7",
+    "semantic_hash": ""
   },
   "src-tauri/src/ssh/mod.rs": {
     "mtime": 1786460024.646112,
@@ -105,9 +105,9 @@
     "semantic_hash": "6e4762bad6aed56799bf8bda2811fc52"
   },
   "src-tauri/src/ssh/tunnel.rs": {
-    "mtime": 1786460024.6463897,
-    "ast_hash": "727d8de2da17518895255945812b4158",
-    "semantic_hash": "727d8de2da17518895255945812b4158"
+    "mtime": 1787112708.0487535,
+    "ast_hash": "7c1e7b1d9b41a39d9986ca8720a15aee",
+    "semantic_hash": ""
   },
   "src-tauri/src/storage/history.rs": {
     "mtime": 1786901367.9505494,
@@ -115,9 +115,9 @@
     "semantic_hash": ""
   },
   "src-tauri/src/storage/library.rs": {
-    "mtime": 1786673618.2913218,
-    "ast_hash": "61bb7a5b53f202a77c41992e67b2f3b9",
-    "semantic_hash": "61bb7a5b53f202a77c41992e67b2f3b9"
+    "mtime": 1787112708.0511963,
+    "ast_hash": "e2d2e2da3ea724b881fb01e7eff55382",
+    "semantic_hash": ""
   },
   "src-tauri/src/storage/mod.rs": {
     "mtime": 1786901367.9509678,
@@ -125,9 +125,9 @@
     "semantic_hash": ""
   },
   "src-tauri/src/storage/profiles.rs": {
-    "mtime": 1786460024.6485107,
-    "ast_hash": "1538cf69d675e2e7c86e3398dbf4d3a7",
-    "semantic_hash": "1538cf69d675e2e7c86e3398dbf4d3a7"
+    "mtime": 1787112708.0517082,
+    "ast_hash": "235664ff4c4efa30ea961c6af536351f",
+    "semantic_hash": ""
   },
   "src-tauri/src/storage/schema.rs": {
     "mtime": 1786901367.9520166,
@@ -135,8 +135,8 @@
     "semantic_hash": ""
   },
   "src-tauri/src/storage/tabs.rs": {
-    "mtime": 1786901367.952312,
-    "ast_hash": "4f3ad2303441474edd3882ae4a41c82c",
+    "mtime": 1787112708.0542686,
+    "ast_hash": "ca3ef352ca87631d24477be89db776cf",
     "semantic_hash": ""
   },
   "src-tauri/tauri.conf.json": {
@@ -150,8 +150,8 @@
     "semantic_hash": "0bffdbae52b8ed9e4c9215ccf78036a4"
   },
   "src/App.tsx": {
-    "mtime": 1787064434.3387375,
-    "ast_hash": "9a7ba10b39650fa7ba975fe94f2272b6",
+    "mtime": 1787111908.771693,
+    "ast_hash": "64888310f3ef2427143fa4958ca521bc",
     "semantic_hash": ""
   },
   "src/core/canvas-presentation.ts": {
@@ -340,8 +340,8 @@
     "semantic_hash": ""
   },
   "src/ui/connection/connection-panel.tsx": {
-    "mtime": 1787053378.208065,
-    "ast_hash": "64d758acee5bdb976360084d0b5c3421",
+    "mtime": 1787112031.1146631,
+    "ast_hash": "c2bd889497c62a4472fdfac112949b26",
     "semantic_hash": ""
   },
   "src/ui/connection/connection-profile-list.tsx": {
@@ -725,7 +725,7 @@
     "semantic_hash": ""
   },
   "tests/ui/app-wiring.test.tsx": {
-    "mtime": 1787106083.2939885,
+    "mtime": 1787112350.0542474,
     "ast_hash": "1aee1fb93d8215802f2c324b2d22b27c",
     "semantic_hash": ""
   },
@@ -735,8 +735,8 @@
     "semantic_hash": ""
   },
   "tests/ui/connection/connection-panel.test.tsx": {
-    "mtime": 1787053378.211135,
-    "ast_hash": "b468e6c507778599cf695dfa197cb213",
+    "mtime": 1787112063.981631,
+    "ast_hash": "24c314b1b780f096ef8894c19489e176",
     "semantic_hash": ""
   },
   "tests/ui/connection/connection-string-fields.test.tsx": {
@@ -1115,8 +1115,8 @@
     "semantic_hash": ""
   },
   "src-tauri/src/postgres/cancel.rs": {
-    "mtime": 1786901128.8651474,
-    "ast_hash": "b682ed9a5dbf842fb4b04f931cd83a5c",
+    "mtime": 1787112133.308238,
+    "ast_hash": "667b9299afa8ff0471f0aba4e89a27ea",
     "semantic_hash": ""
   },
   "src-tauri/src/postgres/catalog.rs": {
@@ -1125,8 +1125,8 @@
     "semantic_hash": ""
   },
   "src-tauri/src/postgres/connection_test.rs": {
-    "mtime": 1786901128.8653667,
-    "ast_hash": "c1bc0a2c645f79d7bfbfd68257a618fa",
+    "mtime": 1787112141.482822,
+    "ast_hash": "6043c22743ce567bb3b907eb0c47ccde",
     "semantic_hash": ""
   },
   "src-tauri/src/postgres/database_admin.rs": {
@@ -1135,8 +1135,8 @@
     "semantic_hash": ""
   },
   "src-tauri/src/postgres/table_admin.rs": {
-    "mtime": 1786901367.949246,
-    "ast_hash": "ce24b63cfeb3a3cae2d5ed0ac808a1ec",
+    "mtime": 1787111974.1356032,
+    "ast_hash": "4847d91685c42ca5ea02d6c06971133d",
     "semantic_hash": ""
   },
   "src/stores/run-browse-on-active-tab.ts": {
@@ -1205,8 +1205,8 @@
     "semantic_hash": ""
   },
   "src/ui/tables/table-context-menu.tsx": {
-    "mtime": 1786982051.107989,
-    "ast_hash": "a72decd6b98164159e60bf72414d4692",
+    "mtime": 1787111931.273232,
+    "ast_hash": "daa893ae0f8795d51e69eeae3eeb0381",
     "semantic_hash": ""
   },
   "src/ui/tables/table-ddl-sheet.tsx": {
@@ -1220,8 +1220,8 @@
     "semantic_hash": ""
   },
   "src/ui/tables/table-list.tsx": {
-    "mtime": 1786981180.4079716,
-    "ast_hash": "9c07b22c4411679dd0335f4bbc15c9bf",
+    "mtime": 1787111911.5453851,
+    "ast_hash": "2b8ffa5727474b60dcc5e0daf4631361",
     "semantic_hash": ""
   },
   "src/ui/tables/tables-accessibility.ts": {
@@ -1235,13 +1235,13 @@
     "semantic_hash": ""
   },
   "tests/ui/tables/table-list.test.tsx": {
-    "mtime": 1786980695.1929872,
-    "ast_hash": "ff7e4c35b2acb4c78d090729bddb1068",
+    "mtime": 1787111940.877476,
+    "ast_hash": "30e6a64910469e4af4bf9d039b5ab7e5",
     "semantic_hash": ""
   },
   "src/lib/format-query-date.ts": {
-    "mtime": 1786907061.427737,
-    "ast_hash": "a426dfa61c4206775aef53c7129ef276",
+    "mtime": 1787112699.1497364,
+    "ast_hash": "23ce54a03ec5c59c8c039653adfdb5da",
     "semantic_hash": ""
   },
   "src/ui/results/json-viewer.tsx": {
@@ -1255,8 +1255,8 @@
     "semantic_hash": ""
   },
   "tests/lib/format-query-date.test.ts": {
-    "mtime": 1787071129.3287725,
-    "ast_hash": "3cadc5c9221c49e38552f7e8ffe960d9",
+    "mtime": 1787111845.774276,
+    "ast_hash": "31a7013112336e5b6f45a53559d6eb67",
     "semantic_hash": ""
   },
   "tests/ui/results/json-viewer.test.tsx": {
@@ -1280,8 +1280,8 @@
     "semantic_hash": ""
   },
   "src/ui/sql-editor/sql-hatch.tsx": {
-    "mtime": 1786944178.7582724,
-    "ast_hash": "caf3ea67fc8329260739d3886cc9ece3",
+    "mtime": 1787111774.051949,
+    "ast_hash": "bfce13e51f82a01ed1e449b2bd45f57f",
     "semantic_hash": ""
   },
   "tests/stores/run-sql-on-active-tab.test.ts": {
@@ -1290,8 +1290,8 @@
     "semantic_hash": ""
   },
   "tests/ui/sql-editor/sql-hatch.test.tsx": {
-    "mtime": 1786947981.3229573,
-    "ast_hash": "133be3c7a60285ac812d9b4a4657ef12",
+    "mtime": 1787112454.6149113,
+    "ast_hash": "a4db600b906ae0acb552294ae016e456",
     "semantic_hash": ""
   },
   "src/ui/library/queries-column-sheets.tsx": {
@@ -1320,13 +1320,13 @@
     "semantic_hash": ""
   },
   "src/ui/library/use-saved-query-autosave.ts": {
-    "mtime": 1786945280.312905,
-    "ast_hash": "3d93591b0b7f3bb959f2324354763ed8",
+    "mtime": 1787111801.5902724,
+    "ast_hash": "dce9e082862b0172f37d7dd649e4cfc1",
     "semantic_hash": ""
   },
   "tests/ui/library/use-saved-query-autosave.test.ts": {
-    "mtime": 1786948501.073607,
-    "ast_hash": "681a01ba4be708f977d414ed459a92a8",
+    "mtime": 1787112699.509508,
+    "ast_hash": "a000b9ea662b135a1c7924062560dc74",
     "semantic_hash": ""
   },
   "src/ui/shell/app-workspace.tsx": {
@@ -1390,8 +1390,8 @@
     "semantic_hash": ""
   },
   "src/stores/browse-session-store.ts": {
-    "mtime": 1787060121.1277118,
-    "ast_hash": "6b7a06f6146d86ca7c99747ff757cdea",
+    "mtime": 1787112317.0532541,
+    "ast_hash": "08b481762907f37d5b5f685130cc893b",
     "semantic_hash": ""
   },
   "src/ui/connection/create-database-flow.ts": {
@@ -1405,8 +1405,8 @@
     "semantic_hash": ""
   },
   "tests/stores/browse-session-store.test.ts": {
-    "mtime": 1787058423.1036274,
-    "ast_hash": "817a85ac42b31be12fb7f51a0a726b76",
+    "mtime": 1787111873.2943408,
+    "ast_hash": "9a200c60d292aadd53f19e0675069149",
     "semantic_hash": ""
   },
   "tests/ui/connection/create-database-flow.test.ts": {
