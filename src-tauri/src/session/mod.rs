@@ -1121,6 +1121,12 @@ impl AppSession {
         }
     }
 
+    /// Keyring secrets for a saved profile, for callers that must fill in
+    /// fields the edit form never received (see `merge_test_secrets`).
+    pub fn stored_secrets(&self, profile_id: &str) -> Result<ProfileSecrets, MappedIpcError> {
+        self.load_secrets(profile_id)
+    }
+
     fn load_secrets(&self, profile_id: &str) -> Result<ProfileSecrets, MappedIpcError> {
         match &self.backend {
             Backend::Production { keyring, .. } => match keyring.get_secrets(profile_id) {
@@ -1590,6 +1596,22 @@ fn secrets_from_input(s: &ProfileSecretsInput) -> ProfileSecrets {
         ssh_password: nonempty_secret(s.ssh_password.as_ref()),
         ssh_passphrase: nonempty_secret(s.ssh_passphrase.as_ref()),
         ssh_private_key: nonempty_secret(s.ssh_private_key.as_ref()),
+    }
+}
+
+/// Secrets for a Test against a saved profile. The edit form initialises its
+/// secrets to `{}` because stored values are never read back out of the
+/// keyring, so any field the user did not retype must come from the keyring —
+/// otherwise Test probes with an empty password and no SSH material and fails
+/// on a profile that Connect opens fine. A retyped value always wins; an empty
+/// string is the form's "unchanged" marker, matching `nonempty_secret`.
+pub fn merge_test_secrets(typed: &ProfileSecretsInput, stored: ProfileSecrets) -> ProfileSecrets {
+    let typed = secrets_from_input(typed);
+    ProfileSecrets {
+        password: typed.password.or(stored.password),
+        ssh_password: typed.ssh_password.or(stored.ssh_password),
+        ssh_passphrase: typed.ssh_passphrase.or(stored.ssh_passphrase),
+        ssh_private_key: typed.ssh_private_key.or(stored.ssh_private_key),
     }
 }
 
@@ -2166,6 +2188,54 @@ fn sample_query_result() -> QueryResultData {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_connection_reuses_stored_secrets_for_omitted_fields() {
+        // Editing a saved profile initialises the form's secrets to {}, so Test
+        // would otherwise probe with an empty password and no SSH material and
+        // report an auth failure for a profile Connect opens fine.
+        let typed = ProfileSecretsInput::default();
+        let stored = ProfileSecrets {
+            password: Some("stored-pw".into()),
+            ssh_password: Some("stored-ssh".into()),
+            ssh_passphrase: Some("stored-phrase".into()),
+            ssh_private_key: Some("stored-key".into()),
+        };
+        let merged = merge_test_secrets(&typed, stored);
+        assert_eq!(merged.password.as_deref(), Some("stored-pw"));
+        assert_eq!(merged.ssh_password.as_deref(), Some("stored-ssh"));
+        assert_eq!(merged.ssh_passphrase.as_deref(), Some("stored-phrase"));
+        assert_eq!(merged.ssh_private_key.as_deref(), Some("stored-key"));
+    }
+
+    #[test]
+    fn test_connection_prefers_freshly_typed_secrets_over_stored_ones() {
+        let typed = ProfileSecretsInput {
+            password: Some("typed-pw".into()),
+            // An empty string is the form's "unchanged" marker, not a blanking.
+            ssh_password: Some(String::new()),
+            ..ProfileSecretsInput::default()
+        };
+        let stored = ProfileSecrets {
+            password: Some("stored-pw".into()),
+            ssh_password: Some("stored-ssh".into()),
+            ..ProfileSecrets::default()
+        };
+        let merged = merge_test_secrets(&typed, stored);
+        assert_eq!(merged.password.as_deref(), Some("typed-pw"));
+        assert_eq!(merged.ssh_password.as_deref(), Some("stored-ssh"));
+    }
+
+    #[test]
+    fn test_connection_without_stored_secrets_keeps_the_typed_ones() {
+        let typed = ProfileSecretsInput {
+            password: Some("typed-pw".into()),
+            ..ProfileSecretsInput::default()
+        };
+        let merged = merge_test_secrets(&typed, ProfileSecrets::default());
+        assert_eq!(merged.password.as_deref(), Some("typed-pw"));
+        assert_eq!(merged.ssh_private_key, None);
+    }
 
     #[test]
     fn failed_drop_with_failed_restore_reports_the_database_the_session_landed_on() {

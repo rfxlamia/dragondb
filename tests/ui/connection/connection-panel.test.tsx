@@ -748,6 +748,36 @@ describe("ConnectionPanel Save-then-Connect", () => {
     expect(input?.secrets.password).toBe("s3cret");
   });
 
+  it("Test on a saved profile sends its profileId so stored secrets are reused", async () => {
+    // formValueFromProfile initialises secrets to {} — stored values are never
+    // read back into the form — so without the profileId Rust probes with an
+    // empty password and Test fails on a profile Connect opens fine.
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    const saved = await ipc.saveProfile({
+      profile: { ...baseProfileFields(), name: "Saved" },
+      secrets: { password: "stored-pw" },
+    });
+    const testSpy = vi.spyOn(ipc, "testConnection");
+    render(
+      <ConnectionPanel
+        ipc={ipc}
+        {...formGateProps()}
+        isConnected={false}
+        {...sessionPropsFromIpc(ipc)}
+        onConnected={vi.fn()}
+        onDisconnected={vi.fn()}
+        onSwitchSuccess={vi.fn()}
+        onSwitchFailure={vi.fn()}
+      />,
+    );
+
+    await user.click(await screen.findByRole("button", { name: /^Saved$/i }));
+    await user.click(screen.getByRole("button", { name: ConnectionCopy.test }));
+    await waitFor(() => expect(testSpy).toHaveBeenCalled());
+    expect(testSpy).toHaveBeenCalledWith(expect.objectContaining({ profileId: saved.id }));
+  });
+
   it("Test in Connection String mode probes the parsed URI, not the empty field form", async () => {
     const user = userEvent.setup();
     const ipc = createMockDragonIpc("happy");

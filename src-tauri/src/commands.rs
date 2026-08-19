@@ -12,9 +12,10 @@ use crate::postgres::{
     collapse_ssl_mode, probe_config, query_cancelled_error, CancelRegistry, ColumnInfoRow,
     IpcErrorKind, MappedIpcError, ProbeConfig, QueryResultData, RowOperationError, TableRefRow,
 };
+use crate::secrets::ProfileSecrets;
 use crate::session::{
-    AppSession, ConnectResult, ExecutableSql, ProfileFields, ProfileSecretsInput, SaveProfileInput,
-    SavedQueryWriteInput, TabStateWriteInput, TableRefArg,
+    merge_test_secrets, AppSession, ConnectResult, ExecutableSql, ProfileFields,
+    ProfileSecretsInput, SaveProfileInput, SavedQueryWriteInput, TabStateWriteInput, TableRefArg,
 };
 use crate::storage::{FolderRow, HistoryRow, ProfileRow, SavedQueryRow, TabStateRow};
 
@@ -173,6 +174,10 @@ pub async fn disconnect(
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TestConnectionInput {
+    /// Saved profile being tested, when there is one. Secrets the edit form
+    /// never received are filled from that profile's keyring entry.
+    #[serde(default)]
+    pub profile_id: Option<String>,
     pub host: String,
     pub port: i64,
     pub username: String,
@@ -194,21 +199,39 @@ pub struct TestConnectionInput {
 }
 
 #[tauri::command]
-pub async fn test_connection(input: TestConnectionInput) -> Result<(), MappedIpcError> {
+pub async fn test_connection(
+    state: State<'_, Mutex<AppSession>>,
+    input: TestConnectionInput,
+) -> Result<(), MappedIpcError> {
+    // Editing a saved profile initialises the form's secrets to {} — stored
+    // values are never read back into the UI — so Test must fall back to the
+    // keyring for anything the user did not retype. Without this, Test reports
+    // an auth failure on a profile Connect opens fine.
+    let typed = ProfileSecretsInput {
+        password: input.password,
+        ssh_password: input.ssh_password,
+        ssh_passphrase: input.ssh_passphrase,
+        ssh_private_key: input.ssh_private_key,
+    };
+    let stored = match input.profile_id.as_deref() {
+        Some(profile_id) => state.lock().await.stored_secrets(profile_id)?,
+        None => ProfileSecrets::default(),
+    };
+    let secrets = merge_test_secrets(&typed, stored);
     probe_config(ProbeConfig {
         host: input.host,
         port: input.port as u16,
         username: input.username,
-        password: input.password.unwrap_or_default(),
+        password: secrets.password.unwrap_or_default(),
         database: input.database,
         tls: collapse_ssl_mode(&input.ssl_mode),
         ssh_host: input.ssh_enabled.then_some(input.ssh_host).flatten(),
         ssh_port: input.ssh_port.unwrap_or(22) as u16,
         ssh_username: input.ssh_username,
         ssh_auth_method: input.ssh_auth_method,
-        ssh_password: input.ssh_password,
-        ssh_private_key: input.ssh_private_key,
-        ssh_passphrase: input.ssh_passphrase,
+        ssh_password: secrets.ssh_password,
+        ssh_private_key: secrets.ssh_private_key,
+        ssh_passphrase: secrets.ssh_passphrase,
     })
     .await
 }

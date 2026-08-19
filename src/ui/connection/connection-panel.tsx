@@ -322,6 +322,9 @@ export function ConnectionPanel(props: ConnectionPanelProps): React.JSX.Element 
     try {
       const { profile, secrets } = uri.applyParseOnSave(form, selectedId);
       await ipc.testConnection({
+        // The form never holds a saved profile's stored secrets, so Rust fills
+        // the omitted ones from this profile's keyring entry.
+        profileId: selectedId,
         host: profile.host,
         port: profile.port,
         username: profile.username,

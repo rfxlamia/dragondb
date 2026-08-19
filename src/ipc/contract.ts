@@ -62,6 +62,12 @@ export interface TableRef {
  * Temporary probe: never mutates the live session, never persists secrets.
  */
 export interface TestConnectionInput {
+  /**
+   * Saved profile being tested, when there is one. Rust fills any secret the
+   * edit form never received from that profile's keyring entry — the form
+   * initialises `secrets` to `{}` because stored values are never read back.
+   */
+  profileId?: ProfileId | null;
   host: string;
   port: number;
   username: string;
