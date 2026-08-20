@@ -318,6 +318,10 @@ body,
     width: 100%;
   }
 
+  .app-shell--collapsed {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
   .app-shell--collapsed .app-sidebar {
     width: 0;
   }

@@ -217,6 +217,32 @@ describe("ConnectionPanel session-action ownership", () => {
 
     expect(onBlockingChange).toHaveBeenLastCalledWith(false);
   });
+
+  it("disables header actions while a confirm is pending", async () => {
+    const user = userEvent.setup();
+    const ipc = createMockDragonIpc("happy");
+    const saved = await ipc.saveProfile({
+      profile: baseProfileFields(),
+      secrets: { password: "pw" },
+    });
+    render(
+      <ConnectionPanel
+        ipc={ipc}
+        {...formGateProps({ formVisible: true })}
+        isConnected={false}
+        activeProfileId={saved.id}
+        {...sessionPropsFromIpc(ipc)}
+        onConnected={vi.fn()}
+        onDisconnected={vi.fn()}
+        onSwitchSuccess={vi.fn()}
+        onSwitchFailure={vi.fn()}
+      />,
+    );
+
+    await user.click(await screen.findByRole("button", { name: ConnectionCopy.delete }));
+    expect(screen.getByRole("button", { name: ConnectionCopy.confirmDelete })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: ConnectionCopy.newProfile })).toBeDisabled();
+  });
 });
 
 describe("ConnectionPanel Save-then-Connect", () => {

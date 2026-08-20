@@ -134,6 +134,7 @@ export function ConnectionPanel(props: ConnectionPanelProps): React.JSX.Element 
   const [pickerBlocking, setPickerBlocking] = useState(false);
   const [connectionsExpanded, setConnectionsExpanded] = useState(true);
   const blocking = formVisible || confirm.hasPending || pickerBlocking;
+  const headerActionsBlocked = confirm.hasPending || pickerBlocking;
   const collapseBlocked = blocking || bannerPhase !== "idle";
   useEffect(() => {
     onBlockingChange?.(blocking);
@@ -443,7 +444,7 @@ export function ConnectionPanel(props: ConnectionPanelProps): React.JSX.Element 
                 className="ui-icon-btn ui-icon-btn--danger"
                 aria-label={ConnectionCopy.disconnect}
                 title={ConnectionCopy.disconnect}
-                disabled={busy}
+                disabled={busy || headerActionsBlocked}
                 onClick={() => void handleDisconnect()}
               >
                 <DisconnectIcon />
@@ -455,7 +456,7 @@ export function ConnectionPanel(props: ConnectionPanelProps): React.JSX.Element 
                 className="ui-icon-btn ui-icon-btn--accent"
                 aria-label={ConnectionCopy.connect}
                 title={ConnectionCopy.connect}
-                disabled={!canConnect}
+                disabled={!canConnect || headerActionsBlocked}
                 onClick={() => void handleConnect()}
               >
                 <ConnectIcon />
@@ -466,6 +467,7 @@ export function ConnectionPanel(props: ConnectionPanelProps): React.JSX.Element 
               className="ui-icon-btn ui-icon-btn--accent"
               aria-label={ConnectionCopy.newProfile}
               title={ConnectionCopy.newProfile}
+              disabled={busy || headerActionsBlocked}
               onClick={startNewProfile}
             >
               <PlusIcon />

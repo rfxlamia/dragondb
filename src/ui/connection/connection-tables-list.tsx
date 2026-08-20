@@ -144,7 +144,7 @@ export function ConnectionTablesList(props: {
         <div className="connection-tables__schema-error" role="alert">
           <p>{schemaError}</p>
           <button type="button" onClick={onDismissSchemaError}>
-            {TablesCopy.ok}
+            {TablesCopy.done}
           </button>
         </div>
       ) : null}

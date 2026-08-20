@@ -33,6 +33,5 @@ export const TablesCopy = {
   noMatchingTables: "No matching tables",
   filterBySchema: "Filter by schema",
   allSchemas: "All schemas",
-  ok: "OK",
   schemaError: "Could not set the schema search path.",
 } as const;

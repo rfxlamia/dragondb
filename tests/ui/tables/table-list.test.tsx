@@ -202,6 +202,32 @@ describe("TableList", () => {
     expect(await screen.findByText(TablesCopy.ddlFailed)).toBeInTheDocument();
   });
 
+  it("reports a blocking surface while a DDL error sheet is open", async () => {
+    const user = userEvent.setup();
+    const onBlockingChange = vi.fn();
+    const onGenerateDdl = vi.fn().mockRejectedValue(new Error("boom"));
+    render(
+      <TableList
+        tables={[orders]}
+        columnsByTable={{}}
+        executing={false}
+        onBrowse={vi.fn()}
+        onDrop={vi.fn()}
+        onTruncate={vi.fn()}
+        onGenerateDdl={onGenerateDdl}
+        onBlockingChange={onBlockingChange}
+      />,
+    );
+
+    expect(onBlockingChange).toHaveBeenLastCalledWith(false);
+
+    await user.click(screen.getByRole("button", { name: TablesCopy.menu }));
+    await user.click(screen.getByRole("menuitem", { name: TablesCopy.ddl }));
+
+    expect(await screen.findByText("boom")).toBeInTheDocument();
+    expect(onBlockingChange).toHaveBeenLastCalledWith(true);
+  });
+
   it("Export menuitem is disabled when onFetchAll/saveCsvFile/saveTextFile are not all provided", async () => {
     const user = userEvent.setup();
     render(

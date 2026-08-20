@@ -70,7 +70,7 @@ export function TableList(props: TableListProps): React.JSX.Element {
   );
   const [collapsedSchemas, setCollapsedSchemas] = useState<ReadonlySet<string>>(() => new Set());
 
-  const blocking = pending !== null || ddl !== null || exportTable !== null;
+  const blocking = pending !== null || ddl !== null || ddlError !== null || exportTable !== null;
   useEffect(() => {
     onBlockingChange?.(blocking);
     return () => onBlockingChange?.(false);
