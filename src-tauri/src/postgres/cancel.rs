@@ -99,11 +99,7 @@ impl CancelRegistry {
 
     /// Marks a run cancelled; issues a PostgreSQL cancel only when that run is
     /// currently executing (not merely queued on the session mutex).
-    pub async fn cancel_run(
-        &self,
-        connection_id: &str,
-        run_id: u64,
-    ) -> Result<(), MappedIpcError> {
+    pub async fn cancel_run(&self, connection_id: &str, run_id: u64) -> Result<(), MappedIpcError> {
         if run_id == 0 {
             return Ok(());
         }
@@ -130,12 +126,8 @@ impl CancelRegistry {
             // Marking a merely queued run is the feature: it is how a run still
             // waiting on the session mutex gets cancelled without a PG cancel.
             self.mark_run_cancelled(run_id);
-            let active = self
-                .active_run_id
-                .read()
-                .map_err(|_| registry_error())?;
-            active.as_ref() == Some(&run_id)
-                && registration.token.is_some()
+            let active = self.active_run_id.read().map_err(|_| registry_error())?;
+            active.as_ref() == Some(&run_id) && registration.token.is_some()
         };
         if should_cancel_pg {
             self.cancel_token(connection_id).await?;

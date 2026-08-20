@@ -1096,7 +1096,9 @@ mod tests {
             .split("#[tauri::command")
             .next()
             .expect("run_query body");
-        let lock_at = body.find("state.lock()").expect("run_query locks the session");
+        let lock_at = body
+            .find("state.lock()")
+            .expect("run_query locks the session");
         let guard_at = body[lock_at..]
             .find("is_run_cancelled")
             .map(|offset| lock_at + offset);
@@ -1104,7 +1106,9 @@ mod tests {
             guard_at.is_some(),
             "run_query must re-check is_run_cancelled AFTER acquiring the session lock"
         );
-        let run_at = body.find("session.run_query").expect("run_query executes the sql");
+        let run_at = body
+            .find("session.run_query")
+            .expect("run_query executes the sql");
         assert!(
             guard_at.expect("guard") < run_at,
             "the post-lock cancellation guard must run before the query executes"
