@@ -611,10 +611,7 @@ mod tests {
             "REINDEX DATABASE cannot run inside a transaction block"
         );
         assert!(
-            !should_wrap_transaction(&[
-                "CREATE UNIQUE INDEX CONCURRENTLY idx ON t(c)",
-                "SELECT 1"
-            ]),
+            !should_wrap_transaction(&["CREATE UNIQUE INDEX CONCURRENTLY idx ON t(c)", "SELECT 1"]),
             "CREATE UNIQUE INDEX CONCURRENTLY cannot run inside a transaction block"
         );
         assert!(
@@ -633,7 +630,10 @@ mod tests {
             "REFRESH MATERIALIZED VIEW CONCURRENTLY cannot run inside a transaction block"
         );
         assert!(
-            !should_wrap_transaction(&["CREATE SUBSCRIPTION sub CONNECTION '' PUBLICATION pub", "SELECT 1"]),
+            !should_wrap_transaction(&[
+                "CREATE SUBSCRIPTION sub CONNECTION '' PUBLICATION pub",
+                "SELECT 1"
+            ]),
             "CREATE SUBSCRIPTION cannot run inside a transaction block"
         );
     }
