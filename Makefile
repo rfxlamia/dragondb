@@ -5,7 +5,7 @@ BUN ?= bun
 
 .DEFAULT_GOAL := help
 
-.PHONY: help install dev tauri-dev build build-tauri preview typecheck lint lint-fix test test-watch check clean
+.PHONY: help install dev tauri-dev build build-tauri preview typecheck lint lint-fix test test-watch check tauri-check clean
 
 help: ## Show available targets
 	@printf 'DragonDB make targets\n'
@@ -46,6 +46,9 @@ test-watch: ## Run tests in watch mode
 
 check: ## CI gate: typecheck + lint + test
 	$(BUN) run check
+
+tauri-check: ## CI gate for Rust: fmt + clippy + test + check (mirrors CI rust job)
+	$(BUN) run tauri:check
 
 clean: ## Remove build artifacts (dist/, src-tauri/target/)
 	rm -rf dist src-tauri/target

@@ -13,7 +13,8 @@
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.core.json",
     "lint": "biome check src tests",
     "lint:fix": "biome check --write src tests",
-    "check": "bun run typecheck && bun run lint && bun run test"
+    "check": "bun run typecheck && bun run lint && bun run test",
+    "tauri:check": "cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check && cargo clippy --manifest-path src-tauri/Cargo.toml --locked --all-targets --all-features && cargo test --manifest-path src-tauri/Cargo.toml --locked && cargo check --manifest-path src-tauri/Cargo.toml --locked"
   },
   "dependencies": {
     "@codemirror/commands": "^6.11.0",
