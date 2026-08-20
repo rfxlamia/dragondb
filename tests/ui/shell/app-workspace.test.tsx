@@ -4,7 +4,6 @@ import { join } from "node:path";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { TabState } from "../../../src/stores/tabs-store";
-import { QueriesAccessibility } from "../../../src/ui/library/queries-accessibility";
 import { ResultsAccessibility } from "../../../src/ui/results/results-accessibility";
 import { AppWorkspace, type AppWorkspaceProps } from "../../../src/ui/shell/app-workspace";
 
@@ -40,12 +39,6 @@ function stubProps(overrides: Partial<AppWorkspaceProps> = {}): AppWorkspaceProp
     profiles: [],
     profileId: null,
     libraryQueries: [],
-    libraryFolders: [],
-    savedQueryId: null,
-    executingQueryId: null,
-    schemaNames: [],
-    selectedSchema: null,
-    schemaError: null,
     status: { kind: "idle" },
     compact: null,
     raw: null,
@@ -66,19 +59,6 @@ function stubProps(overrides: Partial<AppWorkspaceProps> = {}): AppWorkspaceProp
     onNewTab: noop,
     onSwitchTab: noop,
     onCloseTab: noop,
-    onSelectQuery: noop,
-    onNewQuery: noop,
-    onRenameQuery: noop,
-    onDeleteQuery: noop,
-    onMoveQuery: noop,
-    onDeleteFolder: noop,
-    onLibraryRefresh: noop,
-    onDuplicateQuery: noop,
-    onRenameFolder: noop,
-    onCreateFolder: () => ({ id: "folder" }),
-    hasCachedResult: () => false,
-    onSelectSchema: noop,
-    onDismissSchemaError: noop,
     onDismissMutationToast: noop,
     onViewMutationTable: noop,
     ...overrides,
@@ -86,25 +66,22 @@ function stubProps(overrides: Partial<AppWorkspaceProps> = {}): AppWorkspaceProp
 }
 
 describe("AppWorkspace layout", () => {
-  it("keeps Queries in the canvas row so results span to the connection sidebar", () => {
+  it("keeps canvas in the workspace row so results span to the connection sidebar", () => {
     const { container } = render(<AppWorkspace {...stubProps()} />);
     const canvasPanel = container.querySelector("[data-min-canvas='250']");
     const resultsPanel = container.querySelector("[data-min-results='300']");
-    const queries = screen.getByTestId(QueriesAccessibility.column);
     const results = screen.getByTestId(ResultsAccessibility.pane);
 
     expect(canvasPanel).not.toBeNull();
     expect(resultsPanel).not.toBeNull();
-    expect(canvasPanel).toContainElement(queries);
+    expect(canvasPanel).toContainElement(screen.getByTestId("canvas-slot"));
     expect(resultsPanel).toContainElement(results);
-    expect(resultsPanel).not.toContainElement(queries);
     expect(screen.getByTestId("canvas-slot")).toBeInTheDocument();
   });
 
-  it("still shows Queries and omits the results split when the workspace is not ready", () => {
+  it("omits the results split when the workspace is not ready", () => {
     const { container } = render(<AppWorkspace {...stubProps({ workspaceReady: false })} />);
 
-    expect(screen.getByTestId(QueriesAccessibility.column)).toBeInTheDocument();
     expect(container.querySelector("[data-min-results='300']")).toBeNull();
     expect(screen.queryByTestId(ResultsAccessibility.splitSeparator)).toBeNull();
     expect(screen.queryByTestId(ResultsAccessibility.pane)).toBeNull();

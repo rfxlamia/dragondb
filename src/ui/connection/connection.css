@@ -16,6 +16,82 @@
   margin: 0;
 }
 
+.connection-panel__connections {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.connection-panel__connections-header {
+  align-items: center;
+  display: flex;
+  gap: 0.25rem;
+  justify-content: space-between;
+  min-height: 28px;
+  padding-left: 2px;
+}
+
+.connection-panel__connections-toggle {
+  align-items: center;
+  background: transparent;
+  border: none;
+  color: var(--neutral-600);
+  cursor: pointer;
+  display: inline-flex;
+  flex: 1;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  gap: 4px;
+  min-height: 28px;
+  min-width: 0;
+  padding: 0 4px;
+  text-align: left;
+}
+
+.connection-panel__connections-toggle:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.connection-panel__connections-toggle:focus-visible {
+  border-radius: var(--radius);
+  outline: 2px solid var(--primary-600);
+  outline-offset: 2px;
+}
+
+.connection-panel__connections-label {
+  color: var(--neutral-700);
+}
+
+.connection-panel__connections-actions {
+  align-items: center;
+  display: flex;
+  flex-shrink: 0;
+  gap: 2px;
+}
+
+.connection-panel__connections-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.connection-status-dot {
+  border-radius: 50%;
+  flex-shrink: 0;
+  height: 7px;
+  width: 7px;
+}
+
+.connection-status-dot--live {
+  background: var(--success-solid);
+}
+
+.connection-status-dot--idle {
+  background: var(--neutral-400);
+}
+
 .connection-panel__header {
   align-items: center;
   display: flex;
@@ -437,6 +513,25 @@
   gap: 0.5rem;
 }
 
+.connection-tables__schema {
+  display: flex;
+  min-width: 0;
+}
+
+.connection-tables__search {
+  margin-bottom: 0.25rem;
+}
+
+.connection-tables__schema-error {
+  background: var(--error-tint);
+  border-radius: var(--radius);
+  color: var(--error-text);
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.5rem;
+}
+
 .connection-tables-list {
   display: flex;
   flex-direction: column;
@@ -535,10 +630,8 @@
   display: flex;
 }
 
-/* Status line: a compact pill under the panel header, not a full-width bar at
-   the bottom of the table list (you had to scroll a 200-table schema to see
-   it). "Connected" is session state and stays; a Test result is an event and
-   clears itself (see TEST_SUCCESS_LINGER_MS). */
+/* Status line: transient test/switch feedback only — live session state is the
+   database row dot, not a separate "Connected" banner. */
 .connection-status-banner {
   align-items: center;
   border-radius: var(--radius);
@@ -552,21 +645,8 @@
   width: fit-content;
 }
 
-/* Connected: quiet, dot-led — state, not an announcement. */
 .connection-status-banner--idle {
-  background: transparent;
-  color: var(--neutral-700);
-  font-weight: 500;
-  padding-left: 0;
-}
-
-.connection-status-banner--idle::before {
-  background: var(--success-solid);
-  border-radius: 50%;
-  content: "";
-  flex-shrink: 0;
-  height: 7px;
-  width: 7px;
+  display: none;
 }
 
 .connection-status-banner--testing,
@@ -594,16 +674,9 @@
 .connection-database-picker__row {
   align-items: center;
   display: flex;
-  gap: 2px;
+  gap: 6px;
   min-height: var(--row-height);
   padding-left: 6px;
-}
-
-.connection-database-picker__glyph {
-  align-items: center;
-  color: var(--neutral-500);
-  display: inline-flex;
-  flex-shrink: 0;
 }
 
 .connection-database-picker__label {

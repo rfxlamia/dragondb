@@ -5,4 +5,7 @@ export const TablesAccessibility = {
   ddlText: "tables.ddlText",
   exportSheet: "tables.exportSheet",
   menu: "tables.menu",
+  search: "tables.search",
+  schemaToggle: (schema: string) => `tables.schemaToggle.${schema}`,
+  schemaPicker: "tables.schemaPicker",
 } as const;

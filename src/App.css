@@ -15,7 +15,8 @@
   /* The sidebar track follows the sidebar's own width rather than being sized
      here: a width transition on the element animates everywhere, whereas
      interpolating grid-template-columns does not. */
-  grid-template-columns: auto minmax(0, 1fr);
+  /* rail (permanent) · panel (animates its own width) · main */
+  grid-template-columns: var(--sidebar-rail-width) auto minmax(0, 1fr);
   height: 100vh;
   min-height: 100vh;
   overflow: auto;
@@ -48,7 +49,7 @@
 }
 
 .app-shell--collapsed .app-sidebar {
-  width: var(--sidebar-rail-width);
+  width: 0;
 }
 
 .app-sidebar__panel {
@@ -66,34 +67,6 @@
   opacity: 0;
   transition-delay: 0ms;
   transition-duration: 100ms;
-}
-
-/* The rail is the same column seen once the panel has gone: full height,
-   sidebar surface, expand toggle level with the Connection / Queries headers. */
-.app-sidebar__rail {
-  align-items: center;
-  background: var(--surface-sidebar);
-  border-right: 1px solid var(--border-subtle);
-  box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  inset: 0;
-  opacity: 0;
-  padding: 0.5rem 5px;
-  /* The rail overlays the panel's left edge, so while the sidebar is open it
-     must be click-through — otherwise it eats presses on the table-tree
-     chevrons sitting under it. */
-  pointer-events: none;
-  position: absolute;
-  transition: opacity var(--duration-fast) var(--ease-out);
-  width: var(--sidebar-rail-width);
-  z-index: 1;
-}
-
-.app-shell--collapsed .app-sidebar__rail {
-  opacity: 1;
-  pointer-events: auto;
-  transition-delay: 100ms;
 }
 
 .loading-overlay {
@@ -118,13 +91,44 @@
    other way round — white rails around a grey workspace — which put the
    chrome in front of the data. */
 .app-shell .connection-panel {
+  background: transparent;
+  box-sizing: border-box;
+  padding: 0 0 0.5rem;
+}
+
+.app-sidebar__inner {
   background: var(--surface-sidebar);
   border-right: 1px solid var(--border-subtle);
   box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
   height: 100%;
   max-height: 100vh;
-  overflow: auto;
+  min-height: 0;
+  overflow: hidden;
   padding: 0.5rem 0.5rem 1rem;
+  width: var(--sidebar-width);
+}
+
+.app-sidebar__switcher {
+  align-self: stretch;
+}
+
+.app-sidebar__switcher .ui-segment__item {
+  flex: 1;
+}
+
+.app-sidebar__tabpanel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.app-sidebar__tabpanel[hidden] {
+  display: none;
 }
 
 .app-main-column {
@@ -135,33 +139,12 @@
   min-width: 0;
 }
 
-.app-workspace-split {
-  flex: 1;
-  height: 100%;
-  min-height: 0;
-  width: 100%;
-}
-
-.app-workspace-split__queries,
-.app-workspace-split__main {
-  min-height: 0;
-  min-width: 0;
-}
-
-.app-workspace-split__queries {
-  background: var(--surface-sidebar);
-  border-right: 1px solid var(--border-subtle);
-}
-
-.app-workspace-split__separator,
 .workspace-split__separator {
   background: var(--border-subtle);
   transition: background-color var(--duration-fast) var(--ease-standard);
 }
 
-.app-workspace-split__separator:hover,
 .workspace-split__separator:hover,
-.app-workspace-split__separator[data-resize-handle-state="drag"],
 .workspace-split__separator[data-resize-handle-state="drag"] {
   background: var(--primary-400);
 }
@@ -323,7 +306,11 @@ body,
      collapsing drops back to a rail beside the workspace rather than leaving a
      full-width strip of empty chrome. */
   .app-shell {
-    grid-template-columns: 1fr;
+    grid-template-columns: var(--sidebar-rail-width) 1fr;
+  }
+
+  .app-main-column {
+    grid-column: 1 / -1;
   }
 
   .app-sidebar,
@@ -336,13 +323,14 @@ body,
   }
 
   .app-shell--collapsed .app-sidebar {
-    width: var(--sidebar-rail-width);
+    width: 0;
   }
 
-  .app-shell .connection-panel {
+  .app-sidebar__inner {
     border-bottom: 1px solid var(--border-subtle);
     border-right: none;
     height: auto;
     max-height: none;
+    width: 100%;
   }
 }

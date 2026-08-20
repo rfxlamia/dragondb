@@ -16,7 +16,6 @@ export function ConnectionStatusBanner(props: {
   else if (phase === "testingSSH") body = ConnectionCopy.testingSSH;
   else if (phase === "success") body = ConnectionCopy.testSuccess;
   else if (phase === "error") body = message ?? ConnectionCopy.connectionError;
-  else if (isConnected) body = ConnectionCopy.connected;
 
   if (body === null) return null;
 

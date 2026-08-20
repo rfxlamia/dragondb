@@ -10,32 +10,14 @@ export type QueriesColumnToolbarProps = {
   onSortChange: (value: QuerySortKey) => void;
   onNewQuery: () => void;
   onRefresh?: () => void;
-  schemas?: string[];
-  selectedSchema?: string | null;
-  onSelectSchema?: (schema: string | null) => void;
-  schemaError?: string | null;
-  onDismissSchemaError?: () => void;
 };
 
 export function QueriesColumnToolbar(props: QueriesColumnToolbarProps): React.JSX.Element {
-  const {
-    filter,
-    sort,
-    onFilterChange,
-    onSortChange,
-    onNewQuery,
-    onRefresh,
-    schemas,
-    selectedSchema,
-    onSelectSchema,
-    schemaError,
-    onDismissSchemaError,
-  } = props;
+  const { filter, sort, onFilterChange, onSortChange, onNewQuery, onRefresh } = props;
 
   return (
     <>
       <div className="queries-column__header">
-        <h2>{QueriesCopy.title}</h2>
         <div className="queries-column__header-actions">
           {onRefresh ? (
             <button
@@ -60,38 +42,6 @@ export function QueriesColumnToolbar(props: QueriesColumnToolbarProps): React.JS
           </button>
         </div>
       </div>
-
-      {/* Pickers carry no visible label: their own value states what they do,
-          and stacked "Schema"/"Sort" captions turned a sidebar into a form.
-          The label element stays for the accessible name. */}
-      {schemas !== undefined && schemas.length > 1 && onSelectSchema ? (
-        <label className="queries-column__schema">
-          <span className="ui-visually-hidden">{QueriesCopy.schema}</span>
-          <select
-            className="ui-quiet-select"
-            data-testid={QueriesAccessibility.schemaPicker}
-            value={selectedSchema ?? ""}
-            onChange={(event) =>
-              onSelectSchema(event.target.value === "" ? null : event.target.value)
-            }
-          >
-            <option value="">{QueriesCopy.allSchemas}</option>
-            {schemas.map((schema) => (
-              <option key={schema} value={schema}>
-                {schema}
-              </option>
-            ))}
-          </select>
-        </label>
-      ) : null}
-      {schemaError ? (
-        <div className="queries-column__schema-error" role="alert">
-          <p>{schemaError}</p>
-          <button type="button" onClick={onDismissSchemaError}>
-            {QueriesCopy.ok}
-          </button>
-        </div>
-      ) : null}
 
       <div className="ui-search">
         <span className="ui-search__icon">

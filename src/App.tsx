@@ -34,16 +34,18 @@ import { runSelectOnActiveTab } from "./stores/run-select-on-active-tab";
 import { runSqlOnActiveTab } from "./stores/run-sql-on-active-tab";
 import { ConnectionCopy, humanIpcErrorMessage } from "./ui/connection/connection-copy";
 import { ConnectionPanel, type ConnectionPanelHandle } from "./ui/connection/connection-panel";
+import { ConnectionTablesList } from "./ui/connection/connection-tables-list";
 import { HelpDialog } from "./ui/help/help-dialog";
 import { SettingsDialog } from "./ui/help/settings-dialog";
 import { ShortcutsDialog } from "./ui/help/shortcuts-dialog";
-import { SidebarIcon } from "./ui/icons";
-import { QueriesCopy } from "./ui/library/queries-copy";
+import { QueriesColumn } from "./ui/library/queries-column";
 import { createSavedQueryResultCache } from "./ui/library/saved-query-result-cache";
 import { useSavedQueryAutosave } from "./ui/library/use-saved-query-autosave";
 import { BrowseTimeoutContext } from "./ui/results/browse-timeout-dialog";
 import type { RowReloadRecovery } from "./ui/results/query-results-pane";
 import { ResultsCopy } from "./ui/results/results-copy";
+import { ActivityRail } from "./ui/shell/activity-rail";
+import { AppSidebar, type SidebarTab } from "./ui/shell/app-sidebar";
 import { AppWorkspace } from "./ui/shell/app-workspace";
 import { LoadingOverlay } from "./ui/shell/loading-overlay";
 import type { MutationToastTable } from "./ui/shell/mutation-toast";
@@ -55,6 +57,7 @@ import {
   type MenuEventId,
   type WorkspaceAccelContext,
 } from "./ui/shell/workspace-accelerators";
+import { TablesCopy } from "./ui/tables/tables-copy";
 import { VisualQueryCanvas, type VisualQueryCanvasHandle } from "./ui/visual-query/canvas";
 import { VisualQueryCopy } from "./ui/visual-query/copy";
 import { createTabDocuments, serializeQueryDocument } from "./ui/visual-query/tab-documents";
@@ -172,6 +175,11 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
   const [overlayPhase, setOverlayPhase] = useState<string | null>(null);
   const [launchError, setLaunchError] = useState<string | null>(null);
   const [connectionCollapsed, setConnectionCollapsed] = useState(false);
+  const [sidebarTab, setSidebarTab] = useState<SidebarTab>("schema");
+  const [connectionBlocking, setConnectionBlocking] = useState(false);
+  const [queriesBlocking, setQueriesBlocking] = useState(false);
+  const [tablesBlocking, setTablesBlocking] = useState(false);
+  const sidebarBlocked = connectionBlocking || queriesBlocking || tablesBlocking;
   const [missingDatabase, setMissingDatabase] = useState(false);
   const [databaseSwitchError, setDatabaseSwitchError] = useState<string | null>(null);
   /** Run ids with a cancel already in flight — Stop/Escape must not re-send. */
@@ -447,6 +455,13 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
   }, [stores]);
 
   const welcome = profilesReady && profileCount === 0 && !formVisible;
+
+  useEffect(() => {
+    if (!welcome) return;
+    setConnectionBlocking(false);
+    setQueriesBlocking(false);
+    setTablesBlocking(false);
+  }, [welcome]);
 
   function handleNewTab(): void {
     const created = stores.tabs.getState().createTab();
@@ -1057,7 +1072,7 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
       setSelectedSchema(schema);
       setSchemaError(null);
     } catch {
-      setSchemaError(QueriesCopy.schemaError);
+      setSchemaError(TablesCopy.schemaError);
     }
   }
 
@@ -1160,68 +1175,98 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
               <p>{databaseSwitchError}</p>
             </div>
           ) : null}
-          {/* Rail and panel share one column and both stay mounted: the column
-            animates its width while the panel fades under the rail, so hiding
-            the sidebar reads as a drawer closing rather than a jump cut.
-            Whichever layer is not showing is inert, so tab order and the
-            accessibility tree only ever contain the visible one. */}
+          <ActivityRail
+            collapsed={connectionCollapsed}
+            toggleDisabled={sidebarBlocked}
+            onToggle={() => setConnectionCollapsed(!connectionCollapsed)}
+            onOpenSettings={() => setSettingsOpen(true)}
+            onOpenHelp={() => setHelpOpen(true)}
+          />
           <div className="app-sidebar">
-            <div
-              className="app-sidebar__rail"
-              inert={connectionCollapsed ? undefined : true}
-              aria-hidden={connectionCollapsed ? undefined : true}
-            >
-              <button
-                type="button"
-                className="ui-icon-btn"
-                aria-label={ConnectionCopy.showConnection}
-                title={ConnectionCopy.showConnection}
-                onClick={() => setConnectionCollapsed(false)}
-              >
-                <SidebarIcon />
-              </button>
-            </div>
             <div
               className="app-sidebar__panel"
               inert={connectionCollapsed ? true : undefined}
               aria-hidden={connectionCollapsed ? true : undefined}
             >
-              <ConnectionPanel
-                ref={connectionPanelRef}
-                ipc={ipc}
-                isConnected={isConnected}
-                activeProfileId={profileId ?? undefined}
-                formVisible={formVisible}
-                onFormVisibleChange={handleFormVisibleChange}
-                onProfilesLoaded={handleProfilesLoaded}
-                tables={visibleTables}
-                tablesLoading={tablesLoading}
-                tablesErrorMessage={tablesErrorMessage}
-                onBrowse={handleBrowseTable}
-                columnsByTable={columnsByTable}
-                executing={status.kind === "running"}
-                onDrop={handleDropTable}
-                onTruncate={handleTruncateTable}
-                onGenerateDdl={handleGenerateTableDdl}
-                onRefresh={handleRefreshTables}
-                onFetchAll={handleFetchAllTable}
-                onExpand={handleExpandTable}
-                saveCsvFile={(csv, defaultPath) => ipc.saveCsvFile(csv, defaultPath)}
-                saveTextFile={(text, defaultPath, filter) =>
-                  ipc.saveTextFile(text, defaultPath, filter)
+              <AppSidebar
+                tab={sidebarTab}
+                onTabChange={setSidebarTab}
+                switcherDisabled={sidebarBlocked}
+                connections={
+                  <ConnectionPanel
+                    ref={connectionPanelRef}
+                    ipc={ipc}
+                    isConnected={isConnected}
+                    activeProfileId={profileId ?? undefined}
+                    formVisible={formVisible}
+                    onFormVisibleChange={handleFormVisibleChange}
+                    onProfilesLoaded={handleProfilesLoaded}
+                    onBlockingChange={setConnectionBlocking}
+                    connectionId={connectionId}
+                    databaseName={databaseName}
+                    onSwitchDatabase={handleSwitchDatabase}
+                    onClearDatabase={handleClearDatabaseSelection}
+                    missingDatabase={missingDatabase}
+                    connectProfile={(id) => stores.session.getState().connect(id)}
+                    disconnectSession={() => stores.session.getState().disconnect()}
+                    onConnected={handleConnected}
+                    onDisconnected={handleDisconnected}
+                    onSwitchSuccess={handleSwitchSuccess}
+                    onSwitchFailure={handleSwitchFailure}
+                  />
                 }
-                connectionId={connectionId}
-                databaseName={databaseName}
-                onSwitchDatabase={handleSwitchDatabase}
-                onClearDatabase={handleClearDatabaseSelection}
-                onCollapse={() => setConnectionCollapsed(true)}
-                missingDatabase={missingDatabase}
-                connectProfile={(id) => stores.session.getState().connect(id)}
-                disconnectSession={() => stores.session.getState().disconnect()}
-                onConnected={handleConnected}
-                onDisconnected={handleDisconnected}
-                onSwitchSuccess={handleSwitchSuccess}
-                onSwitchFailure={handleSwitchFailure}
+                schema={
+                  <ConnectionTablesList
+                    tables={visibleTables}
+                    tablesLoading={tablesLoading}
+                    tablesErrorMessage={tablesErrorMessage}
+                    onBrowse={handleBrowseTable}
+                    columnsByTable={columnsByTable}
+                    executing={status.kind === "running"}
+                    onDrop={handleDropTable}
+                    onTruncate={handleTruncateTable}
+                    onGenerateDdl={handleGenerateTableDdl}
+                    onRefresh={handleRefreshTables}
+                    onFetchAll={handleFetchAllTable}
+                    onExpand={handleExpandTable}
+                    saveCsvFile={(csv, defaultPath) => ipc.saveCsvFile(csv, defaultPath)}
+                    saveTextFile={(text, defaultPath, filter) =>
+                      ipc.saveTextFile(text, defaultPath, filter)
+                    }
+                    onBlockingChange={setTablesBlocking}
+                    schemas={schemaNames}
+                    selectedSchema={selectedSchema}
+                    onSelectSchema={(schema) => {
+                      void handleSelectSchema(schema);
+                    }}
+                    schemaError={schemaError}
+                    onDismissSchemaError={() => setSchemaError(null)}
+                  />
+                }
+                queries={
+                  <QueriesColumn
+                    queries={libraryQueries}
+                    folders={libraryFolders}
+                    selectedQueryId={savedQueryId}
+                    onSelectQuery={handleSelectQuery}
+                    onNewQuery={handleNewQuery}
+                    onRenameQuery={handleRenameQuery}
+                    onDeleteQuery={handleDeleteQuery}
+                    onMoveQuery={handleMoveQuery}
+                    onDeleteFolder={handleDeleteFolder}
+                    onRefresh={handleLibraryRefresh}
+                    onDuplicateQuery={(id) => {
+                      void stores.library.getState().duplicateSavedQuery(id);
+                    }}
+                    onRenameFolder={(id, name) => {
+                      void stores.library.getState().renameQueryFolder(id, name);
+                    }}
+                    onCreateFolder={(name) => stores.library.getState().createQueryFolder(name)}
+                    hasCachedResult={(id) => savedQueryCacheRef.current.read(id) !== null}
+                    executingQueryId={executingQueryId}
+                    onBlockingChange={setQueriesBlocking}
+                  />
+                }
               />
             </div>
           </div>
@@ -1234,12 +1279,6 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
               profiles={profiles}
               profileId={profileId}
               libraryQueries={libraryQueries}
-              libraryFolders={libraryFolders}
-              savedQueryId={savedQueryId}
-              executingQueryId={executingQueryId}
-              schemaNames={schemaNames}
-              selectedSchema={selectedSchema}
-              schemaError={schemaError}
               status={status}
               compact={compact}
               raw={raw}
@@ -1261,25 +1300,6 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
               onNewTab={handleNewTab}
               onSwitchTab={(id) => void handleSwitchTab(id)}
               onCloseTab={handleCloseTab}
-              onSelectQuery={handleSelectQuery}
-              onNewQuery={handleNewQuery}
-              onRenameQuery={handleRenameQuery}
-              onDeleteQuery={handleDeleteQuery}
-              onMoveQuery={handleMoveQuery}
-              onDeleteFolder={handleDeleteFolder}
-              onLibraryRefresh={handleLibraryRefresh}
-              onDuplicateQuery={(id) => {
-                void stores.library.getState().duplicateSavedQuery(id);
-              }}
-              onRenameFolder={(id, name) => {
-                void stores.library.getState().renameQueryFolder(id, name);
-              }}
-              onCreateFolder={(name) => stores.library.getState().createQueryFolder(name)}
-              hasCachedResult={(id) => savedQueryCacheRef.current.read(id) !== null}
-              onSelectSchema={(schema) => {
-                void handleSelectSchema(schema);
-              }}
-              onDismissSchemaError={() => setSchemaError(null)}
               onDismissMutationToast={handleDismissMutationToast}
               onViewMutationTable={handleViewMutationTable}
             />

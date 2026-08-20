@@ -2,6 +2,7 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { ConnectionAccessibility } from "../../../src/ui/connection/connection-accessibility";
 import { ConnectionCopy } from "../../../src/ui/connection/connection-copy";
 import { ConnectionDatabasePicker } from "../../../src/ui/connection/connection-database-picker";
 
@@ -21,6 +22,38 @@ describe("ConnectionDatabasePicker", () => {
     expect(screen.getByRole("combobox")).toBeDisabled();
   });
 
+  it("shows a grey status dot when connected without a selected database", () => {
+    render(
+      <ConnectionDatabasePicker
+        isConnected={true}
+        databases={["postgres"]}
+        selected={null}
+        onSelect={vi.fn()}
+        profileDatabase="postgres"
+      />,
+    );
+    expect(screen.getByTestId(ConnectionAccessibility.statusDot)).toHaveClass(
+      "connection-status-dot--idle",
+    );
+    expect(screen.queryByText(ConnectionCopy.connected)).toBeNull();
+  });
+
+  it("shows a green status dot when connected with a selected database", () => {
+    render(
+      <ConnectionDatabasePicker
+        isConnected={true}
+        databases={["fastrack_db"]}
+        selected="fastrack_db"
+        onSelect={vi.fn()}
+        profileDatabase="fastrack_db"
+      />,
+    );
+    expect(screen.getByTestId(ConnectionAccessibility.statusDot)).toHaveClass(
+      "connection-status-dot--live",
+    );
+    expect(screen.queryByText(ConnectionCopy.connected)).toBeNull();
+  });
+
   it("switch calls onSelect(shop) without rewriting profileDatabase", async () => {
     const user = userEvent.setup();
     const onSelect = vi.fn();
@@ -36,6 +69,81 @@ describe("ConnectionDatabasePicker", () => {
     await user.selectOptions(screen.getByRole("combobox"), "shop");
     expect(onSelect).toHaveBeenCalledWith("shop");
     expect(screen.getByText("postgres")).toBeInTheDocument();
+  });
+
+  it("reports a blocking surface while the create dialog is open", async () => {
+    const user = userEvent.setup();
+    const onBlockingChange = vi.fn();
+    render(
+      <ConnectionDatabasePicker
+        isConnected={true}
+        databases={["postgres"]}
+        selected="postgres"
+        onSelect={vi.fn()}
+        profileDatabase="postgres"
+        onCreateDatabase={vi.fn()}
+        onBlockingChange={onBlockingChange}
+      />,
+    );
+
+    expect(onBlockingChange).toHaveBeenLastCalledWith(false);
+
+    await user.click(screen.getByRole("button", { name: ConnectionCopy.createDatabase }));
+
+    expect(onBlockingChange).toHaveBeenLastCalledWith(true);
+  });
+
+  it("reports no blocking surface after the create dialog closes", async () => {
+    const user = userEvent.setup();
+    const onBlockingChange = vi.fn();
+    render(
+      <ConnectionDatabasePicker
+        isConnected={true}
+        databases={["postgres"]}
+        selected="postgres"
+        onSelect={vi.fn()}
+        profileDatabase="postgres"
+        onCreateDatabase={vi.fn()}
+        onBlockingChange={onBlockingChange}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: ConnectionCopy.createDatabase }));
+    await user.click(screen.getByRole("button", { name: ConnectionCopy.cancel }));
+
+    expect(onBlockingChange).toHaveBeenLastCalledWith(false);
+  });
+
+  it("clears blocking when disconnected unmounts the picker", async () => {
+    const user = userEvent.setup();
+    const onBlockingChange = vi.fn();
+    const { rerender } = render(
+      <ConnectionDatabasePicker
+        isConnected={true}
+        databases={["postgres"]}
+        selected="postgres"
+        onSelect={vi.fn()}
+        profileDatabase="postgres"
+        onCreateDatabase={vi.fn()}
+        onBlockingChange={onBlockingChange}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: ConnectionCopy.createDatabase }));
+    expect(onBlockingChange).toHaveBeenLastCalledWith(true);
+
+    rerender(
+      <ConnectionDatabasePicker
+        isConnected={false}
+        databases={[]}
+        selected={null}
+        onSelect={vi.fn()}
+        profileDatabase="postgres"
+        onBlockingChange={onBlockingChange}
+      />,
+    );
+
+    expect(onBlockingChange).toHaveBeenLastCalledWith(false);
   });
 
   it("surfaces a failed switch and keeps the previous selection", async () => {

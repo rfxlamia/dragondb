@@ -6,7 +6,6 @@ export const QueriesAccessibility = {
   refresh: "queries.refresh",
   deselect: "queries.deselect",
   refreshOverlay: "queries.refreshOverlay",
-  schemaPicker: "queries.schemaPicker",
   folder: (id: string) => `queries.folder.${id}`,
   cacheDot: (id: string) => `queries.cache.${id}`,
   executing: (id: string) => `queries.executing.${id}`,

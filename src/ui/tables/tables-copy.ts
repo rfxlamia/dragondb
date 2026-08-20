@@ -29,4 +29,9 @@ export const TablesCopy = {
   truncateFailed: "Could not truncate this table. Try again.",
   exportFailed: "Could not export this table. Try again.",
   ddlFailed: "Could not generate the DDL. Try again.",
+  searchTables: "Search tables",
+  noMatchingTables: "No matching tables",
+  filterBySchema: "Filter by schema",
+  allSchemas: "All schemas",
+  schemaError: "Could not set the schema search path.",
 } as const;

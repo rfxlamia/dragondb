@@ -14,4 +14,6 @@ export const HelpCopy = {
   dateFormatUs: "US",
   dateFormatEuropean: "European",
   dateFormatRelative: "Relative",
+  openSettings: "Settings",
+  openHelp: "Help",
 } as const;

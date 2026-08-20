@@ -14,7 +14,7 @@
   align-items: center;
   display: flex;
   gap: 0.5rem;
-  justify-content: space-between;
+  justify-content: flex-end;
   min-height: 28px;
   padding-left: 6px;
 }
@@ -43,20 +43,9 @@
   min-height: 0;
 }
 
-.queries-column__schema,
 .queries-column__sort {
   display: flex;
   min-width: 0;
-}
-
-.queries-column__schema-error {
-  background: var(--error-tint);
-  border-radius: var(--radius);
-  color: var(--error-text);
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  padding: 0.5rem;
 }
 
 .queries-column__refresh-overlay {

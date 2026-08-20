@@ -1,11 +1,12 @@
 /** @vitest-environment jsdom */
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { TABLES_LOAD_FAILED } from "../../../src/stores/schema-store";
 import { ConnectionAccessibility } from "../../../src/ui/connection/connection-accessibility";
 import { ConnectionCopy } from "../../../src/ui/connection/connection-copy";
 import { ConnectionTablesList } from "../../../src/ui/connection/connection-tables-list";
+import { TablesAccessibility } from "../../../src/ui/tables/tables-accessibility";
 
 afterEach(() => cleanup());
 
@@ -68,5 +69,62 @@ describe("ConnectionTablesList", () => {
     expect(screen.getByRole("button", { name: "users" })).toBeInTheDocument();
     rerender(<ConnectionTablesList tables={[]} tablesLoading={false} tablesErrorMessage={null} />);
     expect(screen.queryByRole("button", { name: "users" })).toBeNull();
+  });
+
+  it("filters by schema through the picker", async () => {
+    const user = userEvent.setup();
+    const onSelectSchema = vi.fn();
+    render(
+      <ConnectionTablesList
+        tables={[{ schema: "public", name: "activity", tableType: "regular" }]}
+        tablesLoading={false}
+        tablesErrorMessage={null}
+        schemas={["public", "audit"]}
+        selectedSchema={null}
+        onSelectSchema={onSelectSchema}
+      />,
+    );
+
+    await user.selectOptions(screen.getByTestId(TablesAccessibility.schemaPicker), "audit");
+
+    expect(onSelectSchema).toHaveBeenCalledWith("audit");
+  });
+
+  it("hides the picker when there is only one schema", () => {
+    render(
+      <ConnectionTablesList
+        tables={[{ schema: "public", name: "activity", tableType: "regular" }]}
+        tablesLoading={false}
+        tablesErrorMessage={null}
+        schemas={["public"]}
+        selectedSchema={null}
+        onSelectSchema={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByTestId(TablesAccessibility.schemaPicker)).toBeNull();
+  });
+
+  it("renders search above the schema picker", () => {
+    render(
+      <ConnectionTablesList
+        tables={[{ schema: "public", name: "activity", tableType: "regular" }]}
+        tablesLoading={false}
+        tablesErrorMessage={null}
+        schemas={["public", "audit"]}
+        selectedSchema={null}
+        onSelectSchema={vi.fn()}
+      />,
+    );
+
+    const region = screen.getByTestId(ConnectionAccessibility.tablesRegion);
+    const search = screen.getByTestId(TablesAccessibility.search);
+    const picker = screen.getByTestId(TablesAccessibility.schemaPicker);
+    const searchRow = search.closest(".connection-tables__search");
+    const pickerRow = picker.closest("label");
+    expect(searchRow).not.toBeNull();
+    expect(pickerRow).not.toBeNull();
+    const children = Array.from(region.children);
+    expect(children.indexOf(searchRow!)).toBeLessThan(children.indexOf(pickerRow!));
   });
 });

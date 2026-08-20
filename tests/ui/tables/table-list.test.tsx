@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ColumnInfo, TableRef } from "../../../src/ipc/contract";
 import { TableList } from "../../../src/ui/tables/table-list";
+import { TablesAccessibility } from "../../../src/ui/tables/tables-accessibility";
 import { TablesCopy } from "../../../src/ui/tables/tables-copy";
 
 afterEach(() => cleanup());
@@ -201,6 +202,32 @@ describe("TableList", () => {
     expect(await screen.findByText(TablesCopy.ddlFailed)).toBeInTheDocument();
   });
 
+  it("reports a blocking surface while a DDL error sheet is open", async () => {
+    const user = userEvent.setup();
+    const onBlockingChange = vi.fn();
+    const onGenerateDdl = vi.fn().mockRejectedValue(new Error("boom"));
+    render(
+      <TableList
+        tables={[orders]}
+        columnsByTable={{}}
+        executing={false}
+        onBrowse={vi.fn()}
+        onDrop={vi.fn()}
+        onTruncate={vi.fn()}
+        onGenerateDdl={onGenerateDdl}
+        onBlockingChange={onBlockingChange}
+      />,
+    );
+
+    expect(onBlockingChange).toHaveBeenLastCalledWith(false);
+
+    await user.click(screen.getByRole("button", { name: TablesCopy.menu }));
+    await user.click(screen.getByRole("menuitem", { name: TablesCopy.ddl }));
+
+    expect(await screen.findByText("boom")).toBeInTheDocument();
+    expect(onBlockingChange).toHaveBeenLastCalledWith(true);
+  });
+
   it("Export menuitem is disabled when onFetchAll/saveCsvFile/saveTextFile are not all provided", async () => {
     const user = userEvent.setup();
     render(
@@ -271,5 +298,122 @@ describe("TableList", () => {
     expect(exportItem).toBeEnabled();
     await user.click(exportItem);
     expect(await screen.findByText(TablesCopy.exportTitle)).toBeInTheDocument();
+  });
+
+  it("filters tables by a case-insensitive substring", async () => {
+    const user = userEvent.setup();
+    render(
+      <TableList
+        tables={[
+          { schema: "public", name: "activity", tableType: "regular" },
+          { schema: "public", name: "migrations", tableType: "regular" },
+        ]}
+        columnsByTable={{}}
+        executing={false}
+        onBrowse={vi.fn()}
+        onDrop={vi.fn()}
+        onTruncate={vi.fn()}
+        onGenerateDdl={vi.fn()}
+      />,
+    );
+
+    await user.type(screen.getByTestId(TablesAccessibility.search), "MIGRA");
+
+    expect(screen.queryByText("activity")).toBeNull();
+    expect(screen.getByText("migrations")).toBeTruthy();
+  });
+
+  it("shows a no-matches message when the filter matches nothing", async () => {
+    const user = userEvent.setup();
+    render(
+      <TableList
+        tables={[{ schema: "public", name: "activity", tableType: "regular" }]}
+        columnsByTable={{}}
+        executing={false}
+        onBrowse={vi.fn()}
+        onDrop={vi.fn()}
+        onTruncate={vi.fn()}
+        onGenerateDdl={vi.fn()}
+      />,
+    );
+
+    await user.type(screen.getByTestId(TablesAccessibility.search), "zzz");
+
+    expect(screen.getByText(TablesCopy.noMatchingTables)).toBeTruthy();
+  });
+
+  it("counts matches in the schema header, not the total", async () => {
+    const user = userEvent.setup();
+    render(
+      <TableList
+        tables={[
+          { schema: "public", name: "activity", tableType: "regular" },
+          { schema: "public", name: "migrations", tableType: "regular" },
+        ]}
+        columnsByTable={{}}
+        executing={false}
+        onBrowse={vi.fn()}
+        onDrop={vi.fn()}
+        onTruncate={vi.fn()}
+        onGenerateDdl={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId(TablesAccessibility.schemaToggle("public")).textContent).toContain(
+      "2",
+    );
+
+    await user.type(screen.getByTestId(TablesAccessibility.search), "activity");
+
+    expect(screen.getByTestId(TablesAccessibility.schemaToggle("public")).textContent).toContain(
+      "1",
+    );
+  });
+
+  it("collapses a schema section and hides its rows", async () => {
+    const user = userEvent.setup();
+    render(
+      <TableList
+        tables={[{ schema: "public", name: "activity", tableType: "regular" }]}
+        columnsByTable={{}}
+        executing={false}
+        onBrowse={vi.fn()}
+        onDrop={vi.fn()}
+        onTruncate={vi.fn()}
+        onGenerateDdl={vi.fn()}
+      />,
+    );
+
+    const toggle = screen.getByTestId(TablesAccessibility.schemaToggle("public"));
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+
+    await user.click(toggle);
+
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByText("activity")).toBeNull();
+  });
+
+  it("reports a blocking surface while the drop confirm is open", async () => {
+    const user = userEvent.setup();
+    const onBlockingChange = vi.fn();
+    render(
+      <TableList
+        tables={[{ schema: "public", name: "activity", tableType: "regular" }]}
+        columnsByTable={{}}
+        executing={false}
+        onBrowse={vi.fn()}
+        onDrop={vi.fn()}
+        onTruncate={vi.fn()}
+        onGenerateDdl={vi.fn()}
+        onBlockingChange={onBlockingChange}
+      />,
+    );
+
+    expect(onBlockingChange).toHaveBeenLastCalledWith(false);
+
+    await user.click(screen.getByRole("button", { name: TablesCopy.menu }));
+    await user.click(screen.getByRole("menuitem", { name: TablesCopy.drop }));
+
+    expect(onBlockingChange).toHaveBeenLastCalledWith(true);
   });
 });
