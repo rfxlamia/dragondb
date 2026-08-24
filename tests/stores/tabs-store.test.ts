@@ -533,6 +533,83 @@ describe("tabs-store", () => {
     expect(store.getState().beginRun("missing")).toBeNull();
   });
 
+  it("applyRunSuccess with no columns carries rowsAffected on status and no grid", async () => {
+    const ipc = mockTabsIpc();
+    const store = tabsWithResults(ipc, [baseTab({ id: "T" })], "T");
+    const gen = store.getState().beginRun("T");
+    if (gen === null) throw new Error("expected generation");
+    await store.getState().applyRunSuccess(
+      "T",
+      {
+        columns: [],
+        rows: [],
+        durationMs: 5,
+        rowsAffected: 3,
+        columnTypes: [],
+      },
+      gen,
+    );
+    const tab = store.getState().tabs.find((t) => t.id === "T");
+    expect(tab?.raw).toBeNull();
+    expect(tab?.compact).toBeNull();
+    expect(tab?.status).toEqual({
+      kind: "ok",
+      rowCount: 0,
+      durationMs: 5,
+      rowsAffected: 3,
+    });
+  });
+
+  it("applyRunSuccess with multiple statements carries statement count and index on status", async () => {
+    const ipc = mockTabsIpc();
+    const store = tabsWithResults(ipc, [baseTab({ id: "T" })], "T");
+    const gen = store.getState().beginRun("T");
+    if (gen === null) throw new Error("expected generation");
+    await store.getState().applyRunSuccess(
+      "T",
+      {
+        columns: ["b"],
+        rows: [[{ state: "value", text: "2" }]],
+        durationMs: 8,
+        columnTypes: [{ name: "b", typeName: "int4", typeOid: 23 }],
+        statementCount: 2,
+        statementIndex: 2,
+      },
+      gen,
+    );
+    const tab = store.getState().tabs.find((t) => t.id === "T");
+    expect(tab?.status).toEqual({
+      kind: "ok",
+      rowCount: 1,
+      durationMs: 8,
+      statementCount: 2,
+      statementIndex: 2,
+    });
+  });
+
+  it("applyRunSuccess with a single statement omits the statement counter on status", async () => {
+    const ipc = mockTabsIpc();
+    const store = tabsWithResults(ipc, [baseTab({ id: "T" })], "T");
+    const gen = store.getState().beginRun("T");
+    if (gen === null) throw new Error("expected generation");
+    await store.getState().applyRunSuccess(
+      "T",
+      {
+        columns: ["a"],
+        rows: [[{ state: "value", text: "1" }]],
+        durationMs: 4,
+        columnTypes: [{ name: "a", typeName: "int4", typeOid: 23 }],
+        statementCount: 1,
+        statementIndex: 1,
+      },
+      gen,
+    );
+    const tab = store.getState().tabs.find((t) => t.id === "T");
+    expect(tab?.status).toEqual({ kind: "ok", rowCount: 1, durationMs: 4 });
+    expect(tab?.status).not.toHaveProperty("statementCount");
+    expect(tab?.status).not.toHaveProperty("statementIndex");
+  });
+
   it("applyRunSuccess writes raw+compact+ok status and persists blob with matching generation", async () => {
     const saveTabState = vi.fn(async () => undefined);
     const ipc = {

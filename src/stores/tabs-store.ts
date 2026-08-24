@@ -21,7 +21,7 @@ export type TabResultGrid = {
 export type TabRunStatus =
   | { kind: "idle" }
   | { kind: "running" }
-  | { kind: "ok"; rowCount: number; durationMs: number }
+  | { kind: "ok"; rowCount: number; durationMs: number; rowsAffected?: number | null; statementCount?: number; statementIndex?: number }
   | { kind: "error"; message: string }
   | { kind: "cancelled" };
 
@@ -542,6 +542,15 @@ export function createTabsStore(ipc: DragonIpc, getters: TabsSessionGetters): St
           kind: "ok",
           rowCount: result.rows.length,
           durationMs: result.durationMs,
+          ...(result.rowsAffected !== undefined ? { rowsAffected: result.rowsAffected } : {}),
+          ...(result.statementCount !== undefined &&
+          result.statementCount > 1 &&
+          result.statementIndex !== undefined
+            ? {
+                statementCount: result.statementCount,
+                statementIndex: result.statementIndex,
+              }
+            : {}),
         };
         patchTab(tabId, {
           raw,
