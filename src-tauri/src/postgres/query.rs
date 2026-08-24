@@ -76,7 +76,12 @@ pub async fn run_query(
             .await
             .map_err(|e| map_tokio_postgres_error(&e))?;
     }
-    finalize_multi_statement_run(outcomes, wrap, started.elapsed().as_millis() as u64)
+    finalize_multi_statement_run(
+        outcomes,
+        statements.len(),
+        wrap,
+        started.elapsed().as_millis() as u64,
+    )
 }
 
 async fn run_single_query(
@@ -343,11 +348,11 @@ fn map_text_messages(
 /// Combine per-statement outcomes into the IPC result shape and enrich partial failures.
 pub fn finalize_multi_statement_run(
     outcomes: Vec<Result<QueryResultData, MappedIpcError>>,
+    total_statements: usize,
     wrapped: bool,
     duration_ms: u64,
 ) -> Result<QueryResultData, MappedIpcError> {
-    let total = outcomes.len();
-    if total == 0 {
+    if outcomes.is_empty() {
         return Ok(QueryResultData {
             columns: vec![],
             column_types: vec![],
@@ -359,7 +364,7 @@ pub fn finalize_multi_statement_run(
         });
     }
 
-    if total == 1 {
+    if total_statements == 1 {
         return match outcomes.into_iter().next().expect("one outcome") {
             Ok(mut result) => {
                 result.statement_count = 0;
@@ -376,7 +381,7 @@ pub fn finalize_multi_statement_run(
             return Err(enrich_multi_statement_error(
                 error.clone(),
                 index,
-                total,
+                total_statements,
                 wrapped,
             ));
         }
@@ -914,6 +919,7 @@ mod tests {
                 Ok(sample(&[])),
                 Ok(sample(&["b"])),
             ],
+            3,
             true,
             12,
         )
@@ -923,17 +929,14 @@ mod tests {
         assert_eq!(success.columns, vec!["b"]);
         assert_eq!(success.duration_ms, 12);
 
-        let single = finalize_multi_statement_run(vec![Ok(sample(&["only"]))], false, 4)
+        let single = finalize_multi_statement_run(vec![Ok(sample(&["only"]))], 1, false, 4)
             .expect("single-statement success");
         assert_eq!(single.statement_count, 0);
         assert_eq!(single.displayed_statement_index, None);
 
         let wrapped_failure = finalize_multi_statement_run(
-            vec![
-                Ok(sample(&["a"])),
-                Err(syntax_error("bad syntax")),
-                Ok(sample(&["c"])),
-            ],
+            vec![Ok(sample(&["a"])), Err(syntax_error("bad syntax"))],
+            3,
             true,
             0,
         )
@@ -957,11 +960,8 @@ mod tests {
         );
 
         let unwrapped_failure = finalize_multi_statement_run(
-            vec![
-                Ok(sample(&[])),
-                Err(syntax_error("bad syntax")),
-                Ok(sample(&["c"])),
-            ],
+            vec![Ok(sample(&[])), Err(syntax_error("bad syntax"))],
+            3,
             false,
             0,
         )
