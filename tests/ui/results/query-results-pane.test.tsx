@@ -199,6 +199,27 @@ describe("QueryResultsPane", () => {
     expect(screen.getAllByText(ResultsCopy.unreadableBadge)).toHaveLength(1);
   });
 
+  it("filters unreadable rows by the visible Can't display badge text", async () => {
+    const user = userEvent.setup();
+    renderPane(
+      { kind: "ok", rowCount: 2, durationMs: 1 },
+      {
+        columns: ["id", "payload"],
+        rows: resultRows([
+          [1, "ok"],
+          [2, { state: "unreadable", typeName: "bytea" }],
+        ]),
+      },
+    );
+    expect(screen.getByText(ResultsCopy.unreadableBadge)).toBeInTheDocument();
+    expect(screen.getByText("ok")).toBeInTheDocument();
+
+    await user.type(screen.getByRole("searchbox"), "can't display");
+    expect(screen.getByText(ResultsCopy.unreadableBadge)).toBeInTheDocument();
+    expect(screen.queryByText("ok")).toBeNull();
+    expect(screen.getAllByRole("row").slice(1)).toHaveLength(1);
+  });
+
   it("long cells stay single-line via nowrap / overflow-x in query-results.css", () => {
     renderPane(
       { kind: "ok", rowCount: 1, durationMs: 1 },

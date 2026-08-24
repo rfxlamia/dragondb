@@ -3,6 +3,7 @@ import type { QueryResultsDateFormat } from "../../lib/date-format-setting";
 import { isNullCell, isTruncatedCell, isUnreadableCell } from "../../lib/result-cell";
 import { TRUNCATION_SUFFIX } from "../../lib/result-compactor";
 import { formatResultCell } from "./format-result-cell";
+import { resultCellGridDisplayText } from "./result-cell-grid-display-text";
 import { ResultsCopy } from "./results-copy";
 
 export function ResultCellBadge(props: {
@@ -19,7 +20,7 @@ export function ResultCellBadge(props: {
         className="query-results__cell-badge query-results__cell-badge--error"
         aria-label={ResultsCopy.unreadableAccessibleName(cell.typeName)}
       >
-        {ResultsCopy.unreadableBadge}
+        {resultCellGridDisplayText(cell, columnMetadata, dateFormat)}
       </span>
     );
   }

@@ -17,9 +17,9 @@ import {
 } from "../icons";
 import { SqlHatchCopy } from "../sql-editor/sql-hatch-copy";
 import { BrowseTimeoutContext, BrowseTimeoutDialog } from "./browse-timeout-dialog";
-import { formatResultCell } from "./format-result-cell";
 import { JsonViewer } from "./json-viewer";
 import { ResultCellBadge } from "./result-cell-badge";
+import { resultCellGridDisplayText } from "./result-cell-grid-display-text";
 import { compareResultCells, resultCellSortText } from "./result-comparator";
 import { ResultsAccessibility } from "./results-accessibility";
 import { deleteRowsPrompt, ResultsCopy } from "./results-copy";
@@ -517,7 +517,7 @@ function rowMatches(
   for (const [index] of columns.entries()) {
     const cell = cells[index];
     const columnMetadata = columnTypes[index];
-    const displayed = formatResultCell(cell, columnMetadata, dateFormat).toLowerCase();
+    const displayed = resultCellGridDisplayText(cell, columnMetadata, dateFormat).toLowerCase();
     const raw = resultCellSortText(cell).toLowerCase();
     if (displayed.includes(needle) || raw.includes(needle)) {
       return true;
