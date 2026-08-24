@@ -372,23 +372,15 @@ fn first_cell(result: &QueryResultData) -> &ResultCell {
         .unwrap_or_else(|| panic!("expected at least one cell in {:?}", result.rows))
 }
 
-#[tokio::test]
-#[ignore = "requires live PostgreSQL — set DRAGONDB_TEST_PG_URL and run with --ignored"]
-async fn framing_and_cursor_path_fidelity() {
-    if skip_if_no_pg_url() {
-        return;
-    }
-
-    let (client, _connection_task) = connect_from_env().await;
-    let fixture = TypeMatrixFixture::new();
-    fixture.setup(&client).await;
-
-    let show = run_query(&client, "SHOW timezone", &[])
+async fn assert_show_timezone_through_transport(client: &Client) {
+    let show = run_query(client, "SHOW timezone", &[])
         .await
         .expect("SHOW timezone through transport");
     assert_has_rows(&show, 1);
+}
 
-    let explain = run_query(&client, "EXPLAIN SELECT 1", &[])
+async fn assert_explain_select_through_transport(client: &Client) {
+    let explain = run_query(client, "EXPLAIN SELECT 1", &[])
         .await
         .expect("EXPLAIN SELECT 1 through transport");
     assert_has_rows(&explain, 1);
@@ -400,8 +392,10 @@ async fn framing_and_cursor_path_fidelity() {
         "expected QUERY PLAN column, got {:?}",
         explain.columns
     );
+}
 
-    let explain_json = run_query(&client, "EXPLAIN (FORMAT JSON) SELECT 1", &[])
+async fn assert_explain_json_format_through_transport(client: &Client) {
+    let explain_json = run_query(client, "EXPLAIN (FORMAT JSON) SELECT 1", &[])
         .await
         .expect("EXPLAIN (FORMAT JSON) SELECT 1 through transport");
     assert_has_rows(&explain_json, 1);
@@ -416,22 +410,28 @@ async fn framing_and_cursor_path_fidelity() {
         }
         other => panic!("expected JSON plan value, got {other:?}"),
     }
+}
 
-    let values = run_query(&client, "VALUES (1), (2)", &[])
+async fn assert_values_through_transport(client: &Client) {
+    let values = run_query(client, "VALUES (1), (2)", &[])
         .await
         .expect("VALUES (1), (2) through transport");
     assert_eq!(values.rows.len(), 2);
+}
 
-    let table = run_query(&client, &format!("TABLE {}", fixture.table_name), &[])
+async fn assert_table_through_transport(client: &Client, table_name: &str) {
+    let table = run_query(client, &format!("TABLE {}", table_name), &[])
         .await
         .expect("TABLE fixture through transport");
     assert_has_rows(&table, 2);
+}
 
+async fn assert_insert_returning_through_transport(client: &Client, table_name: &str) {
     let insert = run_query(
-        &client,
+        client,
         &format!(
             "INSERT INTO {} (name) VALUES ('cursor-test') RETURNING *",
-            fixture.table_name
+            table_name
         ),
         &[],
     )
@@ -444,12 +444,14 @@ async fn framing_and_cursor_path_fidelity() {
         matches!(insert.rows[0][id_index], ResultCell::Value { .. }),
         "generated id must be a rendered value"
     );
+}
 
+async fn assert_update_without_returning_through_transport(client: &Client, table_name: &str) {
     let update = run_query(
-        &client,
+        client,
         &format!(
             "UPDATE {} SET name = 'updated' WHERE name = 'cursor-test'",
-            fixture.table_name
+            table_name
         ),
         &[],
     )
@@ -457,18 +459,22 @@ async fn framing_and_cursor_path_fidelity() {
     .expect("UPDATE without RETURNING through transport");
     assert_no_result_grid(&update);
     assert_eq!(update.rows_affected, Some(1));
+}
 
-    let set = run_query(&client, "SET search_path TO public", &[])
+async fn assert_set_without_rows_through_transport(client: &Client) {
+    let set = run_query(client, "SET search_path TO public", &[])
         .await
         .expect("SET search_path TO public through transport");
     assert_no_result_grid(&set);
     assert_eq!(set.rows_affected, Some(0));
+}
 
-    let unparameterized = run_query(&client, "SELECT 'ab'::char(6) AS padded", &[])
+async fn assert_char6_cursor_path_parity(client: &Client) {
+    let unparameterized = run_query(client, "SELECT 'ab'::char(6) AS padded", &[])
         .await
         .expect("unparameterized char(6) through transport");
     let parameterized = run_query(
-        &client,
+        client,
         "SELECT $1::char(6) AS padded",
         &[JsonValue::String("ab".into())],
     )
@@ -476,6 +482,28 @@ async fn framing_and_cursor_path_fidelity() {
     .expect("parameterized char(6) through cursor path");
     assert_eq!(unparameterized.rows, parameterized.rows);
     assert_cell_value(&unparameterized.rows[0][0], "ab    ");
+}
+
+#[tokio::test]
+#[ignore = "requires live PostgreSQL — set DRAGONDB_TEST_PG_URL and run with --ignored"]
+async fn framing_and_cursor_path_fidelity() {
+    if skip_if_no_pg_url() {
+        return;
+    }
+
+    let (client, _connection_task) = connect_from_env().await;
+    let fixture = TypeMatrixFixture::new();
+    fixture.setup(&client).await;
+
+    assert_show_timezone_through_transport(&client).await;
+    assert_explain_select_through_transport(&client).await;
+    assert_explain_json_format_through_transport(&client).await;
+    assert_values_through_transport(&client).await;
+    assert_table_through_transport(&client, &fixture.table_name).await;
+    assert_insert_returning_through_transport(&client, &fixture.table_name).await;
+    assert_update_without_returning_through_transport(&client, &fixture.table_name).await;
+    assert_set_without_rows_through_transport(&client).await;
+    assert_char6_cursor_path_parity(&client).await;
 
     fixture.teardown(&client).await;
 }
