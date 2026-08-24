@@ -3,6 +3,7 @@ import {
   browseSessionSnapshot,
   createBrowseSessionStore,
 } from "../../src/stores/browse-session-store";
+import { resultRows } from "../lib/result-fixture";
 
 const orders = {
   tabId: "t1",
@@ -76,20 +77,20 @@ describe("browse-session-store contract", () => {
     for (let page = 0; page < 21; page += 1) {
       store.getState().writePage(generation, page, {
         columns: ["id"],
-        rows: [[page]],
+        rows: resultRows([[page]]),
         durationMs: 1,
         hasNext: page < 20,
       });
     }
     expect(store.getState().readPage(0)).toBeNull();
-    expect(store.getState().readPage(20)?.rows).toEqual([[20]]);
+    expect(store.getState().readPage(20)?.rows).toEqual(resultRows([[20]]));
     expect(store.getState().cacheSize()).toBe(20);
 
     store.getState().invalidate();
     expect(
       store.getState().writePage(generation, 9, {
         columns: ["id"],
-        rows: [[9]],
+        rows: resultRows([[9]]),
         durationMs: 1,
         hasNext: false,
       }),

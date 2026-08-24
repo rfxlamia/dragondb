@@ -5,7 +5,7 @@ import { QUERY_FAILED_MESSAGE } from "../../src/lib/unknown-error-message";
 import { composeAppStores } from "../../src/stores/compose-app-stores";
 import { runSelectOnActiveTab } from "../../src/stores/run-select-on-active-tab";
 import { defined } from "../lib/defined";
-import { resultFixture, valueCell } from "../lib/result-fixture";
+import { resultFixture, resultRows, valueCell } from "../lib/result-fixture";
 
 const FIXTURE_SQL = { text: "SELECT 1", params: [] as unknown[] };
 
@@ -25,12 +25,7 @@ function composeIpc(overrides: Partial<DragonIpc> = {}): DragonIpc {
     disconnect: vi.fn(async () => undefined),
     listTables: vi.fn(async () => [{ name: "users", schema: "public" }]),
     listColumns: vi.fn(async () => []),
-    runQuery: vi.fn(async () => ({
-      columns: ["id"],
-      rows: [[1]],
-      rowsAffected: null,
-      durationMs: 9,
-    })),
+    runQuery: vi.fn(async () => resultFixture({ columns: ["id"], rows: [[1]], durationMs: 9 })),
     saveTabState: vi.fn(async () => undefined),
     deleteTabState: vi.fn(async () => undefined),
     listTabStates: vi.fn(async () => []),
@@ -44,7 +39,7 @@ describe("run → executing tab orchestration", () => {
     const ipc = composeIpc({
       runQuery: vi.fn(async (_cid, sql) => {
         expect(sql).toEqual(FIXTURE_SQL);
-        return { columns: ["c"], rows: [[long]], rowsAffected: null, durationMs: 12 };
+        return resultFixture({ columns: ["c"], rows: [[long]], durationMs: 12 });
       }),
     });
     const stores = composeAppStores(ipc);
@@ -54,8 +49,8 @@ describe("run → executing tab orchestration", () => {
     expect(result.durationMs).toBe(12);
     expect(stores.tabs.getState().tabs).toHaveLength(1);
     const tab = defined(stores.tabs.getState().tabs[0], "expected tab");
-    expect(tab.raw?.rows[0]?.[0]).toBe(long);
-    expect(tab.compact?.rows[0]?.[0]).toBe(compactCell(long));
+    expect(tab.raw?.rows[0]?.[0]).toEqual(valueCell(long));
+    expect(tab.compact?.rows[0]?.[0]).toEqual(valueCell(compactCell(long)));
     expect(tab.status).toEqual({ kind: "ok", rowCount: 1, durationMs: 12 });
   });
 
@@ -67,7 +62,7 @@ describe("run → executing tab orchestration", () => {
     const ipc = composeIpc({
       runQuery: vi.fn(async () => {
         await gate;
-        return { columns: ["id"], rows: [[1]], rowsAffected: null, durationMs: 5 };
+        return resultFixture({ columns: ["id"], rows: [[1]], durationMs: 5 });
       }),
     });
     const stores = composeAppStores(ipc);
@@ -94,7 +89,7 @@ describe("run → executing tab orchestration", () => {
     const ipc = composeIpc({
       runQuery: vi.fn(async () => {
         await gate;
-        return { columns: ["id"], rows: [[1]], rowsAffected: null, durationMs: 5 };
+        return resultFixture({ columns: ["id"], rows: [[1]], durationMs: 5 });
       }),
     });
     const stores = composeAppStores(ipc);
@@ -131,7 +126,7 @@ describe("run → executing tab orchestration", () => {
     const ipc = composeIpc({
       runQuery: vi.fn(async () => {
         await gate;
-        return { columns: ["id"], rows: [[1]], rowsAffected: null, durationMs: 5 };
+        return resultFixture({ columns: ["id"], rows: [[1]], durationMs: 5 });
       }),
     });
     const stores = composeAppStores(ipc);
@@ -155,7 +150,7 @@ describe("run → executing tab orchestration", () => {
     const ipc = composeIpc({
       runQuery: vi.fn(async () => {
         await gate;
-        return { columns: ["id"], rows: [[1]], rowsAffected: null, durationMs: 5 };
+        return resultFixture({ columns: ["id"], rows: [[1]], durationMs: 5 });
       }),
     });
     const stores = composeAppStores(ipc);
@@ -195,13 +190,13 @@ describe("run → executing tab orchestration", () => {
     await stores.session.getState().connect("P");
     const tab = stores.tabs.getState().createTab();
     const result = await runSelectOnActiveTab(stores, ipc, FIXTURE_SQL);
-    expect(result).toMatchObject({ columns: ["id"], rows: [[1]], durationMs: 9 });
+    expect(result).toMatchObject({ columns: ["id"], rows: resultRows([[1]]), durationMs: 9 });
     const after = defined(
       stores.tabs.getState().tabs.find((t) => t.id === tab.id),
       "expected same tab",
     );
     expect(after.status).toEqual({ kind: "ok", rowCount: 1, durationMs: 9 });
-    expect(after.raw).toEqual({ columns: ["id"], rows: [[1]] });
+    expect(after.raw).toEqual({ columns: ["id"], rows: resultRows([[1]]) });
   });
 
   it("Not connected guard throws before runQuery", async () => {

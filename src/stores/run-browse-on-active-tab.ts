@@ -67,8 +67,10 @@ function visibleBrowsePage(result: QueryResult): BrowseCachedPage {
 function cachedPageToQueryResult(page: BrowseCachedPage): QueryResult {
   return {
     columns: page.columns,
+    columnTypes: page.columns.map((name) => ({ name, typeName: "", typeOid: 0 })),
     rows: page.rows,
     rowsAffected: null,
+    statementCount: 1,
     durationMs: page.durationMs,
   };
 }

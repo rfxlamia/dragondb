@@ -9,6 +9,7 @@ import type {
   DragonIpc,
   IpcError,
   ProfileId,
+  QueryResult,
   TableRef,
 } from "./ipc/contract";
 import { coreToTableRef, tableRefToCore } from "./ipc/table-ref";
@@ -855,7 +856,7 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
 
   async function handleFetchAllTable(
     table: TableRef,
-  ): Promise<{ columns: string[]; rows: unknown[][] }> {
+  ): Promise<Pick<QueryResult, "columns" | "rows">> {
     const liveId = stores.session.getState().connectionId;
     if (liveId === null) throw new Error("Not connected");
     const result = await ipc.runQuery(

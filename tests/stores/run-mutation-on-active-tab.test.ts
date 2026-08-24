@@ -3,6 +3,7 @@ import type { DragonIpc } from "../../src/ipc/contract";
 import { detectQueryType, isMutation } from "../../src/lib/query-type-detector";
 import { composeAppStores } from "../../src/stores/compose-app-stores";
 import { runMutationOnActiveTab } from "../../src/stores/run-mutation-on-active-tab";
+import { resultFixture, resultRows } from "../lib/result-fixture";
 
 describe("runMutationOnActiveTab", () => {
   it("sets a toast for a 0-row UPDATE without replacing the SELECT grid", async () => {
@@ -13,7 +14,7 @@ describe("runMutationOnActiveTab", () => {
       disconnect: vi.fn(async () => undefined),
       listTables: vi.fn(async () => []),
       listColumns: vi.fn(async () => []),
-      runQuery: vi.fn(async () => ({ columns: [], rows: [], rowsAffected: 0, durationMs: 4 })),
+      runQuery: vi.fn(async () => resultFixture({ columns: [], rowsAffected: 0, durationMs: 4 })),
       saveTabState: vi.fn(async () => undefined),
       deleteTabState: vi.fn(async () => undefined),
       listTabStates: vi.fn(async () => []),
@@ -24,14 +25,14 @@ describe("runMutationOnActiveTab", () => {
     stores.tabs.setState((state) => ({
       tabs: state.tabs.map((tab) => ({
         ...tab,
-        compact: { columns: ["n"], rows: [[1]] },
-        raw: { columns: ["n"], rows: [[1]] },
+        compact: { columns: ["n"], rows: resultRows([[1]]) },
+        raw: { columns: ["n"], rows: resultRows([[1]]) },
         status: { kind: "ok" as const, rowCount: 1, durationMs: 1 },
       })),
     }));
     await runMutationOnActiveTab(stores, ipc, { text: "UPDATE t SET x=1 WHERE false", params: [] });
     const tab = stores.tabs.getState().tabs[0];
-    expect(tab?.compact?.rows).toEqual([[1]]);
+    expect(tab?.compact?.rows).toEqual(resultRows([[1]]));
     expect(tab).toMatchObject({
       mutationToast: expect.objectContaining({ sql: expect.stringMatching(/UPDATE/i) }),
     });

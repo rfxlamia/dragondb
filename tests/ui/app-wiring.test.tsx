@@ -65,6 +65,7 @@ import { serializeQueryDocument } from "../../src/ui/visual-query/tab-documents"
 import { WelcomeAccessibility } from "../../src/ui/welcome/welcome-accessibility";
 import { WelcomeCopy } from "../../src/ui/welcome/welcome-copy";
 import { defined } from "../lib/defined";
+import { resultFixture, resultRows } from "../lib/result-fixture";
 
 function emitTauriMenuForTest(id: MenuEventId): void {
   menuListen.emit(id);
@@ -585,12 +586,13 @@ describe("App session connect / disconnect / switch", () => {
   it("disconnect after Run preserves clause cards (store clear covered by unit oracle)", async () => {
     const user = userEvent.setup();
     const ipc = createMockDragonIpc("happy");
-    vi.spyOn(ipc, "runQuery").mockResolvedValue({
-      columns: ["id"],
-      rows: [[1]],
-      rowsAffected: null,
-      durationMs: 9,
-    });
+    vi.spyOn(ipc, "runQuery").mockResolvedValue(
+      resultFixture({
+        columns: ["id"],
+        rows: [[1]],
+        durationMs: 9,
+      }),
+    );
     render(<App ipc={ipc} />);
     await connectFirst(user, ipc);
     await user.click(await screen.findByTestId(VisualQueryAccessibility.initialAddBlock));
@@ -641,12 +643,13 @@ describe("App session connect / disconnect / switch", () => {
       },
       secrets: { password: "pw" },
     });
-    vi.spyOn(ipc, "runQuery").mockResolvedValue({
-      columns: ["id"],
-      rows: [[1]],
-      rowsAffected: null,
-      durationMs: 3,
-    });
+    vi.spyOn(ipc, "runQuery").mockResolvedValue(
+      resultFixture({
+        columns: ["id"],
+        rows: [[1]],
+        durationMs: 3,
+      }),
+    );
     render(<App ipc={ipc} />);
     await connectFirst(user, ipc);
     await user.click(await screen.findByTestId(VisualQueryAccessibility.initialAddBlock));
@@ -776,12 +779,11 @@ describe("App wiring regressions after connect (SP-4a)", () => {
     });
     const runQuery = vi.spyOn(ipc, "runQuery").mockImplementation(async () => {
       await gate;
-      return {
+      return resultFixture({
         columns: ["id"],
         rows: [[1]],
-        rowsAffected: null,
         durationMs: 9,
-      };
+      });
     });
     const listTables = vi.spyOn(ipc, "listTables");
     render(<App ipc={ipc} />);
@@ -830,12 +832,11 @@ describe("App wiring regressions after connect (SP-4a)", () => {
     });
     const runQuery = vi.spyOn(ipc, "runQuery").mockImplementation(async () => {
       await gate;
-      return {
+      return resultFixture({
         columns: ["n"],
         rows: [[99]],
-        rowsAffected: null,
         durationMs: 12,
-      };
+      });
     });
     const cancelQuery = vi.spyOn(ipc, "cancelQuery").mockResolvedValue(undefined);
     render(<App ipc={ipc} />);
@@ -1191,12 +1192,13 @@ describe("App results pane (SP-4b first slice)", () => {
     const user = userEvent.setup();
     const ipc = createMockDragonIpc("happy");
     const runQuery = vi.spyOn(ipc, "runQuery");
-    runQuery.mockResolvedValueOnce({
-      columns: ["id"],
-      rows: [[1]],
-      rowsAffected: null,
-      durationMs: 9,
-    });
+    runQuery.mockResolvedValueOnce(
+      resultFixture({
+        columns: ["id"],
+        rows: [[1]],
+        durationMs: 9,
+      }),
+    );
     runQuery.mockRejectedValueOnce({ kind: "syntax", message: "syntax near x" });
     render(<App ipc={ipc} />);
     await connectFirst(user, ipc);
@@ -1224,12 +1226,13 @@ describe("App results pane (SP-4b first slice)", () => {
     const ipc = createMockDragonIpc("happy");
     const deleteHistory = vi.spyOn(ipc, "deleteHistory");
     const clearHistory = vi.spyOn(ipc, "clearHistory");
-    vi.spyOn(ipc, "runQuery").mockResolvedValue({
-      columns: ["id"],
-      rows: [[1]],
-      rowsAffected: null,
-      durationMs: 9,
-    });
+    vi.spyOn(ipc, "runQuery").mockResolvedValue(
+      resultFixture({
+        columns: ["id"],
+        rows: [[1]],
+        durationMs: 9,
+      }),
+    );
     render(<App ipc={ipc} />);
     await connectFirst(user, ipc);
     await user.click(await screen.findByTestId(VisualQueryAccessibility.initialAddBlock));
@@ -1293,7 +1296,7 @@ describe("App results pane (SP-4b first slice)", () => {
     const ipc = createMockDragonIpc("happy");
     vi.spyOn(ipc, "runQuery").mockImplementation(async () => {
       await gate;
-      return { columns: ["id"], rows: [[1]], rowsAffected: null, durationMs: 9 };
+      return resultFixture({ columns: ["id"], rows: [[1]], durationMs: 9 });
     });
     render(
       <div style={{ overflow: "auto", height: "400px" }}>
@@ -1336,10 +1339,10 @@ describe("App results pane (SP-4b first slice)", () => {
       call += 1;
       if (call === 1) {
         await firstGate;
-        return { columns: ["id"], rows: [["first"]], rowsAffected: null, durationMs: 1 };
+        return resultFixture({ columns: ["id"], rows: [["first"]], durationMs: 1 });
       }
       await secondGate;
-      return { columns: ["id"], rows: [["second"]], rowsAffected: null, durationMs: 2 };
+      return resultFixture({ columns: ["id"], rows: [["second"]], durationMs: 2 });
     });
     render(
       <div style={{ overflow: "auto", height: "400px" }}>
@@ -1409,12 +1412,13 @@ describe("App results pane (SP-4b first slice)", () => {
   it("disconnect then reconnect same profile after a grid keeps empty copy", async () => {
     const user = userEvent.setup();
     const ipc = createMockDragonIpc("happy");
-    vi.spyOn(ipc, "runQuery").mockResolvedValue({
-      columns: ["id"],
-      rows: [[1]],
-      rowsAffected: null,
-      durationMs: 9,
-    });
+    vi.spyOn(ipc, "runQuery").mockResolvedValue(
+      resultFixture({
+        columns: ["id"],
+        rows: [[1]],
+        durationMs: 9,
+      }),
+    );
     render(<App ipc={ipc} />);
     await connectFirst(user, ipc);
     await addSelectFromUsers(user);
@@ -1438,12 +1442,13 @@ describe("App results pane (SP-4b first slice)", () => {
   it("deleting the SELECT root clears the results pane like Start over", async () => {
     const user = userEvent.setup();
     const ipc = createMockDragonIpc("happy");
-    vi.spyOn(ipc, "runQuery").mockResolvedValue({
-      columns: ["id"],
-      rows: [[1]],
-      rowsAffected: null,
-      durationMs: 9,
-    });
+    vi.spyOn(ipc, "runQuery").mockResolvedValue(
+      resultFixture({
+        columns: ["id"],
+        rows: [[1]],
+        durationMs: 9,
+      }),
+    );
     render(<App ipc={ipc} />);
     await connectFirst(user, ipc);
     await addSelectFromUsers(user);
@@ -1477,12 +1482,13 @@ describe("App results pane (SP-4b first slice)", () => {
       },
       secrets: { password: "pw" },
     });
-    vi.spyOn(ipc, "runQuery").mockResolvedValue({
-      columns: ["id"],
-      rows: [[1]],
-      rowsAffected: null,
-      durationMs: 4,
-    });
+    vi.spyOn(ipc, "runQuery").mockResolvedValue(
+      resultFixture({
+        columns: ["id"],
+        rows: [[1]],
+        durationMs: 4,
+      }),
+    );
     render(<App ipc={ipc} />);
     await connectFirst(user, ipc);
     await addSelectFromUsers(user);
@@ -1669,7 +1675,7 @@ describe("App tab bar and in-session documents", () => {
     });
     vi.spyOn(ipc, "runQuery").mockImplementation(async () => {
       await runGate;
-      return { columns: ["id"], rows: [[1], [2]], rowsAffected: null, durationMs: 4 };
+      return resultFixture({ columns: ["id"], rows: [[1], [2]], durationMs: 4 });
     });
     render(<App ipc={ipc} />);
     await connectFirst(user, ipc);
@@ -1855,12 +1861,13 @@ describe("App Queries column (SP-4b)", () => {
       savedQuery("q2", "Q2", "SELECT 2"),
     ];
     vi.spyOn(ipc, "listSavedQueries").mockImplementation(async () => library.slice());
-    vi.spyOn(ipc, "runQuery").mockResolvedValue({
-      columns: ["id"],
-      rows: Array.from({ length: 10 }, (_, i) => [i]),
-      rowsAffected: null,
-      durationMs: 8,
-    });
+    vi.spyOn(ipc, "runQuery").mockResolvedValue(
+      resultFixture({
+        columns: ["id"],
+        rows: Array.from({ length: 10 }, (_, i) => [i]),
+        durationMs: 8,
+      }),
+    );
     render(<App ipc={ipc} />);
     await connectFirst(user, ipc, { queriesTab: true });
     await addSelectFromUsers(user);
@@ -1885,12 +1892,13 @@ describe("App Queries column (SP-4b)", () => {
       savedQuery("q2", "Q2", "SELECT 2"),
     ]);
     const runQuery = vi.spyOn(ipc, "runQuery");
-    runQuery.mockResolvedValueOnce({
-      columns: ["id"],
-      rows: [[1], [2]],
-      rowsAffected: null,
-      durationMs: 3,
-    });
+    runQuery.mockResolvedValueOnce(
+      resultFixture({
+        columns: ["id"],
+        rows: [[1], [2]],
+        durationMs: 3,
+      }),
+    );
     runQuery.mockRejectedValueOnce({ kind: "syntax", message: "boom" });
     render(<App ipc={ipc} />);
     await connectFirst(user, ipc, { queriesTab: true });
@@ -1928,12 +1936,13 @@ describe("App Queries column (SP-4b)", () => {
       secrets: { password: "pw" },
     });
     vi.spyOn(ipc, "listSavedQueries").mockResolvedValue([savedQuery("q1", "Q1", "SELECT 1")]);
-    vi.spyOn(ipc, "runQuery").mockResolvedValue({
-      columns: ["id"],
-      rows: [["from-a"]],
-      rowsAffected: null,
-      durationMs: 2,
-    });
+    vi.spyOn(ipc, "runQuery").mockResolvedValue(
+      resultFixture({
+        columns: ["id"],
+        rows: [["from-a"]],
+        durationMs: 2,
+      }),
+    );
     render(<App ipc={ipc} />);
     await connectFirst(user, ipc, { queriesTab: true });
     await addSelectFromUsers(user);
@@ -1972,12 +1981,13 @@ describe("App Queries column (SP-4b)", () => {
       secrets: { password: "pw" },
     });
     vi.spyOn(ipc, "listSavedQueries").mockResolvedValue([savedQuery("q1", "Q1", "SELECT 1")]);
-    vi.spyOn(ipc, "runQuery").mockResolvedValue({
-      columns: ["id"],
-      rows: [["from-a"]],
-      rowsAffected: null,
-      durationMs: 2,
-    });
+    vi.spyOn(ipc, "runQuery").mockResolvedValue(
+      resultFixture({
+        columns: ["id"],
+        rows: [["from-a"]],
+        durationMs: 2,
+      }),
+    );
     render(<App ipc={ipc} />);
     await connectFirst(user, ipc, { queriesTab: true });
     await addSelectFromUsers(user);
@@ -2011,15 +2021,14 @@ describe("App Queries column (SP-4b)", () => {
     vi.spyOn(ipc, "runQuery").mockImplementation(async () => {
       call += 1;
       if (call === 1) {
-        return {
+        return resultFixture({
           columns: ["id"],
           rows: Array.from({ length: 10 }, (_, i) => [`q1-${i}`]),
-          rowsAffected: null,
           durationMs: 8,
-        };
+        });
       }
       await gate;
-      return { columns: ["id"], rows: [["late-q1"]], rowsAffected: null, durationMs: 9 };
+      return resultFixture({ columns: ["id"], rows: [["late-q1"]], durationMs: 9 });
     });
     render(<App ipc={ipc} />);
     await connectFirst(user, ipc, { queriesTab: true });
@@ -2783,12 +2792,13 @@ describe("App table browser host wiring", () => {
   it("clicking a listed table name browses into the results grid; mere focus does not", async () => {
     const user = userEvent.setup();
     const ipc = createMockDragonIpc("happy");
-    const runQuery = vi.spyOn(ipc, "runQuery").mockResolvedValue({
-      columns: ["id"],
-      rows: [[1]],
-      rowsAffected: null,
-      durationMs: 4,
-    });
+    const runQuery = vi.spyOn(ipc, "runQuery").mockResolvedValue(
+      resultFixture({
+        columns: ["id"],
+        rows: [[1]],
+        durationMs: 4,
+      }),
+    );
     render(<App ipc={ipc} />);
     await connectFirst(user, ipc);
     const name = await screen.findByRole("button", { name: "users" });
@@ -2871,7 +2881,7 @@ describe("App table browser host wiring", () => {
     });
     vi.spyOn(ipc, "runQuery").mockImplementation(async () => {
       await gate;
-      return { columns: ["id"], rows: [[1]], rowsAffected: null, durationMs: 1 };
+      return resultFixture({ columns: ["id"], rows: [[1]], durationMs: 1 });
     });
     render(<App ipc={ipc} />);
     await connectFirst(user, ipc);
@@ -2954,7 +2964,7 @@ describe("App table browser host wiring", () => {
       screen.getByTestId(ConnectionAccessibility.databasePicker),
       "analytics",
     );
-    release({ columns: ["id"], rows: [[99]], rowsAffected: null, durationMs: 1 });
+    release(resultFixture({ columns: ["id"], rows: [[99]], durationMs: 1 }));
 
     await waitFor(() => expect(document.title).toBe("analytics"));
     expect(screen.queryByText("99")).toBeNull();
@@ -2978,13 +2988,14 @@ describe("App table browser host wiring", () => {
   it("does not leak browse page onto the first tab after paging a second tab", async () => {
     const user = userEvent.setup();
     const ipc = createMockDragonIpc("happy");
-    const pageRows = Array.from({ length: 101 }, (_, i) => [i]);
-    const runQuery = vi.spyOn(ipc, "runQuery").mockResolvedValue({
-      columns: ["id"],
-      rows: pageRows,
-      rowsAffected: null,
-      durationMs: 1,
-    });
+    const pageRows = resultRows(Array.from({ length: 101 }, (_, i) => [i]));
+    const runQuery = vi.spyOn(ipc, "runQuery").mockResolvedValue(
+      resultFixture({
+        columns: ["id"],
+        rows: pageRows,
+        durationMs: 1,
+      }),
+    );
     render(<App ipc={ipc} />);
     await connectFirst(user, ipc);
 
@@ -3043,12 +3054,13 @@ describe("App table browser host wiring", () => {
 
   it("reuses Prev cache and Refresh invalidates before reloading", async () => {
     const ipc = createMockDragonIpc("happy");
-    vi.spyOn(ipc, "runQuery").mockResolvedValue({
-      columns: ["id"],
-      rows: Array.from({ length: 101 }, (_, index) => [index]),
-      rowsAffected: null,
-      durationMs: 1,
-    });
+    vi.spyOn(ipc, "runQuery").mockResolvedValue(
+      resultFixture({
+        columns: ["id"],
+        rows: Array.from({ length: 101 }, (_, index) => [index]),
+        durationMs: 1,
+      }),
+    );
     const user = userEvent.setup();
     render(<App ipc={ipc} />);
     await connectFirst(user, ipc);
@@ -3068,12 +3080,13 @@ describe("App table browser host wiring", () => {
   // this task covers only the admin boundary it actually owns.
   it("invalidates all pages and reloads after a successful truncate", async () => {
     const ipc = createMockDragonIpc("happy");
-    const runQuery = vi.spyOn(ipc, "runQuery").mockResolvedValue({
-      columns: ["id"],
-      rows: Array.from({ length: 101 }, (_, index) => [index]),
-      rowsAffected: null,
-      durationMs: 1,
-    });
+    const runQuery = vi.spyOn(ipc, "runQuery").mockResolvedValue(
+      resultFixture({
+        columns: ["id"],
+        rows: Array.from({ length: 101 }, (_, index) => [index]),
+        durationMs: 1,
+      }),
+    );
     const user = userEvent.setup();
     render(<App ipc={ipc} />);
     await connectFirst(user, ipc);
@@ -3096,12 +3109,13 @@ describe("App table browser host wiring", () => {
 
   it("clears identity instead of reloading a dropped table", async () => {
     const ipc = createMockDragonIpc("happy");
-    const runQuery = vi.spyOn(ipc, "runQuery").mockResolvedValue({
-      columns: ["id"],
-      rows: Array.from({ length: 101 }, (_, index) => [index]),
-      rowsAffected: null,
-      durationMs: 1,
-    });
+    const runQuery = vi.spyOn(ipc, "runQuery").mockResolvedValue(
+      resultFixture({
+        columns: ["id"],
+        rows: Array.from({ length: 101 }, (_, index) => [index]),
+        durationMs: 1,
+      }),
+    );
     const user = userEvent.setup();
     render(<App ipc={ipc} />);
     await connectFirst(user, ipc);
@@ -3120,24 +3134,27 @@ describe("App table browser host wiring", () => {
     const ipc = createMockDragonIpc("happy");
     const runQuery = vi.spyOn(ipc, "runQuery");
     runQuery
-      .mockResolvedValueOnce({
-        columns: ["id"],
-        rows: Array.from({ length: 101 }, (_, index) => [index]),
-        rowsAffected: null,
-        durationMs: 1,
-      })
-      .mockResolvedValueOnce({
-        columns: ["id"],
-        rows: Array.from({ length: 101 }, (_, index) => [index + 100]),
-        rowsAffected: null,
-        durationMs: 1,
-      })
-      .mockResolvedValueOnce({
-        columns: ["id"],
-        rows: [],
-        rowsAffected: null,
-        durationMs: 1,
-      });
+      .mockResolvedValueOnce(
+        resultFixture({
+          columns: ["id"],
+          rows: Array.from({ length: 101 }, (_, index) => [index]),
+          durationMs: 1,
+        }),
+      )
+      .mockResolvedValueOnce(
+        resultFixture({
+          columns: ["id"],
+          rows: Array.from({ length: 101 }, (_, index) => [index + 100]),
+          durationMs: 1,
+        }),
+      )
+      .mockResolvedValueOnce(
+        resultFixture({
+          columns: ["id"],
+          rows: [],
+          durationMs: 1,
+        }),
+      );
     const user = userEvent.setup();
     render(<App ipc={ipc} />);
     await connectFirst(user, ipc);
@@ -3154,12 +3171,13 @@ describe("App table browser host wiring", () => {
 
   it("keeps listColumns metadata intact through App and QueryResultsPane", async () => {
     const ipc = createMockDragonIpc("happy");
-    vi.spyOn(ipc, "runQuery").mockResolvedValue({
-      columns: ["id", "occurred_on"],
-      rows: [[42, "2026-08-18"]],
-      rowsAffected: null,
-      durationMs: 1,
-    });
+    vi.spyOn(ipc, "runQuery").mockResolvedValue(
+      resultFixture({
+        columns: ["id", "occurred_on"],
+        rows: [[42, "2026-08-18"]],
+        durationMs: 1,
+      }),
+    );
     vi.spyOn(ipc, "listColumns").mockResolvedValue([
       {
         name: "id",
@@ -3195,19 +3213,21 @@ describe("App table browser host wiring", () => {
     const updateRow = vi.spyOn(ipc, "updateRow").mockResolvedValue(undefined);
     const runQuery = vi.spyOn(ipc, "runQuery");
     runQuery
-      .mockResolvedValueOnce({
-        columns: ["id", "name"],
-        rows: [[1, "before"]],
-        rowsAffected: null,
-        durationMs: 1,
-      })
+      .mockResolvedValueOnce(
+        resultFixture({
+          columns: ["id", "name"],
+          rows: [[1, "before"]],
+          durationMs: 1,
+        }),
+      )
       .mockRejectedValueOnce(new Error("reload offline"))
-      .mockResolvedValueOnce({
-        columns: ["id", "name"],
-        rows: [[1, "after"]],
-        rowsAffected: null,
-        durationMs: 1,
-      });
+      .mockResolvedValueOnce(
+        resultFixture({
+          columns: ["id", "name"],
+          rows: [[1, "after"]],
+          durationMs: 1,
+        }),
+      );
     const user = userEvent.setup();
     render(<App ipc={ipc} />);
     await connectFirst(user, ipc);
@@ -3224,12 +3244,12 @@ describe("App table browser host wiring", () => {
     expect(runQuery).toHaveBeenCalledTimes(3);
   });
 
-  const browsePage = (start: number) => ({
-    columns: ["id"],
-    rows: Array.from({ length: 101 }, (_, index) => [start + index]),
-    rowsAffected: null,
-    durationMs: 1,
-  });
+  const browsePage = (start: number) =>
+    resultFixture({
+      columns: ["id"],
+      rows: Array.from({ length: 101 }, (_, index) => [start + index]),
+      durationMs: 1,
+    });
 
   it.each(["update", "delete"] as const)(
     "invalidates all pages and reloads after a successful %s",
@@ -3403,7 +3423,7 @@ describe("SQL cancellation that the backend rejects", () => {
     });
     const runQuery = vi.spyOn(ipc, "runQuery").mockImplementation(async () => {
       await gate;
-      return { columns: ["n"], rows: [[99]], rowsAffected: null, durationMs: 12 };
+      return resultFixture({ columns: ["n"], rows: [[99]], durationMs: 12 });
     });
     const cancelQuery = vi.spyOn(ipc, "cancelQuery").mockRejectedValue(new Error("cancel refused"));
     render(<App ipc={ipc} />);
@@ -3442,7 +3462,7 @@ describe("SQL cancellation that the backend rejects", () => {
     });
     const runQuery = vi.spyOn(ipc, "runQuery").mockImplementation(async () => {
       await gate;
-      return { columns: ["n"], rows: [[99]], rowsAffected: null, durationMs: 12 };
+      return resultFixture({ columns: ["n"], rows: [[99]], durationMs: 12 });
     });
     const cancelQuery = vi.spyOn(ipc, "cancelQuery").mockRejectedValue(new Error("cancel refused"));
     render(<App ipc={ipc} />);

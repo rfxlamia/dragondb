@@ -16,6 +16,7 @@ import {
   type VisualQueryCanvasHandle,
 } from "../../../src/ui/visual-query/canvas";
 import { VisualQueryCopy } from "../../../src/ui/visual-query/copy";
+import { resultFixture } from "../../lib/result-fixture";
 
 afterEach(() => {
   cleanup();
@@ -110,12 +111,9 @@ describe("VisualQueryCanvas layout chrome", () => {
   it("toolbar Run query in SQL mode submits the hatch buffer, not generated visual SQL", async () => {
     const user = userEvent.setup();
     const onRunQuery = vi.fn();
-    const onRunSql = vi.fn(async () => ({
-      columns: [],
-      rows: [],
-      rowsAffected: 0,
-      durationMs: 1,
-    }));
+    const onRunSql = vi.fn(async () =>
+      resultFixture({ columns: [], rowsAffected: 0, durationMs: 1 }),
+    );
     render(
       <VisualQueryCanvas
         tables={tables}
@@ -582,12 +580,9 @@ describe("VisualQueryCanvas full lock + Run (SP-2)", () => {
 
   it("Run SELECT calls onRunQuery with exec SQL and does not show OK / N rows / ms", async () => {
     const user = userEvent.setup();
-    const onRunQuery = vi.fn(async (_sql: { text: string; params: unknown[] }) => ({
-      columns: ["id"],
-      rows: [[1], [2]],
-      rowsAffected: null,
-      durationMs: 17,
-    }));
+    const onRunQuery = vi.fn(async (_sql: { text: string; params: unknown[] }) =>
+      resultFixture({ columns: ["id"], rows: [[1], [2]], durationMs: 17 }),
+    );
     render(
       <VisualQueryCanvas
         tables={tables}
@@ -621,12 +616,9 @@ describe("VisualQueryCanvas full lock + Run (SP-2)", () => {
 
   it("Run SELECT with 0 rows does not show OK / 0 rows / X ms", async () => {
     const user = userEvent.setup();
-    const onRunQuery = vi.fn(async () => ({
-      columns: ["id"],
-      rows: [],
-      rowsAffected: 0,
-      durationMs: 4,
-    }));
+    const onRunQuery = vi.fn(async () =>
+      resultFixture({ columns: ["id"], rowsAffected: 0, durationMs: 4 }),
+    );
     render(
       <VisualQueryCanvas
         tables={tables}
@@ -652,12 +644,9 @@ describe("VisualQueryCanvas full lock + Run (SP-2)", () => {
 
   it("clears stale Run success status when disconnected", async () => {
     const user = userEvent.setup();
-    const onRunQuery = vi.fn(async () => ({
-      columns: ["id"],
-      rows: [[1]],
-      rowsAffected: null,
-      durationMs: 9,
-    }));
+    const onRunQuery = vi.fn(async () =>
+      resultFixture({ columns: ["id"], rows: [[1]], durationMs: 9 }),
+    );
     const { rerender } = render(
       <VisualQueryCanvas
         tables={tables}
@@ -783,7 +772,7 @@ describe("VisualQueryCanvas full lock + Run (SP-2)", () => {
     await waitFor(() => expect(onRunQuery).toHaveBeenCalledTimes(1));
     await user.click(screen.getByTestId(VisualQueryAccessibility.startOver));
     expect(onClearTabResults).toHaveBeenCalled();
-    resolveRun({ columns: ["id"], rows: [[1]], rowsAffected: null, durationMs: 9 });
+    resolveRun(resultFixture({ columns: ["id"], rows: [[1]], durationMs: 9 }));
     await waitFor(() =>
       expect(document.querySelector(".vq-canvas__status")?.textContent ?? "").not.toMatch(
         /OK\s*\//i,

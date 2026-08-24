@@ -7,6 +7,7 @@ import { composeAppStores } from "../../src/stores/compose-app-stores";
 import { runMutationOnActiveTab } from "../../src/stores/run-mutation-on-active-tab";
 import { runSelectOnActiveTab } from "../../src/stores/run-select-on-active-tab";
 import { defined } from "../lib/defined";
+import { resultFixture } from "../lib/result-fixture";
 
 const LONG_SELECT = { text: "SELECT pg_sleep(60)", params: [] as unknown[] };
 const DELETE_MUTATION = { text: "DELETE FROM users WHERE id = 1", params: [] as unknown[] };
@@ -63,10 +64,10 @@ describe("cancel cross-tab runId targeting", () => {
     const { ipc, runQuery } = composeSerializedIpc(async (sql) => {
       if (sql.includes("pg_sleep")) {
         await longQueryGate;
-        return { columns: ["n"], rows: [[1]], rowsAffected: null, durationMs: 5 };
+        return resultFixture({ columns: ["n"], rows: [[1]], durationMs: 5 });
       }
       completedQueries += 1;
-      return { columns: [], rows: [], rowsAffected: 1, durationMs: 3 };
+      return resultFixture({ columns: [], rowsAffected: 1, durationMs: 3 });
     });
 
     const stores = composeAppStores(ipc);
@@ -113,9 +114,9 @@ describe("cancel cross-tab runId targeting", () => {
     const { ipc, runQuery } = composeSerializedIpc(async (sql) => {
       if (sql.includes("pg_sleep")) {
         await longQueryGate;
-        return { columns: ["n"], rows: [[1]], rowsAffected: null, durationMs: 5 };
+        return resultFixture({ columns: ["n"], rows: [[1]], durationMs: 5 });
       }
-      return { columns: [], rows: [], rowsAffected: 1, durationMs: 3 };
+      return resultFixture({ columns: [], rowsAffected: 1, durationMs: 3 });
     });
 
     const stores = composeAppStores(ipc);

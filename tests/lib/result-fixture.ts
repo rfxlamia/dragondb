@@ -1,9 +1,22 @@
 import type { QueryResult, ResultCell, ResultColumn, ValueCell } from "../../src/ipc/contract";
 
-type ResultFixtureOptions = Partial<QueryResult> & Pick<QueryResult, "columns">;
+type FixtureValue = ResultCell | string | number | boolean | bigint;
+
+type ResultFixtureOptions = Omit<Partial<QueryResult>, "rows"> &
+  Pick<QueryResult, "columns"> & {
+    rows?: FixtureValue[][];
+  };
 
 export function valueCell(value: string | number | boolean | bigint): ValueCell {
   return { state: "value", text: String(value) };
+}
+
+export function resultRows(rows: FixtureValue[][]): ResultCell[][] {
+  return rows.map((row) =>
+    row.map((cell) =>
+      cell == null || (typeof cell === "object" && "state" in cell) ? cell : valueCell(cell),
+    ),
+  );
 }
 
 function defaultColumnType(name: string): ResultColumn {
@@ -15,7 +28,7 @@ export function resultFixture(options: ResultFixtureOptions): QueryResult {
   return {
     columns,
     columnTypes: options.columnTypes ?? columns.map(defaultColumnType),
-    rows: options.rows ?? ([] as ResultCell[][]),
+    rows: options.rows == null ? [] : resultRows(options.rows),
     rowsAffected: options.rowsAffected ?? null,
     statementCount: options.statementCount ?? 1,
     durationMs: options.durationMs ?? 0,
