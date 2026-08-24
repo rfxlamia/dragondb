@@ -14,6 +14,7 @@ pub mod result_cell;
 pub mod row_ops;
 pub mod ssl;
 pub mod table_admin;
+pub mod text_transport;
 
 pub use cancel::{query_cancelled_error, CancelRegistry};
 pub use catalog::{
