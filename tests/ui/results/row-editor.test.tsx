@@ -114,7 +114,86 @@ describe("RowEditor", () => {
     await user.click(nullToggle);
     expect(screen.getByLabelText("note")).toHaveValue("keep me");
     await user.click(screen.getByRole("button", { name: ResultsCopy.save }));
-    expect(onSubmit).toHaveBeenCalledWith({ note: "keep me" });
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(screen.getByRole("status")).toHaveTextContent("Nothing changed");
+  });
+
+  describe("only changed columns are sent", () => {
+    const editColumns = [
+      column({ name: "name" }),
+      column({ name: "created_at", dataType: "date" }),
+      column({ name: "note", isNullable: true }),
+    ];
+
+    it("sends only the column the user edited", async () => {
+      const user = userEvent.setup();
+      const onSubmit = vi.fn();
+      render(
+        <RowEditor
+          selectedCount={1}
+          columns={editColumns}
+          values={["ada", "2026-08-03", "hello"]}
+          onSubmit={onSubmit}
+        />,
+      );
+      await user.clear(screen.getByLabelText("name"));
+      await user.type(screen.getByLabelText("name"), "grace");
+      await user.click(screen.getByRole("button", { name: ResultsCopy.save }));
+      expect(onSubmit).toHaveBeenCalledTimes(1);
+      expect(onSubmit).toHaveBeenCalledWith({ name: "grace" });
+    });
+
+    it("does not send a column after NULL is toggled on and back off", async () => {
+      const user = userEvent.setup();
+      const onSubmit = vi.fn();
+      render(
+        <RowEditor
+          selectedCount={1}
+          columns={editColumns}
+          values={["ada", "2026-08-03", "hello"]}
+          onSubmit={onSubmit}
+        />,
+      );
+      const nullToggle = screen.getByLabelText(ResultsCopy.setNullFor("note"));
+      await user.click(nullToggle);
+      await user.click(nullToggle);
+      await user.click(screen.getByRole("button", { name: ResultsCopy.save }));
+      expect(onSubmit).not.toHaveBeenCalled();
+      expect(screen.getByRole("status")).toHaveTextContent("Nothing changed");
+    });
+
+    it("sends NULL when the user explicitly marks a column NULL", async () => {
+      const user = userEvent.setup();
+      const onSubmit = vi.fn();
+      render(
+        <RowEditor
+          selectedCount={1}
+          columns={editColumns}
+          values={["ada", "2026-08-03", "hello"]}
+          onSubmit={onSubmit}
+        />,
+      );
+      await user.click(screen.getByLabelText(ResultsCopy.setNullFor("note")));
+      await user.click(screen.getByRole("button", { name: ResultsCopy.save }));
+      expect(onSubmit).toHaveBeenCalledTimes(1);
+      expect(onSubmit).toHaveBeenCalledWith({ note: null });
+    });
+
+    it("does not submit when nothing was edited", async () => {
+      const user = userEvent.setup();
+      const onSubmit = vi.fn();
+      render(
+        <RowEditor
+          selectedCount={1}
+          columns={editColumns}
+          values={["ada", "2026-08-03", "hello"]}
+          onSubmit={onSubmit}
+        />,
+      );
+      await user.click(screen.getByRole("button", { name: ResultsCopy.save }));
+      expect(onSubmit).not.toHaveBeenCalled();
+      expect(screen.getByRole("status")).toHaveTextContent("Nothing changed");
+    });
   });
 
   it("keeps a failed draft and blocks duplicate Save while pending", async () => {
