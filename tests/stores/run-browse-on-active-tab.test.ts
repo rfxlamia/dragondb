@@ -27,6 +27,78 @@ function composeIpc(overrides: Partial<DragonIpc> = {}): DragonIpc {
 }
 
 describe("runBrowseOnActiveTab", () => {
+  const columnTypes = [
+    { name: "id", typeName: "int4", typeOid: 23 },
+    { name: "created_at", typeName: "timestamptz", typeOid: 1184 },
+  ];
+
+  function metadataResult(start: number): QueryResult {
+    return {
+      columns: ["id", "created_at"],
+      columnTypes,
+      rows: resultRows(
+        Array.from({ length: 101 }, (_, index) => [start + index, "2026-08-24 14:00:00+07"]),
+      ),
+      rowsAffected: 3,
+      statementCount: 2,
+      displayedStatementIndex: 2,
+      durationMs: 9,
+    };
+  }
+
+  it("carries result metadata and statement status on a fresh browse page", async () => {
+    const ipc = composeIpc({ runQuery: vi.fn(async () => metadataResult(0)) });
+    const stores = composeAppStores(ipc);
+    await stores.session.getState().connect("P");
+
+    await runBrowseOnActiveTab(
+      stores,
+      ipc,
+      { schema: "public", name: "orders", tableType: "regular" },
+      0,
+    );
+
+    const tab = stores.tabs.getState().tabs[0];
+    expect(tab?.status).toMatchObject({
+      kind: "ok",
+      rowsAffected: 3,
+      statementCount: 2,
+      statementIndex: 2,
+    });
+    expect(tab?.raw?.columnTypes).toEqual(columnTypes);
+  });
+
+  it("preserves result metadata through the browse page cache round trip", async () => {
+    const runQuery = vi
+      .fn()
+      .mockResolvedValueOnce(metadataResult(0))
+      .mockResolvedValueOnce(metadataResult(100));
+    const ipc = composeIpc({ runQuery });
+    const stores = composeAppStores(ipc);
+    await stores.session.getState().connect("P");
+    const table = { schema: "public", name: "orders", tableType: "regular" as const };
+
+    await runBrowseOnActiveTab(stores, ipc, table, 0);
+    await runBrowseOnActiveTab(stores, ipc, table, 1);
+    const cachedResult = await runBrowseOnActiveTab(stores, ipc, table, 0);
+
+    expect(runQuery).toHaveBeenCalledTimes(2);
+    expect(cachedResult).toMatchObject({
+      columnTypes,
+      rowsAffected: 3,
+      statementCount: 2,
+      displayedStatementIndex: 2,
+    });
+    const tab = stores.tabs.getState().tabs[0];
+    expect(tab?.status).toMatchObject({
+      kind: "ok",
+      rowsAffected: 3,
+      statementCount: 2,
+      statementIndex: 2,
+    });
+    expect(tab?.raw?.columnTypes).toEqual(columnTypes);
+  });
+
   it("page 0 requests LIMIT 101, displays ≤100, sets selectedTable", async () => {
     const ipc = composeIpc();
     const stores = composeAppStores(ipc);

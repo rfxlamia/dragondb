@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { DragonIpc } from "../../src/ipc/contract";
+import type { DragonIpc, QueryResult } from "../../src/ipc/contract";
 import { composeAppStores } from "../../src/stores/compose-app-stores";
 import { runSqlOnActiveTab } from "../../src/stores/run-sql-on-active-tab";
 import { resultFixture, resultRows } from "../lib/result-fixture";
@@ -61,5 +61,42 @@ describe("runSqlOnActiveTab", () => {
     await runSqlOnActiveTab(stores, ipc, sql);
     expect(ipc.runQuery).toHaveBeenCalledOnce();
     expect(ipc.runQuery).toHaveBeenCalledWith("c1", sql, expect.any(Number));
+  });
+
+  it("carries result metadata and statement status through the select adapter", async () => {
+    const columnTypes = [
+      { name: "id", typeName: "int4", typeOid: 23 },
+      { name: "created_at", typeName: "timestamptz", typeOid: 1184 },
+    ];
+    const result: QueryResult = {
+      columns: ["id", "created_at"],
+      columnTypes,
+      rows: resultRows([[1, "2026-08-24 14:00:00+07"]]),
+      rowsAffected: 3,
+      statementCount: 2,
+      displayedStatementIndex: 2,
+      durationMs: 7,
+    };
+    const ipc = composeIpc({ runQuery: vi.fn(async () => result) });
+    const stores = composeAppStores(ipc);
+    await stores.session.getState().connect("P");
+    stores.tabs.getState().createTab();
+
+    await runSqlOnActiveTab(stores, ipc, {
+      text: "UPDATE orders SET archived = true; SELECT id, created_at FROM orders",
+      params: [],
+    });
+
+    const tab = stores.tabs.getState().tabs[0];
+    expect(tab?.status).toMatchObject({
+      kind: "ok",
+      rowsAffected: 3,
+      statementCount: 2,
+      statementIndex: 2,
+    });
+    expect(tab?.raw).toMatchObject({
+      columns: ["id", "created_at"],
+      columnTypes,
+    });
   });
 });

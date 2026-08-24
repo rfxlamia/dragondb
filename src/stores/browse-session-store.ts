@@ -1,5 +1,5 @@
 import { createStore, type StoreApi } from "zustand/vanilla";
-import type { ConnectionId, ResultCell, TableRef } from "../ipc/contract";
+import type { ConnectionId, QueryResult, ResultCell, TableRef } from "../ipc/contract";
 
 export const BROWSE_PAGE_CACHE_LIMIT = 20;
 export const BROWSE_VISIBLE_PAGE_SIZE = 100;
@@ -51,7 +51,12 @@ export type BrowsePublishPatch = {
   hasNext?: boolean;
 };
 
-export type BrowseCachedPage = {
+type BrowseCachedResultMetadata = Partial<
+  Pick<QueryResult, "columnTypes" | "rowsAffected" | "statementCount" | "displayedStatementIndex">
+>;
+
+/** Result metadata stays optional so callers constructing legacy cache pages remain compatible. */
+export type BrowseCachedPage = BrowseCachedResultMetadata & {
   columns: string[];
   rows: ResultCell[][];
   durationMs: number;
@@ -258,7 +263,13 @@ export function createBrowseSessionStore(): StoreApi<BrowseSessionState> {
       const key = browsePageCacheKey(identity, page);
       const stored: BrowseCachedPage = {
         columns: [...entry.columns],
+        ...(entry.columnTypes !== undefined ? { columnTypes: [...entry.columnTypes] } : {}),
         rows: entry.rows.slice(0, BROWSE_VISIBLE_PAGE_SIZE),
+        ...(entry.rowsAffected !== undefined ? { rowsAffected: entry.rowsAffected } : {}),
+        ...(entry.statementCount !== undefined ? { statementCount: entry.statementCount } : {}),
+        ...(entry.displayedStatementIndex !== undefined
+          ? { displayedStatementIndex: entry.displayedStatementIndex }
+          : {}),
         durationMs: entry.durationMs,
         hasNext: entry.hasNext,
       };

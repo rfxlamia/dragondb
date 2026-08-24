@@ -126,6 +126,7 @@ export interface QueryResult {
   rows: ResultCell[][];
   rowsAffected: number | null;
   statementCount: number;
+  displayedStatementIndex?: number;
   durationMs: number;
 }
 

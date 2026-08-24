@@ -55,7 +55,11 @@ export async function runSelectOnActiveTab(
         executingTabId,
         {
           columns: result.columns,
+          columnTypes: result.columnTypes,
           rows: result.rows,
+          ...(result.rowsAffected !== null ? { rowsAffected: result.rowsAffected } : {}),
+          statementCount: result.statementCount,
+          statementIndex: result.displayedStatementIndex,
           durationMs: result.durationMs,
         },
         gen,

@@ -58,7 +58,11 @@ function liveBrowseIdentity(stores: AppStores, table: TableRef): BrowseIdentity 
 function visibleBrowsePage(result: QueryResult): BrowseCachedPage {
   return {
     columns: result.columns,
+    columnTypes: result.columnTypes,
     rows: result.rows.slice(0, PAGE_SIZE),
+    ...(result.rowsAffected !== null ? { rowsAffected: result.rowsAffected } : {}),
+    statementCount: result.statementCount,
+    displayedStatementIndex: result.displayedStatementIndex,
     durationMs: result.durationMs,
     hasNext: result.rows.length > PAGE_SIZE,
   };
@@ -67,10 +71,14 @@ function visibleBrowsePage(result: QueryResult): BrowseCachedPage {
 function cachedPageToQueryResult(page: BrowseCachedPage): QueryResult {
   return {
     columns: page.columns,
-    columnTypes: page.columns.map((name) => ({ name, typeName: "", typeOid: 0 })),
+    columnTypes:
+      page.columnTypes ?? page.columns.map((name) => ({ name, typeName: "", typeOid: 0 })),
     rows: page.rows,
-    rowsAffected: null,
-    statementCount: 1,
+    rowsAffected: page.rowsAffected ?? null,
+    statementCount: page.statementCount ?? 1,
+    ...(page.displayedStatementIndex !== undefined
+      ? { displayedStatementIndex: page.displayedStatementIndex }
+      : {}),
     durationMs: page.durationMs,
   };
 }
@@ -84,14 +92,20 @@ async function publishBrowsePageToTab(
 ): Promise<void> {
   if (!stores.session.getState().isConnected || tabGeneration === null) return;
   try {
-    await stores.tabs
-      .getState()
-      .applyRunSuccess(
-        tabId,
-        { columns: page.columns, rows: page.rows, durationMs: page.durationMs },
-        tabGeneration,
-        { displayRowLimit: PAGE_SIZE, selectedTable: table },
-      );
+    await stores.tabs.getState().applyRunSuccess(
+      tabId,
+      {
+        columns: page.columns,
+        columnTypes: page.columnTypes,
+        rows: page.rows,
+        ...(page.rowsAffected != null ? { rowsAffected: page.rowsAffected } : {}),
+        statementCount: page.statementCount,
+        statementIndex: page.displayedStatementIndex,
+        durationMs: page.durationMs,
+      },
+      tabGeneration,
+      { displayRowLimit: PAGE_SIZE, selectedTable: table },
+    );
   } catch {
     /* in-memory result is authoritative; persistence is best-effort */
   }

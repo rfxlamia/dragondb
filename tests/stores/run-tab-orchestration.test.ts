@@ -196,7 +196,11 @@ describe("run → executing tab orchestration", () => {
       "expected same tab",
     );
     expect(after.status).toEqual({ kind: "ok", rowCount: 1, durationMs: 9 });
-    expect(after.raw).toEqual({ columns: ["id"], rows: resultRows([[1]]) });
+    expect(after.raw).toEqual({
+      columns: ["id"],
+      columnTypes: [{ name: "id", typeName: "text", typeOid: 25 }],
+      rows: resultRows([[1]]),
+    });
   });
 
   it("Not connected guard throws before runQuery", async () => {
