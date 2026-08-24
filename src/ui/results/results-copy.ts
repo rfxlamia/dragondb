@@ -6,6 +6,10 @@ export const ResultsCopy = {
   queryFailedTitle: "Query Failed",
   cancelFailed: "Couldn't cancel this query. Reconnect, then try again.",
   nullToken: "NULL",
+  unreadableBadge: "Can't display",
+  unreadableAccessibleName(typeName: string): string {
+    return `DragonDB couldn't read this ${typeName} value. The row is unchanged in the database.`;
+  },
   multipleRowsSelected: "Multiple Rows Selected",
   selectOnlyOneRow: "Please select only one row to edit at a time.",
   filterPlaceholder: "Filter results",
