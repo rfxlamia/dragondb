@@ -14,6 +14,7 @@ import { composeAppStores } from "../../src/stores/compose-app-stores";
 import { createLibraryStore } from "../../src/stores/library-store";
 import { createSessionStore } from "../../src/stores/session-store";
 import { createTabsStore } from "../../src/stores/tabs-store";
+import { resultRows } from "../lib/result-fixture";
 
 type SaveTabOpts = { includeCachedResults?: boolean };
 
@@ -149,7 +150,7 @@ describe("SP-3 audit — pending-deleted TOCTOU (AC Tabs)", () => {
 
     const persistPromise = store.getState().applyRunSuccess("gone", {
       columns: ["id"],
-      rows: [[1]],
+      rows: resultRows([[1]]),
       durationMs: 1,
     });
     // Close while persist awaits IPC

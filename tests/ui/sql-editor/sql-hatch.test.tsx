@@ -10,6 +10,7 @@ import { QueryResultsPane } from "../../../src/ui/results/query-results-pane";
 import { ResultsAccessibility } from "../../../src/ui/results/results-accessibility";
 import { SqlHatch, shouldHighlightSql } from "../../../src/ui/sql-editor/sql-hatch";
 import { SqlHatchCopy } from "../../../src/ui/sql-editor/sql-hatch-copy";
+import { resultRows } from "../../lib/result-fixture";
 
 afterEach(() => cleanup());
 
@@ -88,7 +89,7 @@ describe("SqlHatch", () => {
     const [status, setStatus] = useState<TabRunStatus>({ kind: "running" });
     const [compact, setCompact] = useState<TabResultGrid | null>({
       columns: ["n"],
-      rows: [[1]],
+      rows: resultRows([[1]]),
     });
     return (
       <>

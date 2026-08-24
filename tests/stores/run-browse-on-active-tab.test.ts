@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DragonIpc, QueryResult } from "../../src/ipc/contract";
 import { composeAppStores } from "../../src/stores/compose-app-stores";
 import { runBrowseOnActiveTab } from "../../src/stores/run-browse-on-active-tab";
+import { resultFixture, resultRows } from "../lib/result-fixture";
 
 function composeIpc(overrides: Partial<DragonIpc> = {}): DragonIpc {
   return {
@@ -9,12 +10,13 @@ function composeIpc(overrides: Partial<DragonIpc> = {}): DragonIpc {
     disconnect: vi.fn(async () => undefined),
     listTables: vi.fn(async () => [{ name: "orders", schema: "public", tableType: "regular" }]),
     listColumns: vi.fn(async () => []),
-    runQuery: vi.fn(async () => ({
-      columns: ["id"],
-      rows: Array.from({ length: 101 }, (_, i) => [i]),
-      rowsAffected: null,
-      durationMs: 9,
-    })),
+    runQuery: vi.fn(async () =>
+      resultFixture({
+        columns: ["id"],
+        rows: Array.from({ length: 101 }, (_, i) => [i]),
+        durationMs: 9,
+      }),
+    ),
     saveTabState: vi.fn(async () => undefined),
     deleteTabState: vi.fn(async () => undefined),
     listTabStates: vi.fn(async () => []),
@@ -68,9 +70,9 @@ describe("runBrowseOnActiveTab", () => {
       .fn()
       .mockImplementationOnce(async () => {
         await gate;
-        return { columns: ["id"], rows: [[1]], rowsAffected: null, durationMs: 1 };
+        return resultFixture({ columns: ["id"], rows: [[1]], durationMs: 1 });
       })
-      .mockResolvedValueOnce({ columns: ["id"], rows: [[2]], rowsAffected: null, durationMs: 1 });
+      .mockResolvedValueOnce(resultFixture({ columns: ["id"], rows: [[2]], durationMs: 1 }));
     const ipc = composeIpc({ runQuery });
     const stores = composeAppStores(ipc);
     await stores.session.getState().connect("P");
@@ -90,7 +92,7 @@ describe("runBrowseOnActiveTab", () => {
     await Promise.all([first, second]);
     const tab = stores.tabs.getState().tabs[0];
     expect(tab?.selectedTableName).toBe("customers");
-    expect(tab?.raw?.rows).toEqual([[2]]);
+    expect(tab?.raw?.rows).toEqual(resultRows([[2]]));
   });
 
   it("serves a visited page from cache without a second query", async () => {
@@ -124,12 +126,13 @@ describe("runBrowseOnActiveTab", () => {
     const first = runBrowseOnActiveTab(stores, ipc, table, 2);
     const second = runBrowseOnActiveTab(stores, ipc, table, 2);
     expect(runQuery).toHaveBeenCalledTimes(1);
-    release({
-      columns: ["id"],
-      rows: Array.from({ length: 101 }, (_, index) => [index]),
-      rowsAffected: null,
-      durationMs: 1,
-    });
+    release(
+      resultFixture({
+        columns: ["id"],
+        rows: Array.from({ length: 101 }, (_, index) => [index]),
+        durationMs: 1,
+      }),
+    );
     await Promise.all([first, second]);
     expect(stores.browse.getState().hasNext).toBe(true);
     expect(stores.tabs.getState().tabs[0]?.compact?.rows).toHaveLength(100);
@@ -137,12 +140,12 @@ describe("runBrowseOnActiveTab", () => {
 
   it("lets a valid late page fill only its own cache entry", async () => {
     const releases: Array<(result: QueryResult) => void> = [];
-    const page = (start: number): QueryResult => ({
-      columns: ["id"],
-      rows: Array.from({ length: 101 }, (_, index) => [start + index]),
-      rowsAffected: null,
-      durationMs: 1,
-    });
+    const page = (start: number): QueryResult =>
+      resultFixture({
+        columns: ["id"],
+        rows: Array.from({ length: 101 }, (_, index) => [start + index]),
+        durationMs: 1,
+      });
     const runQuery = vi.fn(
       () =>
         new Promise<QueryResult>((resolve) => {
@@ -164,11 +167,11 @@ describe("runBrowseOnActiveTab", () => {
     await slow;
 
     // Page 1 is still a valid entry for this identity, so it may cache …
-    expect(stores.browse.getState().readPage(1)?.rows[0]).toEqual([100]);
+    expect(stores.browse.getState().readPage(1)?.rows[0]).toEqual(resultRows([[100]])[0]);
     // … but page 2 stays the visible page and the rendered result.
     // T3 ruling: visible page lives on the active tab, not browse.page.
     expect(stores.tabs.getState().tabs[0]?.browsePage).toBe(2);
-    expect(stores.tabs.getState().tabs[0]?.raw?.rows[0]).toEqual([200]);
+    expect(stores.tabs.getState().tabs[0]?.raw?.rows[0]).toEqual(resultRows([[200]])[0]);
   });
 });
 
@@ -212,7 +215,7 @@ describe("browse timeout", () => {
     const runQuery = vi
       .fn()
       .mockImplementationOnce(() => new Promise<QueryResult>(() => {}))
-      .mockResolvedValue({ columns: ["id"], rows: [[7]], rowsAffected: null, durationMs: 1 });
+      .mockResolvedValue(resultFixture({ columns: ["id"], rows: [[7]], durationMs: 1 }));
     const cancelQuery = vi.fn(
       () =>
         new Promise<void>((resolve) => {
@@ -277,9 +280,9 @@ describe("browse timeout", () => {
       { schema: "public", name: "orders", tableType: "regular" },
       0,
     );
-    releaseQuery({ columns: ["id"], rows: [[1]], rowsAffected: null, durationMs: 300_000 });
+    releaseQuery(resultFixture({ columns: ["id"], rows: [[1]], durationMs: 300_000 }));
     await vi.advanceTimersByTimeAsync(300_000);
-    await expect(request).resolves.toMatchObject({ rows: [[1]] });
+    await expect(request).resolves.toMatchObject({ rows: resultRows([[1]]) });
     expect(ipc.cancelQuery).not.toHaveBeenCalled();
     expect(stores.browse.getState().lifecycle.phase).toBe("ready");
   });
@@ -328,9 +331,9 @@ describe("browse timeout", () => {
     const timedOut = expect(request).rejects.toMatchObject({ name: "BrowseTimeoutError" });
     await vi.advanceTimersByTimeAsync(300_000);
     await timedOut;
-    releaseQuery({ columns: ["id"], rows: [[999]], rowsAffected: null, durationMs: 300_001 });
+    releaseQuery(resultFixture({ columns: ["id"], rows: [[999]], durationMs: 300_001 }));
     await vi.advanceTimersByTimeAsync(0);
-    expect(stores.tabs.getState().tabs[0]?.raw?.rows).not.toEqual([[999]]);
+    expect(stores.tabs.getState().tabs[0]?.raw?.rows).not.toEqual(resultRows([[999]]));
     expect(stores.browse.getState().cacheSize()).toBe(0);
   });
 });

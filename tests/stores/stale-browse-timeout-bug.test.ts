@@ -14,16 +14,16 @@ import { browseRetryOf } from "../../src/stores/browse-session-store";
 import { composeAppStores } from "../../src/stores/compose-app-stores";
 import { BROWSE_TIMEOUT_MS } from "../../src/stores/recover-browse-after-timeout";
 import { runBrowseOnActiveTab } from "../../src/stores/run-browse-on-active-tab";
+import { resultFixture } from "../lib/result-fixture";
 
 const TABLE_A: TableRef = { schema: "public", name: "hangs", tableType: "regular" };
 const TABLE_B: TableRef = { schema: "public", name: "orders", tableType: "regular" };
 
-const PAGE_B: QueryResult = {
+const PAGE_B: QueryResult = resultFixture({
   columns: ["id"],
   rows: [[1]],
-  rowsAffected: null,
   durationMs: 4,
-};
+});
 
 function composeIpc(): DragonIpc {
   return {

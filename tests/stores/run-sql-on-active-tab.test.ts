@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { DragonIpc } from "../../src/ipc/contract";
 import { composeAppStores } from "../../src/stores/compose-app-stores";
 import { runSqlOnActiveTab } from "../../src/stores/run-sql-on-active-tab";
+import { resultFixture, resultRows } from "../lib/result-fixture";
 
 function composeIpc(overrides: Partial<DragonIpc> = {}): DragonIpc {
   return {
@@ -9,12 +10,7 @@ function composeIpc(overrides: Partial<DragonIpc> = {}): DragonIpc {
     disconnect: vi.fn(async () => undefined),
     listTables: vi.fn(async () => []),
     listColumns: vi.fn(async () => []),
-    runQuery: vi.fn(async () => ({
-      columns: ["n"],
-      rows: [[1]],
-      rowsAffected: null,
-      durationMs: 2,
-    })),
+    runQuery: vi.fn(async () => resultFixture({ columns: ["n"], rows: [[1]], durationMs: 2 })),
     saveTabState: vi.fn(async () => undefined),
     deleteTabState: vi.fn(async () => undefined),
     listTabStates: vi.fn(async () => []),
@@ -30,17 +26,12 @@ describe("runSqlOnActiveTab", () => {
     stores.tabs.getState().createTab();
     await runSqlOnActiveTab(stores, ipc, { text: "SELECT 1 AS n", params: [] });
     expect(ipc.runQuery).toHaveBeenCalledOnce();
-    expect(stores.tabs.getState().tabs[0]?.compact?.rows).toEqual([[1]]);
+    expect(stores.tabs.getState().tabs[0]?.compact?.rows).toEqual(resultRows([[1]]));
   });
 
   it("routes a 0-row UPDATE through the mutation writer (grid kept, toast set)", async () => {
     const ipc = composeIpc({
-      runQuery: vi.fn(async () => ({
-        columns: [],
-        rows: [],
-        rowsAffected: 0,
-        durationMs: 3,
-      })),
+      runQuery: vi.fn(async () => resultFixture({ columns: [], rowsAffected: 0, durationMs: 3 })),
     });
     const stores = composeAppStores(ipc);
     await stores.session.getState().connect("P");
@@ -48,12 +39,12 @@ describe("runSqlOnActiveTab", () => {
     stores.tabs.setState((s) => ({
       tabs: s.tabs.map((t) => ({
         ...t,
-        compact: { columns: ["n"], rows: [[1]] },
-        raw: { columns: ["n"], rows: [[1]] },
+        compact: { columns: ["n"], rows: resultRows([[1]]) },
+        raw: { columns: ["n"], rows: resultRows([[1]]) },
       })),
     }));
     await runSqlOnActiveTab(stores, ipc, { text: "UPDATE t SET x=1 WHERE false", params: [] });
-    expect(stores.tabs.getState().tabs[0]?.compact?.rows).toEqual([[1]]);
+    expect(stores.tabs.getState().tabs[0]?.compact?.rows).toEqual(resultRows([[1]]));
     expect(stores.tabs.getState().tabs[0]).toMatchObject({
       mutationToast: expect.objectContaining({ sql: expect.stringMatching(/UPDATE/i) }),
     });
@@ -61,12 +52,7 @@ describe("runSqlOnActiveTab", () => {
 
   it("sends a multi-statement script through runQuery once (T4 server split)", async () => {
     const ipc = composeIpc({
-      runQuery: vi.fn(async () => ({
-        columns: ["b"],
-        rows: [[2]],
-        rowsAffected: null,
-        durationMs: 5,
-      })),
+      runQuery: vi.fn(async () => resultFixture({ columns: ["b"], rows: [[2]], durationMs: 5 })),
     });
     const stores = composeAppStores(ipc);
     await stores.session.getState().connect("P");

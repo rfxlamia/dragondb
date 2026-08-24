@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { ColumnInfo, DragonIpc, TableRef } from "../../ipc/contract";
 import { TABLES_LOAD_FAILED } from "../../stores/schema-store";
 import { SearchIcon } from "../icons";
+import type { TableExportRows } from "../tables/table-export-sheet";
 import { TableList } from "../tables/table-list";
 import { TablesAccessibility } from "../tables/tables-accessibility";
 import { TablesCopy } from "../tables/tables-copy";
@@ -23,7 +24,7 @@ export function ConnectionTablesList(props: {
   onRunQuery?: (sql: string) => void;
   onRefresh?: (table: TableRef) => void;
   onExpand?: (table: TableRef) => void;
-  onFetchAll?: (table: TableRef) => Promise<{ columns: string[]; rows: unknown[][] }>;
+  onFetchAll?: (table: TableRef) => Promise<TableExportRows>;
   saveCsvFile?: DragonIpc["saveCsvFile"];
   saveTextFile?: DragonIpc["saveTextFile"];
   onBlockingChange?: (blocking: boolean) => void;

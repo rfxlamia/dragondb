@@ -1,5 +1,5 @@
 import { createStore, type StoreApi } from "zustand/vanilla";
-import type { ConnectionId, TableRef } from "../ipc/contract";
+import type { ConnectionId, ResultCell, TableRef } from "../ipc/contract";
 
 export const BROWSE_PAGE_CACHE_LIMIT = 20;
 export const BROWSE_VISIBLE_PAGE_SIZE = 100;
@@ -53,7 +53,7 @@ export type BrowsePublishPatch = {
 
 export type BrowseCachedPage = {
   columns: string[];
-  rows: unknown[][];
+  rows: ResultCell[][];
   durationMs: number;
   hasNext: boolean;
 };

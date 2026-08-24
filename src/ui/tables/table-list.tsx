@@ -5,7 +5,7 @@ import { unknownErrorMessage } from "../../lib/unknown-error-message";
 import { ChevronDownIcon, ChevronRightIcon, SearchIcon, TableIcon } from "../icons";
 import { TableContextMenu } from "./table-context-menu";
 import { TableDdlSheet } from "./table-ddl-sheet";
-import { TableExportSheet } from "./table-export-sheet";
+import { type TableExportRows, TableExportSheet } from "./table-export-sheet";
 import { TablesAccessibility } from "./tables-accessibility";
 import { TablesCopy } from "./tables-copy";
 import "./tables.css";
@@ -25,7 +25,7 @@ export type TableListProps = {
   /** Accepted so callers can pass hatch runQuery — table admin must never call it. */
   onRunQuery?: (sql: string) => void;
   onRefresh?: (table: TableRef) => void;
-  onFetchAll?: (table: TableRef) => Promise<{ columns: string[]; rows: unknown[][] }>;
+  onFetchAll?: (table: TableRef) => Promise<TableExportRows>;
   saveCsvFile?: DragonIpc["saveCsvFile"];
   saveTextFile?: DragonIpc["saveTextFile"];
   /** True while a sheet or confirm owns this list — see ConnectionPanel. */

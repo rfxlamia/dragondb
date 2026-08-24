@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { DragonIpc, IpcError } from "../../src/ipc/contract";
 import { composeAppStores } from "../../src/stores/compose-app-stores";
+import { resultRows } from "../lib/result-fixture";
 
 function baseTabDto(id: string) {
   return {
@@ -62,8 +63,8 @@ describe("composeAppStores", () => {
       tabs: [
         {
           ...baseTabDto("T"),
-          raw: { columns: ["c"], rows: [[1]] },
-          compact: { columns: ["c"], rows: [[1]] },
+          raw: { columns: ["c"], rows: resultRows([[1]]) },
+          compact: { columns: ["c"], rows: resultRows([[1]]) },
           status: { kind: "ok", rowCount: 1, durationMs: 1 },
         },
       ],
@@ -100,8 +101,8 @@ describe("composeAppStores", () => {
       tabs: [
         {
           ...baseTabDto("T"),
-          raw: { columns: ["c"], rows: [["keep-cards-not-results"]] },
-          compact: { columns: ["c"], rows: [["x"]] },
+          raw: { columns: ["c"], rows: resultRows([["keep-cards-not-results"]]) },
+          compact: { columns: ["c"], rows: resultRows([["x"]]) },
           status: { kind: "ok", rowCount: 1, durationMs: 1 },
         },
       ],

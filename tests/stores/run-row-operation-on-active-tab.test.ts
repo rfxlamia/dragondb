@@ -6,14 +6,14 @@ import {
   runDeleteRowsOnActiveTab,
   runUpdateRowOnActiveTab,
 } from "../../src/stores/run-row-operation-on-active-tab";
+import { resultFixture } from "../lib/result-fixture";
 
 const table = { schema: "public", name: "orders", tableType: "regular" as const };
-const result: QueryResult = {
+const result: QueryResult = resultFixture({
   columns: ["id", "note"],
   rows: [[1, "saved"]],
-  rowsAffected: null,
   durationMs: 1,
-};
+});
 
 function operationIpc(overrides: Partial<DragonIpc> = {}): DragonIpc {
   return {
