@@ -8,13 +8,14 @@
  * Hydration sets tabsReady after listTabStates; creates one empty tab if none remain.
  */
 import { createStore, type StoreApi } from "zustand/vanilla";
-import type { ConnectionId, DragonIpc, TabStateDto } from "../ipc/contract";
+import type { ConnectionId, DragonIpc, ResultColumn, TabStateDto } from "../ipc/contract";
 import { isValueCell } from "../lib/result-cell";
 import { compactCell } from "../lib/result-compactor";
 
 export type TabResultGrid = {
   columns: string[];
   rows: unknown[][];
+  columnTypes?: ResultColumn[];
 };
 
 export type TabRunStatus =
@@ -52,6 +53,10 @@ export type TabRunResult = {
   columns: string[];
   rows: unknown[][];
   durationMs: number;
+  columnTypes?: ResultColumn[];
+  rowsAffected?: number | null;
+  statementCount?: number;
+  statementIndex?: number;
 };
 
 export type TabsState = {
@@ -147,22 +152,48 @@ function emptyTab(
   });
 }
 
-function parseCachedResults(data: string | null): TabResultGrid | null {
-  if (data == null || data === "") return null;
+type ParsedCachedResults =
+  | { kind: "new"; grid: TabResultGrid }
+  | { kind: "previous" }
+  | { kind: "invalid" };
+
+function parseCachedResults(data: string | null): ParsedCachedResults {
+  if (data == null || data === "") return { kind: "invalid" };
   try {
-    const parsed = JSON.parse(data) as { columns?: unknown; rows?: unknown };
-    if (!Array.isArray(parsed.columns) || !Array.isArray(parsed.rows)) return null;
+    const parsed = JSON.parse(data) as {
+      columns?: unknown;
+      columnTypes?: unknown;
+      rows?: unknown;
+    };
+    if (!Array.isArray(parsed.columns) || !Array.isArray(parsed.rows)) {
+      return { kind: "invalid" };
+    }
+    if (!Array.isArray(parsed.columnTypes)) {
+      return { kind: "previous" };
+    }
     const rows: unknown[][] = [];
     for (const row of parsed.rows) {
-      if (!Array.isArray(row)) return null;
+      if (!Array.isArray(row)) return { kind: "invalid" };
       rows.push(row);
     }
+    const columnTypes = parsed.columnTypes.map((entry) => {
+      const col = entry as { name?: unknown; typeName?: unknown; typeOid?: unknown };
+      return {
+        name: String(col.name ?? ""),
+        typeName: String(col.typeName ?? ""),
+        typeOid: Number(col.typeOid ?? 0),
+      };
+    });
     return {
-      columns: parsed.columns.map(String),
-      rows,
+      kind: "new",
+      grid: {
+        columns: parsed.columns.map(String),
+        rows,
+        columnTypes,
+      },
     };
   } catch {
-    return null;
+    return { kind: "invalid" };
   }
 }
 
@@ -180,6 +211,7 @@ function compactGrid(raw: TabResultGrid): TabResultGrid {
   return {
     columns: raw.columns,
     rows: rows.map(compactCells),
+    columnTypes: raw.columnTypes,
   };
 }
 
@@ -376,7 +408,47 @@ export function createTabsStore(ipc: DragonIpc, getters: TabsSessionGetters): St
 
       hydrateFromDto(dto) {
         if (get().pendingDeletedIds.has(dto.id)) return;
-        const raw = parseCachedResults(dto.cachedResultsData);
+        const parsed = parseCachedResults(dto.cachedResultsData);
+
+        if (parsed.kind === "previous") {
+          const clearedDto: TabStateDto = {
+            ...dto,
+            cachedResultsData: null,
+            cachedColumnNames: null,
+          };
+          const hydrated = toTabState(clearedDto, null, null);
+          set((state) => {
+            const idx = state.tabs.findIndex((t) => t.id === dto.id);
+            if (idx >= 0) {
+              const existing = state.tabs[idx];
+              const tabs = state.tabs.slice();
+              if (existing && isThisSessionResultStatus(existing.status)) {
+                tabs[idx] = {
+                  ...hydrated,
+                  raw: existing.raw,
+                  compact: existing.compact,
+                  status: existing.status,
+                  browsePage: existing.browsePage,
+                };
+              } else {
+                tabs[idx] = { ...hydrated, status: existing?.status ?? { kind: "idle" } };
+              }
+              return { tabs };
+            }
+            return {
+              tabs: [...state.tabs, hydrated],
+              activeTabId: state.activeTabId ?? (dto.isActive ? dto.id : state.activeTabId),
+            };
+          });
+          void get()
+            .persistTab(clearedDto, { includeCachedResults: true })
+            .catch(() => {
+              /* best-effort stale-cache purge */
+            });
+          return;
+        }
+
+        const raw = parsed.kind === "new" ? parsed.grid : null;
         const compact = raw ? compactGrid(raw) : null;
         const hydrated = toTabState(dto, raw, compact);
         set((state) => {
@@ -451,22 +523,39 @@ export function createTabsStore(ipc: DragonIpc, getters: TabsSessionGetters): St
 
       async applyRunSuccess(tabId, result, generation, options) {
         if (!canApplyRun(tabId, generation)) return false;
-        const raw: TabResultGrid = { columns: result.columns, rows: result.rows };
+        const hasColumns = result.columns.length > 0;
+        const raw: TabResultGrid | null = hasColumns
+          ? {
+              columns: result.columns,
+              rows: result.rows,
+              columnTypes: result.columnTypes,
+            }
+          : null;
         const displayRows =
-          options?.displayRowLimit === undefined
-            ? raw.rows
-            : raw.rows.slice(0, options.displayRowLimit);
-        const compact = compactGrid({ columns: raw.columns, rows: displayRows });
+          raw === null
+            ? []
+            : options?.displayRowLimit === undefined
+              ? raw.rows
+              : raw.rows.slice(0, options.displayRowLimit);
+        const compact = raw === null ? null : compactGrid({ ...raw, rows: displayRows });
+        const status: Extract<TabRunStatus, { kind: "ok" }> = {
+          kind: "ok",
+          rowCount: result.rows.length,
+          durationMs: result.durationMs,
+        };
         patchTab(tabId, {
           raw,
           compact,
-          status: {
-            kind: "ok",
-            rowCount: result.rows.length,
-            durationMs: result.durationMs,
-          },
-          cachedResultsData: JSON.stringify(raw),
-          cachedColumnNames: result.columns,
+          status,
+          cachedResultsData:
+            raw === null
+              ? null
+              : JSON.stringify({
+                  columns: raw.columns,
+                  columnTypes: raw.columnTypes ?? [],
+                  rows: raw.rows,
+                }),
+          cachedColumnNames: hasColumns ? result.columns : null,
           // Always resolve (not merge-preserve): a plain SELECT/canvas run must
           // clear a stale selectedTable from a prior browse, or QueryResultsPane
           // would keep treating unrelated results as editable via the old table.

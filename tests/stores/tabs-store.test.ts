@@ -1,7 +1,19 @@
 import { describe, expect, it, vi } from "vitest";
-import type { DragonIpc, TabStateDto } from "../../src/ipc/contract";
-import { compactCell } from "../../src/lib/result-compactor";
+import type { DragonIpc, ResultColumn, TabStateDto } from "../../src/ipc/contract";
+import { compactCell, MAX_CELL_CHARACTERS } from "../../src/lib/result-compactor";
 import { createTabsStore } from "../../src/stores/tabs-store";
+
+function defaultColumnTypes(columns: string[]): ResultColumn[] {
+  return columns.map((name) => ({ name, typeName: "text", typeOid: 25 }));
+}
+
+function newShapeCache(
+  columns: string[],
+  rows: unknown[][],
+  columnTypes: ResultColumn[] = defaultColumnTypes(columns),
+): string {
+  return JSON.stringify({ columns, columnTypes, rows });
+}
 
 function baseTab(overrides: Partial<TabStateDto> = {}): TabStateDto {
   return {
@@ -278,7 +290,7 @@ describe("tabs-store", () => {
     store.getState().hydrateFromDto(
       baseTab({
         id: "t1",
-        cachedResultsData: JSON.stringify({ columns: ["c"], rows: [[long]] }),
+        cachedResultsData: newShapeCache(["c"], [[long]]),
         cachedColumnNames: ["c"],
       }),
     );
@@ -427,7 +439,7 @@ describe("tabs-store", () => {
     store.getState().hydrateFromDto(
       baseTab({
         id: "T",
-        cachedResultsData: JSON.stringify({ columns: ["id"], rows: [["cached"]] }),
+        cachedResultsData: newShapeCache(["id"], [["cached"]]),
         cachedColumnNames: ["id"],
       }),
     );
@@ -435,6 +447,63 @@ describe("tabs-store", () => {
     expect(tab?.compact?.columns).toEqual(["id"]);
     expect(tab?.compact?.rows).toEqual([["cached"]]);
     expect(tab?.status).toEqual({ kind: "idle" });
+  });
+
+  it("discards previous-shape cachedResultsData on hydrate — no grid, idle state", async () => {
+    const saveTabState = vi.fn(async () => undefined);
+    const ipc = {
+      saveTabState,
+      deleteTabState: vi.fn(async () => undefined),
+      listTabStates: vi.fn(async () => []),
+    } as unknown as DragonIpc;
+    const store = createTabsStore(ipc, {
+      getConnectionId: () => "c1",
+      getDatabaseName: () => "app",
+    });
+    store.getState().hydrateFromDto(
+      baseTab({
+        id: "T",
+        cachedResultsData: JSON.stringify({ columns: ["id"], rows: [["stale"]] }),
+        cachedColumnNames: ["id"],
+      }),
+    );
+    const tab = store.getState().tabs.find((t) => t.id === "T");
+    expect(tab?.raw).toBeNull();
+    expect(tab?.compact).toBeNull();
+    expect(tab?.status).toEqual({ kind: "idle" });
+    await vi.waitFor(() => {
+      expect(saveTabState).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: "T",
+          cachedResultsData: null,
+          cachedColumnNames: null,
+        }),
+        { includeCachedResults: true },
+      );
+    });
+  });
+
+  it("restores new-shape cache with column metadata on hydrate", () => {
+    const ipc = mockTabsIpc();
+    const store = createTabsStore(ipc, {
+      getConnectionId: () => "c1",
+      getDatabaseName: () => "app",
+    });
+    const columnTypes: ResultColumn[] = [
+      { name: "id", typeName: "int4", typeOid: 23 },
+      { name: "name", typeName: "text", typeOid: 25 },
+    ];
+    store.getState().hydrateFromDto(
+      baseTab({
+        id: "T",
+        cachedResultsData: newShapeCache(["id", "name"], [[{ state: "value", text: "ada" }]], columnTypes),
+        cachedColumnNames: ["id", "name"],
+      }),
+    );
+    const tab = store.getState().tabs.find((t) => t.id === "T");
+    expect(tab?.raw?.columnTypes).toEqual(columnTypes);
+    expect(tab?.compact?.columnTypes).toEqual(columnTypes);
+    expect(tab?.raw?.rows).toEqual([[{ state: "value", text: "ada" }]]);
   });
 
   it("beginRun clears prior result, sets status=running, returns generation", () => {
@@ -656,7 +725,7 @@ describe("tabs-store", () => {
       baseTab({
         id: "good",
         isActive: true,
-        cachedResultsData: JSON.stringify({ columns: ["id"], rows: [["ok"]] }),
+        cachedResultsData: newShapeCache(["id"], [["ok"]]),
       }),
     );
     const good = store.getState().tabs.find((t) => t.id === "good");
@@ -677,7 +746,7 @@ describe("tabs-store", () => {
         baseTab({
           id: "good",
           isActive: true,
-          cachedResultsData: JSON.stringify({ columns: ["id"], rows: [["ok"]] }),
+          cachedResultsData: newShapeCache(["id"], [["ok"]]),
         }),
       ]),
     } as unknown as DragonIpc;
