@@ -96,10 +96,36 @@ export interface ColumnInfo {
   isForeignKey: boolean;
 }
 
+export interface ValueCell {
+  state: "value";
+  text: string;
+}
+
+export interface UnreadableCell {
+  state: "unreadable";
+  typeName: string;
+}
+
+export interface TruncatedCell {
+  state: "truncated";
+  text: string;
+}
+
+/** SQL NULL stays JSON null; every non-null state carries an explicit discriminator. */
+export type ResultCell = ValueCell | null | UnreadableCell | TruncatedCell;
+
+export interface ResultColumn {
+  name: string;
+  typeName: string;
+  typeOid: number;
+}
+
 export interface QueryResult {
   columns: string[];
-  rows: unknown[][];
+  columnTypes: ResultColumn[];
+  rows: ResultCell[][];
   rowsAffected: number | null;
+  statementCount: number;
   durationMs: number;
 }
 

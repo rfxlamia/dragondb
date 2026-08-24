@@ -116,8 +116,10 @@ function tableKey(table: TableRef): string {
 function emptyQueryResult(): QueryResult {
   return {
     columns: [],
+    columnTypes: [],
     rows: [],
     rowsAffected: null,
+    statementCount: 1,
     durationMs: 0,
   };
 }

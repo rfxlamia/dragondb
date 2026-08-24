@@ -12,6 +12,9 @@ import type {
   ProfileId,
   ProfileSecretsInput,
   QueryFolderDto,
+  QueryResult,
+  ResultCell,
+  ResultColumn,
   RowOperationError,
   RowOperationErrorKind,
   SaveCsvFileResult,
@@ -27,6 +30,62 @@ import type {
   UpdateRowInput,
 } from "../../src/ipc/contract";
 import * as contract from "../../src/ipc/contract";
+import { createMockDragonIpc } from "../../src/ipc/mock";
+
+describe("lossless query result contract", () => {
+  it("keeps duplicate column metadata aligned by array index", () => {
+    const rows: ResultCell[][] = [
+      [
+        { state: "value", text: "42" },
+        { state: "value", text: "550e8400-e29b-41d4-a716-446655440000" },
+      ],
+    ];
+    const columnTypes: ResultColumn[] = [
+      { name: "id", typeName: "int4", typeOid: 23 },
+      { name: "id", typeName: "uuid", typeOid: 2950 },
+    ];
+    const duplicateNames: QueryResult = {
+      columns: ["id", "id"],
+      columnTypes,
+      rows,
+      rowsAffected: null,
+      statementCount: 1,
+      durationMs: 2,
+    };
+
+    expect(Array.isArray(duplicateNames.columnTypes)).toBe(true);
+    expect(duplicateNames.columnTypes).toHaveLength(duplicateNames.columns.length);
+    expect(duplicateNames.columnTypes[0]).not.toEqual(duplicateNames.columnTypes[1]);
+    expect(duplicateNames.columnTypes[0]?.typeName).toBe("int4");
+    expect(duplicateNames.columnTypes[1]?.typeName).toBe("uuid");
+  });
+
+  it("retains complete column metadata when no rows are returned", async () => {
+    const columns: ResultColumn[] = [
+      { name: "id", typeName: "int8", typeOid: 20 },
+      { name: "created_at", typeName: "timestamptz", typeOid: 1184 },
+    ];
+    const empty: QueryResult = {
+      columns: columns.map((column) => column.name),
+      columnTypes: columns,
+      rows: [],
+      rowsAffected: null,
+      statementCount: 1,
+      durationMs: 1,
+    };
+
+    expect(empty.rows).toEqual([]);
+    expect(empty.columnTypes).toEqual(columns);
+
+    const mockResult = await createMockDragonIpc().runQuery(
+      "fixture",
+      { text: "SELECT 1", params: [] },
+      1,
+    );
+    expect(mockResult).toHaveProperty("columnTypes");
+    expect(mockResult).toHaveProperty("statementCount");
+  });
+});
 
 describe("DragonIpc contract delta (SP-2)", () => {
   it("exports SSL / SSH union literals used by DTOs", () => {
@@ -252,8 +311,10 @@ describe("DragonIpc contract delta (SP-3 library/tab/history/row/csv)", () => {
       listColumns: async () => [],
       runQuery: async () => ({
         columns: [],
+        columnTypes: [],
         rows: [],
         rowsAffected: null,
+        statementCount: 1,
         durationMs: 0,
       }),
       // SP-3 library (locked names — NOT listFolders/createFolder)
