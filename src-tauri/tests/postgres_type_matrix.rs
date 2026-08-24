@@ -6,7 +6,9 @@
 use dragondb_lib::postgres::{
     connect, run_query, ConnectParams, EffectiveTls, QueryResultData, ResultCell,
 };
+use serde_json::Value as JsonValue;
 use std::env;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio_postgres::Client;
 
@@ -72,7 +74,8 @@ fn parse_pg_url(raw: &str) -> ParsedPgUrl {
         } else {
             (
                 host.to_string(),
-                port.parse::<u16>().unwrap_or_else(|_| panic!("invalid port in DRAGONDB_TEST_PG_URL")),
+                port.parse::<u16>()
+                    .unwrap_or_else(|_| panic!("invalid port in DRAGONDB_TEST_PG_URL")),
             )
         }
     } else {
@@ -88,12 +91,15 @@ fn parse_pg_url(raw: &str) -> ParsedPgUrl {
     }
 }
 
+static FIXTURE_COUNTER: AtomicU64 = AtomicU64::new(0);
+
 fn fixture_suffix() -> String {
-    SystemTime::now()
+    let counter = FIXTURE_COUNTER.fetch_add(1, Ordering::Relaxed);
+    let nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .expect("system clock before unix epoch")
-        .as_nanos()
-        .to_string()
+        .as_nanos();
+    format!("{nanos}_{counter}")
 }
 
 struct TypeMatrixFixture {
@@ -329,6 +335,147 @@ async fn type_matrix_round_trip_fidelity() {
         .expect("select type matrix through transport");
 
     assert_type_matrix_row(&result);
+
+    fixture.teardown(&client).await;
+}
+
+fn assert_no_result_grid(result: &QueryResultData) {
+    assert!(
+        result.columns.is_empty(),
+        "expected no columns, got {:?}",
+        result.columns
+    );
+    assert!(
+        result.rows.is_empty(),
+        "expected no rows, got {}",
+        result.rows.len()
+    );
+}
+
+fn assert_has_rows(result: &QueryResultData, min_rows: usize) {
+    assert!(
+        !result.columns.is_empty(),
+        "expected a non-empty column set, got none"
+    );
+    assert!(
+        result.rows.len() >= min_rows,
+        "expected at least {min_rows} rows, got {}",
+        result.rows.len()
+    );
+}
+
+fn first_cell(result: &QueryResultData) -> &ResultCell {
+    result
+        .rows
+        .first()
+        .and_then(|row| row.first())
+        .unwrap_or_else(|| panic!("expected at least one cell in {:?}", result.rows))
+}
+
+#[tokio::test]
+#[ignore = "requires live PostgreSQL — set DRAGONDB_TEST_PG_URL and run with --ignored"]
+async fn framing_and_cursor_path_fidelity() {
+    if skip_if_no_pg_url() {
+        return;
+    }
+
+    let (client, _connection_task) = connect_from_env().await;
+    let fixture = TypeMatrixFixture::new();
+    fixture.setup(&client).await;
+
+    let show = run_query(&client, "SHOW timezone", &[])
+        .await
+        .expect("SHOW timezone through transport");
+    assert_has_rows(&show, 1);
+
+    let explain = run_query(&client, "EXPLAIN SELECT 1", &[])
+        .await
+        .expect("EXPLAIN SELECT 1 through transport");
+    assert_has_rows(&explain, 1);
+    assert!(
+        explain
+            .columns
+            .iter()
+            .any(|name| name.contains("QUERY PLAN")),
+        "expected QUERY PLAN column, got {:?}",
+        explain.columns
+    );
+
+    let explain_json = run_query(&client, "EXPLAIN (FORMAT JSON) SELECT 1", &[])
+        .await
+        .expect("EXPLAIN (FORMAT JSON) SELECT 1 through transport");
+    assert_has_rows(&explain_json, 1);
+    let json_plan_cell = first_cell(&explain_json);
+    assert_cell_value_not_unreadable(json_plan_cell);
+    match json_plan_cell {
+        ResultCell::Value { text } => {
+            assert!(
+                text.trim_start().starts_with('[') || text.contains("Plan"),
+                "expected JSON plan text, got {text:?}"
+            );
+        }
+        other => panic!("expected JSON plan value, got {other:?}"),
+    }
+
+    let values = run_query(&client, "VALUES (1), (2)", &[])
+        .await
+        .expect("VALUES (1), (2) through transport");
+    assert_eq!(values.rows.len(), 2);
+
+    let table = run_query(&client, &format!("TABLE {}", fixture.table_name), &[])
+        .await
+        .expect("TABLE fixture through transport");
+    assert_has_rows(&table, 2);
+
+    let insert = run_query(
+        &client,
+        &format!(
+            "INSERT INTO {} (name) VALUES ('cursor-test') RETURNING *",
+            fixture.table_name
+        ),
+        &[],
+    )
+    .await
+    .expect("INSERT ... RETURNING * through transport");
+    assert_has_rows(&insert, 1);
+    let id_index = column_index(&insert, "id");
+    assert_cell_value_not_unreadable(&insert.rows[0][id_index]);
+    assert!(
+        matches!(insert.rows[0][id_index], ResultCell::Value { .. }),
+        "generated id must be a rendered value"
+    );
+
+    let update = run_query(
+        &client,
+        &format!(
+            "UPDATE {} SET name = 'updated' WHERE name = 'cursor-test'",
+            fixture.table_name
+        ),
+        &[],
+    )
+    .await
+    .expect("UPDATE without RETURNING through transport");
+    assert_no_result_grid(&update);
+    assert_eq!(update.rows_affected, Some(1));
+
+    let set = run_query(&client, "SET search_path TO public", &[])
+        .await
+        .expect("SET search_path TO public through transport");
+    assert_no_result_grid(&set);
+    assert_eq!(set.rows_affected, Some(0));
+
+    let unparameterized = run_query(&client, "SELECT 'ab'::char(6) AS padded", &[])
+        .await
+        .expect("unparameterized char(6) through transport");
+    let parameterized = run_query(
+        &client,
+        "SELECT $1::char(6) AS padded",
+        &[JsonValue::String("ab".into())],
+    )
+    .await
+    .expect("parameterized char(6) through cursor path");
+    assert_eq!(unparameterized.rows, parameterized.rows);
+    assert_cell_value(&unparameterized.rows[0][0], "ab    ");
 
     fixture.teardown(&client).await;
 }
