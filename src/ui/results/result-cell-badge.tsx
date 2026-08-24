@@ -15,6 +15,7 @@ export function ResultCellBadge(props: {
   if (isUnreadableCell(cell)) {
     return (
       <span
+        role="img"
         className="query-results__cell-badge query-results__cell-badge--error"
         aria-label={ResultsCopy.unreadableAccessibleName(cell.typeName)}
       >

@@ -178,6 +178,27 @@ describe("QueryResultsPane", () => {
     expect(container.textContent ?? "").not.toMatch(/\d+\s*ms/);
   });
 
+  it("one unreadable cell does not disturb the grid", () => {
+    renderPane(
+      { kind: "ok", rowCount: 2, durationMs: 1 },
+      {
+        columns: ["id", "payload"],
+        rows: resultRows([
+          [1, "ok"],
+          [2, { state: "unreadable", typeName: "bytea" }],
+        ]),
+      },
+    );
+    expect(screen.getByTestId(ResultsAccessibility.grid)).toBeInTheDocument();
+    expect(screen.queryByTestId(ResultsAccessibility.error)).toBeNull();
+    expect(screen.getByText("1")).toBeInTheDocument();
+    expect(screen.getByText("ok")).toBeInTheDocument();
+    expect(screen.getByText("2")).toBeInTheDocument();
+    expect(screen.getByText(ResultsCopy.unreadableBadge)).toBeInTheDocument();
+    expect(screen.queryByText(UNREADABLE_EXPORT_SENTINEL)).toBeNull();
+    expect(screen.getAllByText(ResultsCopy.unreadableBadge)).toHaveLength(1);
+  });
+
   it("long cells stay single-line via nowrap / overflow-x in query-results.css", () => {
     renderPane(
       { kind: "ok", rowCount: 1, durationMs: 1 },

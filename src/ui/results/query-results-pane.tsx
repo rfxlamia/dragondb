@@ -19,6 +19,7 @@ import { SqlHatchCopy } from "../sql-editor/sql-hatch-copy";
 import { BrowseTimeoutContext, BrowseTimeoutDialog } from "./browse-timeout-dialog";
 import { formatResultCell } from "./format-result-cell";
 import { JsonViewer } from "./json-viewer";
+import { ResultCellBadge } from "./result-cell-badge";
 import { compareResultCells, resultCellSortText } from "./result-comparator";
 import { ResultsAccessibility } from "./results-accessibility";
 import { deleteRowsPrompt, ResultsCopy } from "./results-copy";
@@ -578,7 +579,11 @@ function bodyRows(
     for (const [cellIndex, column] of columns.entries()) {
       cells.push(
         <td key={`${column}-${cellIndex}`}>
-          {renderResultCellText(row.cells[cellIndex], columnTypes[cellIndex], dateFormat)}
+          <ResultCellBadge
+            cell={row.cells[cellIndex]}
+            columnMetadata={columnTypes[cellIndex]}
+            dateFormat={dateFormat}
+          />
         </td>,
       );
     }
@@ -597,14 +602,6 @@ function bodyRows(
     );
   }
   return elements;
-}
-
-function renderResultCellText(
-  cell: ResultCell | undefined,
-  columnMetadata: ResultColumn | undefined,
-  dateFormat: QueryResultsDateFormat,
-): string {
-  return formatResultCell(cell, columnMetadata, dateFormat);
 }
 
 function metadataForResultColumns(resultColumns: string[], metadata: ColumnInfo[]): ColumnInfo[] {
