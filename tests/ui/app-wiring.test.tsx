@@ -3237,6 +3237,8 @@ describe("App table browser host wiring", () => {
     await user.click(screen.getByRole("button", { name: "users" }));
     await user.click(defined((await screen.findAllByRole("row"))[1], "expected first data row"));
     await user.click(screen.getByRole("button", { name: ResultsCopy.edit }));
+    await user.clear(screen.getByLabelText("name"));
+    await user.type(screen.getByLabelText("name"), "after");
     await user.click(screen.getByRole("button", { name: ResultsCopy.save }));
     expect(await screen.findByRole("alert")).toHaveTextContent("could not be reloaded");
     expect(updateRow).toHaveBeenCalledTimes(1);
@@ -3249,8 +3251,8 @@ describe("App table browser host wiring", () => {
 
   const browsePage = (start: number) =>
     resultFixture({
-      columns: ["id"],
-      rows: Array.from({ length: 101 }, (_, index) => [start + index]),
+      columns: ["id", "name"],
+      rows: Array.from({ length: 101 }, (_, index) => [start + index, `row-${start + index}`]),
       durationMs: 1,
     });
 
@@ -3277,6 +3279,10 @@ describe("App table browser host wiring", () => {
               name: ResultsCopy.delete,
             }),
       );
+      if (operation === "update") {
+        await user.clear(screen.getByLabelText("name"));
+        await user.type(screen.getByLabelText("name"), "after");
+      }
       await user.click(
         operation === "update"
           ? screen.getByRole("button", { name: ResultsCopy.save })
@@ -3307,6 +3313,8 @@ describe("App table browser host wiring", () => {
 
     await user.click(defined((await screen.findAllByRole("row"))[1], "expected first data row"));
     await user.click(screen.getByRole("button", { name: ResultsCopy.edit }));
+    await user.clear(screen.getByLabelText("name"));
+    await user.type(screen.getByLabelText("name"), "after");
     await user.click(screen.getByRole("button", { name: ResultsCopy.save }));
     await screen.findByRole("alert");
     await user.click(screen.getByRole("button", { name: ResultsCopy.cancel }));

@@ -302,6 +302,8 @@ describe("QueryResultsPane", () => {
     );
     await user.click(defined(screen.getAllByRole("row")[1], "expected first data row"));
     await user.click(screen.getByRole("button", { name: ResultsCopy.edit }));
+    await user.clear(screen.getByLabelText("note"));
+    await user.type(screen.getByLabelText("note"), "after");
     await user.click(screen.getByRole("button", { name: ResultsCopy.save }));
     expect(await screen.findByRole("alert")).toHaveTextContent("could not be reloaded");
     expect(screen.queryByTestId(ResultsAccessibility.rowEditor)).toBeNull();

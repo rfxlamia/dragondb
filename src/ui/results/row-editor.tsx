@@ -1,6 +1,11 @@
 import { useRef, useState } from "react";
 import type { ColumnInfo } from "../../ipc/contract";
-import { isValueCell } from "../../lib/result-cell";
+import {
+  isTruncatedCell,
+  isUnreadableCell,
+  isValueCell,
+  resultCellToExportValue,
+} from "../../lib/result-cell";
 import { ResultsAccessibility } from "./results-accessibility";
 import { ResultsCopy } from "./results-copy";
 import { RowEditorField } from "./row-editor-field";
@@ -10,6 +15,7 @@ import "./query-results.css";
 type FieldBaseline = {
   isNull: boolean;
   text: string;
+  readOnly: boolean;
 };
 
 export function RowEditor(props: {
@@ -120,6 +126,7 @@ export function RowEditor(props: {
             column={column}
             value={fields[index] ?? ""}
             isNull={nullFlags[index] === true}
+            readOnly={baselinesRef.current[index]?.readOnly === true}
             pending={pending}
             onValueChange={(text) => setFieldAt(index, text)}
             onNullChange={(isNull) => setNullAt(index, isNull)}
@@ -150,16 +157,19 @@ export function RowEditor(props: {
 }
 
 function baselineFromValue(value: unknown): FieldBaseline {
+  if (isUnreadableCell(value) || isTruncatedCell(value)) {
+    return { isNull: false, text: resultCellToExportValue(value) ?? "", readOnly: true };
+  }
   if (value === null || value === undefined) {
-    return { isNull: true, text: "" };
+    return { isNull: true, text: "", readOnly: false };
   }
   if (isValueCell(value)) {
-    return { isNull: false, text: value.text };
+    return { isNull: false, text: value.text, readOnly: false };
   }
   if (typeof value === "string") {
-    return { isNull: false, text: value };
+    return { isNull: false, text: value, readOnly: false };
   }
-  return { isNull: false, text: String(value) };
+  return { isNull: false, text: String(value), readOnly: false };
 }
 
 function valueToField(value: unknown): string | null {
@@ -176,7 +186,8 @@ function buildPatch(
   const patch: Record<string, unknown | null> = {};
   for (const [index, column] of columns.entries()) {
     if (column.isPrimaryKey) continue;
-    const baseline = baselines[index] ?? { isNull: true, text: "" };
+    const baseline = baselines[index] ?? { isNull: true, text: "", readOnly: false };
+    if (baseline.readOnly) continue;
     const isNull = nullFlags[index] === true;
     const text = fields[index] ?? "";
     if (isNull !== baseline.isNull) {

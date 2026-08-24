@@ -21,16 +21,26 @@ export function RowEditorField(props: {
   column: ColumnInfo;
   value: string;
   isNull: boolean;
+  readOnly?: boolean;
   pending?: boolean;
   onValueChange: (value: string) => void;
   onNullChange: (isNull: boolean) => void;
 }): React.JSX.Element {
-  const { column, value, isNull, pending = false, onValueChange, onNullChange } = props;
+  const {
+    column,
+    value,
+    isNull,
+    readOnly = false,
+    pending = false,
+    onValueChange,
+    onNullChange,
+  } = props;
   const inputType = inputTypeForColumn(column.dataType);
   const isPk = column.isPrimaryKey;
+  const locked = isPk || readOnly;
   const fieldId = `row-editor-field-${column.name}`;
   const nullId = `row-editor-null-${column.name}`;
-  const showNullToggle = !isPk && column.isNullable;
+  const showNullToggle = !locked && column.isNullable;
 
   return (
     <div className="query-results__editor-field">
@@ -40,8 +50,8 @@ export function RowEditorField(props: {
         id={fieldId}
         type={inputType}
         value={isNull ? "" : value}
-        disabled={isPk || isNull || pending}
-        readOnly={isPk}
+        disabled={locked || isNull || pending}
+        readOnly={locked}
         onChange={(event) => onValueChange(event.target.value)}
       />
       {showNullToggle ? (

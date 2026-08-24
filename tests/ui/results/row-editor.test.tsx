@@ -196,6 +196,88 @@ describe("RowEditor", () => {
     });
   });
 
+  describe("unreadable and truncated cells cannot be edited", () => {
+    const payloadColumns = [
+      column({ name: "id", dataType: "bigint", isPrimaryKey: true }),
+      column({ name: "payload", isNullable: true }),
+      column({ name: "note" }),
+    ];
+
+    it("keeps unreadable cells read-only and out of the patch", async () => {
+      const user = userEvent.setup();
+      const onSubmit = vi.fn();
+      render(
+        <RowEditor
+          selectedCount={1}
+          columns={payloadColumns}
+          values={[1, { state: "unreadable", typeName: "bytea" }, "visible"]}
+          onSubmit={onSubmit}
+        />,
+      );
+      const payloadInput = screen.getByLabelText("payload");
+      expect(payloadInput).toHaveAttribute("readonly");
+      await user.click(payloadInput);
+      await user.keyboard("hack");
+      expect(payloadInput).toHaveValue("[unreadable]");
+      expect(screen.queryByLabelText(ResultsCopy.setNullFor("payload"))).not.toBeInTheDocument();
+      await user.clear(screen.getByLabelText("note"));
+      await user.type(screen.getByLabelText("note"), "updated");
+      await user.click(screen.getByRole("button", { name: ResultsCopy.save }));
+      expect(onSubmit).toHaveBeenCalledWith({ note: "updated" });
+    });
+
+    it("keeps truncated cells read-only and out of the patch", async () => {
+      const user = userEvent.setup();
+      const onSubmit = vi.fn();
+      render(
+        <RowEditor
+          selectedCount={1}
+          columns={payloadColumns}
+          values={[1, { state: "truncated", text: "partial value" }, "visible"]}
+          onSubmit={onSubmit}
+        />,
+      );
+      const payloadInput = screen.getByLabelText("payload");
+      expect(payloadInput).toHaveAttribute("readonly");
+      await user.click(payloadInput);
+      await user.keyboard("more");
+      expect(payloadInput).toHaveValue("partial value... [truncated]");
+      expect(screen.queryByLabelText(ResultsCopy.setNullFor("payload"))).not.toBeInTheDocument();
+      await user.clear(screen.getByLabelText("note"));
+      await user.type(screen.getByLabelText("note"), "updated");
+      await user.click(screen.getByRole("button", { name: ResultsCopy.save }));
+      expect(onSubmit).toHaveBeenCalledWith({ note: "updated" });
+    });
+
+    it("preserves an int8 primary key at 64-bit max exactly", async () => {
+      const user = userEvent.setup();
+      const onSubmit = vi.fn();
+      const int8Max = "9223372036854775807";
+      render(
+        <RowEditor
+          selectedCount={1}
+          columns={[
+            column({ name: "id", dataType: "bigint", isPrimaryKey: true }),
+            column({ name: "label" }),
+          ]}
+          values={[
+            { state: "value", text: int8Max },
+            { state: "value", text: "edge" },
+          ]}
+          onSubmit={onSubmit}
+        />,
+      );
+      const pkInput = screen.getByLabelText("id");
+      expect(pkInput).toHaveAttribute("readonly");
+      expect(pkInput).toHaveValue(int8Max);
+      await user.clear(screen.getByLabelText("label"));
+      await user.type(screen.getByLabelText("label"), "updated");
+      await user.click(screen.getByRole("button", { name: ResultsCopy.save }));
+      expect(onSubmit).toHaveBeenCalledWith({ label: "updated" });
+      expect(pkInput).toHaveValue(int8Max);
+    });
+  });
+
   it("keeps a failed draft and blocks duplicate Save while pending", async () => {
     let rejectSave!: (reason: unknown) => void;
     const onSubmit = vi.fn(
