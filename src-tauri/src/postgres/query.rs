@@ -98,9 +98,13 @@ async fn run_single_query(
     params: &[JsonValue],
     started: Instant,
 ) -> Result<QueryResultData, MappedIpcError> {
-    if params.is_empty() || looks_like_select(sql) {
-        run_text_query(client, sql, params, started).await
-    } else {
+    let prepared_columns = prepare_text_columns(client, sql).await;
+    let column_count = prepared_columns
+        .as_ref()
+        .map(|columns| columns.len())
+        .unwrap_or(0);
+
+    if !params.is_empty() && !statement_produces_rows(column_count) {
         let owned = json_params_to_owned(params)?;
         let binds: Vec<&(dyn ToSql + Sync)> = owned
             .iter()
@@ -110,15 +114,17 @@ async fn run_single_query(
             .execute(sql, &binds)
             .await
             .map_err(|e| map_tokio_postgres_error(&e))?;
-        Ok(QueryResultData {
+        return Ok(QueryResultData {
             columns: vec![],
             column_types: vec![],
             rows: vec![],
             rows_affected: Some(result),
             statement_count: 1,
             duration_ms: started.elapsed().as_millis() as u64,
-        })
+        });
     }
+
+    run_text_query(client, sql, params, started, prepared_columns).await
 }
 
 async fn run_text_query(
@@ -126,8 +132,8 @@ async fn run_text_query(
     sql: &str,
     params: &[JsonValue],
     started: Instant,
+    prepared_columns: Option<Vec<TextColumn>>,
 ) -> Result<QueryResultData, MappedIpcError> {
-    let prepared_columns = prepare_text_columns(client, sql).await;
     let messages = match execution_route(sql, params.len()) {
         ExecutionRoute::SimpleQuery => client
             .simple_query(sql)
@@ -597,10 +603,9 @@ fn json_to_sql(value: &JsonValue) -> Result<Box<dyn ToSql + Sync + Send>, Mapped
     }
 }
 
-/// True when SQL is a row-returning query (SELECT / WITH …), after leading comments.
-fn looks_like_select(sql: &str) -> bool {
-    let stripped = strip_leading_sql_noise(sql);
-    keyword_at(&stripped, "select") || keyword_at(&stripped, "with")
+/// True when a prepared statement's column set indicates row-producing results.
+fn statement_produces_rows(column_count: usize) -> bool {
+    column_count > 0
 }
 
 fn strip_leading_sql_noise(sql: &str) -> String {
@@ -627,17 +632,6 @@ fn strip_leading_sql_noise(sql: &str) -> String {
         break;
     }
     s.to_string()
-}
-
-fn keyword_at(s: &str, keyword: &str) -> bool {
-    let len = keyword.len();
-    if s.len() < len || !s[..len].eq_ignore_ascii_case(keyword) {
-        return false;
-    }
-    match s.as_bytes().get(len) {
-        None => true,
-        Some(b) => b.is_ascii_whitespace() || *b == b'(',
-    }
 }
 
 #[cfg(test)]
@@ -795,17 +789,23 @@ mod tests {
     }
 
     #[test]
-    fn looks_like_select_handles_comments_and_with() {
-        assert!(looks_like_select("SELECT 1"));
-        assert!(looks_like_select("  select id from t"));
-        assert!(looks_like_select("-- comment\nSELECT 1"));
-        assert!(looks_like_select("/* block */\nSELECT 1"));
-        assert!(looks_like_select(
-            "WITH cte AS (SELECT 1) SELECT * FROM cte"
-        ));
-        assert!(!looks_like_select("INSERT INTO t VALUES (1)"));
-        assert!(!looks_like_select("UPDATE t SET x = 1"));
-        assert!(!looks_like_select("SELECTIVE_NAME"));
+    fn row_producing_statements_are_identified_by_column_set() {
+        let fixtures: [(&str, &[&str], bool); 6] = [
+            ("SHOW timezone", &["TimeZone"], true),
+            ("EXPLAIN SELECT 1", &["QUERY PLAN"], true),
+            ("VALUES (1), (2)", &["column1"], true),
+            ("TABLE users", &["id", "name"], true),
+            ("INSERT INTO t VALUES (1) RETURNING *", &["id"], true),
+            ("UPDATE t SET x = 1", &[], false),
+        ];
+
+        for (sql, column_names, expect_row_producing) in fixtures {
+            assert_eq!(
+                statement_produces_rows(column_names.len()),
+                expect_row_producing,
+                "column-set classification for {sql:?}"
+            );
+        }
     }
 
     #[test]
