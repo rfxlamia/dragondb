@@ -119,16 +119,7 @@ async fn run_text_query(
     params: &[JsonValue],
     started: Instant,
 ) -> Result<QueryResultData, MappedIpcError> {
-    let prepared_columns = client.prepare(sql).await.ok().map(|statement| {
-        statement
-            .columns()
-            .iter()
-            .map(|column| {
-                TextColumn::new(column.name(), column.type_().name(), column.type_().oid())
-            })
-            .collect::<Vec<_>>()
-    });
-
+    let prepared_columns = prepare_text_columns(client, sql).await;
     let messages = match execution_route(sql, params.len()) {
         ExecutionRoute::SimpleQuery => client
             .simple_query(sql)
@@ -137,50 +128,137 @@ async fn run_text_query(
         ExecutionRoute::BoundCursor {
             declare_sql,
             fetch_sql,
-        } => {
-            let ownership = cursor_transaction_ownership(client).await?;
-            let owned = json_params_to_owned(params)?;
-            let binds: Vec<&(dyn ToSql + Sync)> = owned
-                .iter()
-                .map(|param| param.as_ref() as &(dyn ToSql + Sync))
-                .collect();
-            if let Some(begin) = ownership.begin_command() {
-                client
-                    .batch_execute(begin)
-                    .await
-                    .map_err(|error| map_tokio_postgres_error(&error))?;
-            }
-            if let Err(error) = client.execute(declare_sql.as_str(), &binds).await {
-                rollback_if_path_owned(client, ownership).await;
-                return Err(map_tokio_postgres_error(&error));
-            }
-            let messages = match client.simple_query(&fetch_sql).await {
-                Ok(messages) => messages,
-                Err(error) => {
-                    rollback_if_path_owned(client, ownership).await;
-                    return Err(map_tokio_postgres_error(&error));
-                }
-            };
-            let close = format!("CLOSE {DISPLAY_CURSOR_NAME}");
-            if let Err(error) = client.batch_execute(&close).await {
-                rollback_if_path_owned(client, ownership).await;
-                return Err(map_tokio_postgres_error(&error));
-            }
-            if let Some(commit) = ownership.commit_command() {
-                if let Err(error) = client.batch_execute(commit).await {
-                    let _ = client.batch_execute("ROLLBACK").await;
-                    return Err(map_tokio_postgres_error(&error));
-                }
-            }
-            messages
-        }
+        } => run_postgres_bound_cursor(client, &declare_sql, &fetch_sql, params).await?,
     };
-
     Ok(map_text_messages(
         messages,
         prepared_columns,
         started.elapsed(),
     ))
+}
+
+async fn prepare_text_columns(client: &Client, sql: &str) -> Option<Vec<TextColumn>> {
+    client.prepare(sql).await.ok().map(|statement| {
+        statement
+            .columns()
+            .iter()
+            .map(|column| {
+                TextColumn::new(column.name(), column.type_().name(), column.type_().oid())
+            })
+            .collect()
+    })
+}
+
+async fn run_postgres_bound_cursor(
+    client: &Client,
+    declare_sql: &str,
+    fetch_sql: &str,
+    params: &[JsonValue],
+) -> Result<Vec<SimpleQueryMessage>, MappedIpcError> {
+    let ownership = cursor_transaction_ownership(client).await?;
+    let owned = json_params_to_owned(params)?;
+    let binds: Vec<&(dyn ToSql + Sync)> = owned
+        .iter()
+        .map(|param| param.as_ref() as &(dyn ToSql + Sync))
+        .collect();
+    let mut operations = PostgresCursorOperations {
+        client,
+        declare_sql,
+        fetch_sql,
+        binds: &binds,
+    };
+    execute_bound_cursor(&mut operations, ownership)
+        .await
+        .map_err(|error| map_tokio_postgres_error(&error))
+}
+
+trait BoundCursorOperations {
+    type Output;
+    type Error;
+
+    async fn begin(&mut self) -> Result<(), Self::Error>;
+    async fn declare(&mut self) -> Result<(), Self::Error>;
+    async fn fetch(&mut self) -> Result<Self::Output, Self::Error>;
+    async fn close(&mut self) -> Result<(), Self::Error>;
+    async fn commit(&mut self) -> Result<(), Self::Error>;
+    async fn rollback(&mut self);
+}
+
+async fn execute_bound_cursor<O: BoundCursorOperations>(
+    operations: &mut O,
+    ownership: CursorTransactionOwnership,
+) -> Result<O::Output, O::Error> {
+    if ownership == CursorTransactionOwnership::PathOwned {
+        operations.begin().await?;
+    }
+    if let Err(error) = operations.declare().await {
+        return cursor_failure(operations, ownership, error).await;
+    }
+    let output = match operations.fetch().await {
+        Ok(output) => output,
+        Err(error) => return cursor_failure(operations, ownership, error).await,
+    };
+    if let Err(error) = operations.close().await {
+        return cursor_failure(operations, ownership, error).await;
+    }
+    if ownership == CursorTransactionOwnership::PathOwned {
+        if let Err(error) = operations.commit().await {
+            return cursor_failure(operations, ownership, error).await;
+        }
+    }
+    Ok(output)
+}
+
+async fn cursor_failure<O: BoundCursorOperations>(
+    operations: &mut O,
+    ownership: CursorTransactionOwnership,
+    error: O::Error,
+) -> Result<O::Output, O::Error> {
+    if ownership == CursorTransactionOwnership::PathOwned {
+        operations.rollback().await;
+    }
+    Err(error)
+}
+
+struct PostgresCursorOperations<'a> {
+    client: &'a Client,
+    declare_sql: &'a str,
+    fetch_sql: &'a str,
+    binds: &'a [&'a (dyn ToSql + Sync)],
+}
+
+impl BoundCursorOperations for PostgresCursorOperations<'_> {
+    type Output = Vec<SimpleQueryMessage>;
+    type Error = tokio_postgres::Error;
+
+    async fn begin(&mut self) -> Result<(), Self::Error> {
+        self.client.batch_execute("BEGIN").await
+    }
+
+    async fn declare(&mut self) -> Result<(), Self::Error> {
+        self.client
+            .execute(self.declare_sql, self.binds)
+            .await
+            .map(|_| ())
+    }
+
+    async fn fetch(&mut self) -> Result<Self::Output, Self::Error> {
+        self.client.simple_query(self.fetch_sql).await
+    }
+
+    async fn close(&mut self) -> Result<(), Self::Error> {
+        self.client
+            .batch_execute(&format!("CLOSE {DISPLAY_CURSOR_NAME}"))
+            .await
+    }
+
+    async fn commit(&mut self) -> Result<(), Self::Error> {
+        self.client.batch_execute("COMMIT").await
+    }
+
+    async fn rollback(&mut self) {
+        let _ = self.client.batch_execute("ROLLBACK").await;
+    }
 }
 
 const CURSOR_OWNERSHIP_SAVEPOINT: &str = "dragondb_display_cursor_ownership";
@@ -207,12 +285,6 @@ async fn cursor_transaction_ownership(
     }
 }
 
-async fn rollback_if_path_owned(client: &Client, ownership: CursorTransactionOwnership) {
-    if let Some(rollback) = ownership.rollback_command() {
-        let _ = client.batch_execute(rollback).await;
-    }
-}
-
 fn map_text_messages(
     messages: Vec<SimpleQueryMessage>,
     prepared_columns: Option<Vec<TextColumn>>,
@@ -231,18 +303,7 @@ fn map_text_messages(
                 rows_affected = None;
             }
             SimpleQueryMessage::Row(row) => {
-                if columns.len() != row.len() {
-                    columns = fallback_protocol_columns(row.columns().iter().map(|col| col.name()));
-                }
-                let mapped = (0..row.len())
-                    .map(|index| match row.try_get(index) {
-                        Ok(value) => map_cell(value.map(str::as_bytes), &columns[index]),
-                        Err(_) => ResultCell::Unreadable {
-                            type_name: columns[index].type_name.clone(),
-                        },
-                    })
-                    .collect();
-                rows.push(mapped);
+                rows.push(map_simple_row(&row, &mut columns));
                 rows_affected = None;
             }
             SimpleQueryMessage::CommandComplete(affected) if rows_affected.is_some() => {
@@ -266,6 +327,23 @@ fn map_text_messages(
         rows_affected,
         duration_ms: duration.as_millis() as u64,
     }
+}
+
+fn map_simple_row(
+    row: &tokio_postgres::SimpleQueryRow,
+    columns: &mut Vec<TextColumn>,
+) -> Vec<ResultCell> {
+    if columns.len() != row.len() {
+        *columns = fallback_protocol_columns(row.columns().iter().map(|column| column.name()));
+    }
+    (0..row.len())
+        .map(|index| match row.try_get(index) {
+            Ok(value) => map_cell(value.map(str::as_bytes), &columns[index]),
+            Err(_) => ResultCell::Unreadable {
+                type_name: columns[index].type_name.clone(),
+            },
+        })
+        .collect()
 }
 
 /// Mirrors `src/lib/sql-statement-splitter.ts`.
@@ -549,6 +627,131 @@ fn keyword_at(s: &str, keyword: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    enum CursorOperation {
+        Begin,
+        Declare,
+        Fetch,
+        Close,
+        Commit,
+        Rollback,
+    }
+
+    struct FakeCursorOperations {
+        calls: Vec<CursorOperation>,
+        fails_at: Option<CursorOperation>,
+    }
+
+    impl FakeCursorOperations {
+        fn new(fails_at: Option<CursorOperation>) -> Self {
+            Self {
+                calls: Vec::new(),
+                fails_at,
+            }
+        }
+
+        fn record(&mut self, operation: CursorOperation) -> Result<(), CursorOperation> {
+            self.calls.push(operation);
+            (self.fails_at != Some(operation))
+                .then_some(())
+                .ok_or(operation)
+        }
+    }
+
+    impl BoundCursorOperations for FakeCursorOperations {
+        type Output = &'static str;
+        type Error = CursorOperation;
+
+        async fn begin(&mut self) -> Result<(), Self::Error> {
+            self.record(CursorOperation::Begin)
+        }
+
+        async fn declare(&mut self) -> Result<(), Self::Error> {
+            self.record(CursorOperation::Declare)
+        }
+
+        async fn fetch(&mut self) -> Result<Self::Output, Self::Error> {
+            self.record(CursorOperation::Fetch).map(|()| "rows")
+        }
+
+        async fn close(&mut self) -> Result<(), Self::Error> {
+            self.record(CursorOperation::Close)
+        }
+
+        async fn commit(&mut self) -> Result<(), Self::Error> {
+            self.record(CursorOperation::Commit)
+        }
+
+        async fn rollback(&mut self) {
+            self.calls.push(CursorOperation::Rollback);
+        }
+    }
+
+    #[tokio::test]
+    async fn text_transport_cursor_success_respects_transaction_owner() {
+        let mut caller = FakeCursorOperations::new(None);
+        let output = execute_bound_cursor(&mut caller, CursorTransactionOwnership::CallerOwned)
+            .await
+            .expect("caller-owned cursor");
+        assert_eq!(output, "rows");
+        assert_eq!(
+            caller.calls,
+            vec![
+                CursorOperation::Declare,
+                CursorOperation::Fetch,
+                CursorOperation::Close,
+            ]
+        );
+
+        let mut path = FakeCursorOperations::new(None);
+        execute_bound_cursor(&mut path, CursorTransactionOwnership::PathOwned)
+            .await
+            .expect("path-owned cursor");
+        assert_eq!(
+            path.calls,
+            vec![
+                CursorOperation::Begin,
+                CursorOperation::Declare,
+                CursorOperation::Fetch,
+                CursorOperation::Close,
+                CursorOperation::Commit,
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn text_transport_cursor_failures_cleanup_only_path_owned_transactions() {
+        for failure in [
+            CursorOperation::Declare,
+            CursorOperation::Fetch,
+            CursorOperation::Close,
+            CursorOperation::Commit,
+        ] {
+            let mut path = FakeCursorOperations::new(Some(failure));
+            assert_eq!(
+                execute_bound_cursor(&mut path, CursorTransactionOwnership::PathOwned).await,
+                Err(failure)
+            );
+            assert_eq!(path.calls.last(), Some(&CursorOperation::Rollback));
+        }
+
+        for failure in [
+            CursorOperation::Declare,
+            CursorOperation::Fetch,
+            CursorOperation::Close,
+        ] {
+            let mut caller = FakeCursorOperations::new(Some(failure));
+            assert_eq!(
+                execute_bound_cursor(&mut caller, CursorTransactionOwnership::CallerOwned).await,
+                Err(failure)
+            );
+            assert!(!caller.calls.iter().any(|call| matches!(
+                call,
+                CursorOperation::Begin | CursorOperation::Commit | CursorOperation::Rollback
+            )));
+        }
+    }
 
     #[test]
     fn looks_like_select_handles_comments_and_with() {

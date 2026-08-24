@@ -27,74 +27,6 @@ pub fn cursor_ownership_from_probe(probe: CursorTransactionProbe) -> CursorTrans
     }
 }
 
-impl CursorTransactionOwnership {
-    pub(crate) fn begin_command(self) -> Option<&'static str> {
-        (self == Self::PathOwned).then_some("BEGIN")
-    }
-
-    pub(crate) fn commit_command(self) -> Option<&'static str> {
-        (self == Self::PathOwned).then_some("COMMIT")
-    }
-
-    pub(crate) fn rollback_command(self) -> Option<&'static str> {
-        (self == Self::PathOwned).then_some("ROLLBACK")
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CursorFailure {
-    Declare,
-    Fetch,
-    Close,
-    Commit,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CursorStep {
-    Begin,
-    Declare,
-    Fetch,
-    Close,
-    Commit,
-    Rollback,
-}
-
-pub fn cursor_success_steps(ownership: CursorTransactionOwnership) -> Vec<CursorStep> {
-    let mut steps = Vec::new();
-    if ownership.begin_command().is_some() {
-        steps.push(CursorStep::Begin);
-    }
-    steps.extend([CursorStep::Declare, CursorStep::Fetch, CursorStep::Close]);
-    if ownership.commit_command().is_some() {
-        steps.push(CursorStep::Commit);
-    }
-    steps
-}
-
-pub fn cursor_failure_steps(
-    ownership: CursorTransactionOwnership,
-    failure: CursorFailure,
-) -> Vec<CursorStep> {
-    let mut steps = Vec::new();
-    if ownership.begin_command().is_some() {
-        steps.push(CursorStep::Begin);
-    }
-    steps.push(CursorStep::Declare);
-    if failure != CursorFailure::Declare {
-        steps.push(CursorStep::Fetch);
-    }
-    if matches!(failure, CursorFailure::Close | CursorFailure::Commit) {
-        steps.push(CursorStep::Close);
-    }
-    if failure == CursorFailure::Commit && ownership.commit_command().is_some() {
-        steps.push(CursorStep::Commit);
-    }
-    if ownership.rollback_command().is_some() {
-        steps.push(CursorStep::Rollback);
-    }
-    steps
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ExecutionRoute {
     SimpleQuery,
@@ -230,63 +162,22 @@ mod tests {
 
         let (cells, mapped_columns) = map_text_row(&values, &columns);
 
+        assert_eq!(cells[0], value("ab    "));
+        assert_eq!(cells[1], ResultCell::Null);
         assert_eq!(
-            cells,
-            vec![
-                ResultCell::Value {
-                    text: "ab    ".into()
-                },
-                ResultCell::Null,
-                ResultCell::Unreadable {
-                    type_name: "custom".into()
-                },
-                ResultCell::Truncated {
-                    text: "x".repeat(MAX_CELL_BYTES)
-                },
-                ResultCell::Value {
-                    text: "true".into()
-                },
-                ResultCell::Value {
-                    text: "false".into()
-                },
-            ]
+            cells[2],
+            ResultCell::Unreadable {
+                type_name: "custom".into()
+            }
         );
-        assert_eq!(cells[3].text_len(), Some(MAX_CELL_BYTES));
-        assert_eq!(
-            mapped_columns,
-            vec![
-                ResultColumn {
-                    name: "padded".into(),
-                    type_name: "bpchar".into(),
-                    type_oid: 1042,
-                },
-                ResultColumn {
-                    name: "missing".into(),
-                    type_name: "text".into(),
-                    type_oid: 25,
-                },
-                ResultColumn {
-                    name: "binary".into(),
-                    type_name: "custom".into(),
-                    type_oid: 99_999,
-                },
-                ResultColumn {
-                    name: "large".into(),
-                    type_name: "text".into(),
-                    type_oid: 25,
-                },
-                ResultColumn {
-                    name: "enabled".into(),
-                    type_name: "bool".into(),
-                    type_oid: 16,
-                },
-                ResultColumn {
-                    name: "disabled".into(),
-                    type_name: "bool".into(),
-                    type_oid: 16,
-                },
-            ]
-        );
+        assert_eq!(cells[3], truncated("x".repeat(MAX_CELL_BYTES)));
+        assert_eq!(cells[4], value("true"));
+        assert_eq!(cells[5], value("false"));
+        for (actual, expected) in mapped_columns.iter().zip(&columns) {
+            assert_eq!(actual.name, expected.name);
+            assert_eq!(actual.type_name, expected.type_name);
+            assert_eq!(actual.type_oid, expected.type_oid);
+        }
     }
 
     #[test]
@@ -321,63 +212,11 @@ mod tests {
         );
     }
 
-    #[test]
-    fn cursor_transaction_plan_preserves_ownership() {
-        assert_eq!(
-            cursor_ownership_from_probe(CursorTransactionProbe::NoActiveTransaction),
-            CursorTransactionOwnership::PathOwned,
-            "autocommit requires a transaction owned by the cursor path"
-        );
-        assert_eq!(
-            cursor_ownership_from_probe(CursorTransactionProbe::SavepointCreated),
-            CursorTransactionOwnership::CallerOwned,
-            "an existing manual transaction stays caller-owned"
-        );
-        assert_eq!(
-            cursor_success_steps(CursorTransactionOwnership::PathOwned),
-            vec![
-                CursorStep::Begin,
-                CursorStep::Declare,
-                CursorStep::Fetch,
-                CursorStep::Close,
-                CursorStep::Commit,
-            ]
-        );
-        assert_eq!(
-            cursor_success_steps(CursorTransactionOwnership::CallerOwned),
-            vec![CursorStep::Declare, CursorStep::Fetch, CursorStep::Close]
-        );
+    fn value(text: &str) -> ResultCell {
+        ResultCell::Value { text: text.into() }
     }
 
-    #[test]
-    fn cursor_failure_cleanup_only_rolls_back_path_owned_transactions() {
-        for failure in [
-            CursorFailure::Declare,
-            CursorFailure::Fetch,
-            CursorFailure::Close,
-            CursorFailure::Commit,
-        ] {
-            let path_owned = cursor_failure_steps(CursorTransactionOwnership::PathOwned, failure);
-            assert_eq!(path_owned.last(), Some(&CursorStep::Rollback));
-
-            let caller_owned =
-                cursor_failure_steps(CursorTransactionOwnership::CallerOwned, failure);
-            assert!(!caller_owned.contains(&CursorStep::Begin));
-            assert!(!caller_owned.contains(&CursorStep::Commit));
-            assert!(!caller_owned.contains(&CursorStep::Rollback));
-        }
-    }
-
-    trait CellTextLen {
-        fn text_len(&self) -> Option<usize>;
-    }
-
-    impl CellTextLen for ResultCell {
-        fn text_len(&self) -> Option<usize> {
-            match self {
-                ResultCell::Value { text } | ResultCell::Truncated { text } => Some(text.len()),
-                ResultCell::Null | ResultCell::Unreadable { .. } => None,
-            }
-        }
+    fn truncated(text: String) -> ResultCell {
+        ResultCell::Truncated { text }
     }
 }
