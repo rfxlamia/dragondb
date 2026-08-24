@@ -408,7 +408,7 @@ describe("App session connect / disconnect / switch", () => {
   it("locks canvas after switch A teardown while connect B is in flight", async () => {
     const user = userEvent.setup();
     const ipc = createMockDragonIpc("happy");
-    await ipc.saveProfile({
+    const b = await ipc.saveProfile({
       profile: {
         name: "B",
         host: "db-b",
@@ -431,10 +431,12 @@ describe("App session connect / disconnect / switch", () => {
       releaseConnect = resolve;
     });
     const realConnect = ipc.connectProfile.bind(ipc);
-    let connectCalls = 0;
+    // Gate only the switch-time connect to B — not App restore's first connectProfile
+    // nor connectFirst's new profile connect (both would increment a global call counter
+    // and leave initialAddBlock disabled before the switch scenario starts).
+    let gateProfileBConnect = false;
     ipc.connectProfile = async (id) => {
-      connectCalls += 1;
-      if (connectCalls > 1) {
+      if (id === b.id && gateProfileBConnect) {
         await connectGate;
       }
       return realConnect(id);
@@ -442,6 +444,7 @@ describe("App session connect / disconnect / switch", () => {
 
     render(<App ipc={ipc} />);
     await connectFirst(user, ipc);
+    gateProfileBConnect = true;
     await user.click(await screen.findByTestId(VisualQueryAccessibility.initialAddBlock));
     await user.click(screen.getByTestId(VisualQueryAccessibility.statementMenuItem("select")));
     expect(screen.getByTestId(VisualQueryAccessibility.trailingAddBlock)).not.toBeDisabled();
