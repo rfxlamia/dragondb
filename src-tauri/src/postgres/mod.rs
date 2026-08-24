@@ -28,9 +28,7 @@ pub use database_admin::{
 pub use error::{
     map_postgres_error, map_tokio_postgres_error, DriverFailure, IpcErrorKind, MappedIpcError,
 };
-pub use query::{
-    json_params_to_owned, map_query_rows, run_query, MappedRowSet, QueryResultData, Value,
-};
+pub use query::{json_params_to_owned, run_query, QueryResultData};
 pub use result_cell::{ResultCell, ResultColumn};
 pub use row_ops::{
     delete_rows, fetch_primary_key_columns, update_row, validate_delete_preconditions,

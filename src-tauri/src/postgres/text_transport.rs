@@ -6,6 +6,37 @@ use super::{ResultCell, ResultColumn};
 /// from sending a tens-of-megabytes rendered payload through IPC and SQLite.
 pub const MAX_CELL_BYTES: usize = 1024 * 1024;
 
+pub const DISPLAY_CURSOR_NAME: &str = "dragondb_display_cursor";
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ExecutionRoute {
+    SimpleQuery,
+    BoundCursor {
+        declare_sql: String,
+        fetch_sql: String,
+    },
+}
+
+/// Choose text-protocol execution without ever placing parameter values in SQL.
+pub fn execution_route(sql: &str, parameter_count: usize) -> ExecutionRoute {
+    if parameter_count == 0 {
+        ExecutionRoute::SimpleQuery
+    } else {
+        ExecutionRoute::BoundCursor {
+            declare_sql: format!("DECLARE {DISPLAY_CURSOR_NAME} CURSOR FOR {sql}"),
+            fetch_sql: format!("FETCH ALL FROM {DISPLAY_CURSOR_NAME}"),
+        }
+    }
+}
+
+/// Build R4.4 fallback metadata from protocol row-description names.
+pub fn fallback_protocol_columns<'a>(names: impl IntoIterator<Item = &'a str>) -> Vec<TextColumn> {
+    names
+        .into_iter()
+        .map(|name| TextColumn::new(name, "unknown", 0))
+        .collect()
+}
+
 /// Column information acquired from the prepared statement or row description.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TextColumn {
@@ -52,7 +83,7 @@ pub fn map_text_row(
     (cells, result_columns)
 }
 
-fn map_cell(value: Option<&[u8]>, column: &TextColumn) -> ResultCell {
+pub(crate) fn map_cell(value: Option<&[u8]>, column: &TextColumn) -> ResultCell {
     let Some(bytes) = value else {
         return ResultCell::Null;
     };
@@ -167,6 +198,38 @@ mod tests {
                     type_name: "bool".into(),
                     type_oid: 16,
                 },
+            ]
+        );
+    }
+
+    #[test]
+    fn execution_routing_keeps_parameter_values_out_of_sql() {
+        let sql = "SELECT $1::text";
+        let secret_parameter = "do-not-inline-me";
+
+        assert_eq!(execution_route("SELECT 1", 0), ExecutionRoute::SimpleQuery);
+        let route = execution_route(sql, 1);
+        let ExecutionRoute::BoundCursor {
+            declare_sql,
+            fetch_sql,
+        } = route
+        else {
+            panic!("parameterized statements must use the bound cursor path");
+        };
+        assert!(declare_sql.contains(sql));
+        assert!(!declare_sql.contains(secret_parameter));
+        assert_eq!(fetch_sql, "FETCH ALL FROM dragondb_display_cursor");
+    }
+
+    #[test]
+    fn prepare_failure_uses_unknown_protocol_columns() {
+        let columns = fallback_protocol_columns(["first", "second"]);
+
+        assert_eq!(
+            columns,
+            vec![
+                TextColumn::new("first", "unknown", 0),
+                TextColumn::new("second", "unknown", 0),
             ]
         );
     }

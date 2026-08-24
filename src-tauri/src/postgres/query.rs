@@ -4,47 +4,24 @@ use std::time::{Duration, Instant};
 
 use serde::Serialize;
 use serde_json::Value as JsonValue;
-use tokio_postgres::types::{ToSql, Type};
-use tokio_postgres::Client;
+use tokio_postgres::types::ToSql;
+use tokio_postgres::{Client, SimpleQueryMessage};
 
 use super::error::{map_tokio_postgres_error, IpcErrorKind, MappedIpcError};
-
-/// Cell value used by the pure row mapper / QueryResult shaping.
-#[derive(Debug, Clone, PartialEq, Serialize)]
-#[serde(untagged)]
-pub enum Value {
-    Null,
-    Bool(bool),
-    Int(i64),
-    Float(f64),
-    Text(String),
-}
-
-/// Intermediate row set before attaching duration / rowsAffected.
-#[derive(Debug, Clone, PartialEq)]
-pub struct MappedRowSet {
-    pub columns: Vec<String>,
-    pub rows: Vec<Vec<Value>>,
-}
+use super::text_transport::{
+    execution_route, fallback_protocol_columns, map_cell, ExecutionRoute, TextColumn,
+    DISPLAY_CURSOR_NAME,
+};
+use super::{ResultCell, ResultColumn};
 
 /// QueryResult-shaped payload (mirrors `src/ipc/contract.ts` QueryResult).
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QueryResultData {
-    pub columns: Vec<String>,
-    pub rows: Vec<Vec<Value>>,
+    pub columns: Vec<ResultColumn>,
+    pub rows: Vec<Vec<ResultCell>>,
     pub rows_affected: Option<u64>,
     pub duration_ms: u64,
-}
-
-/// Attach durationMs; SELECT row count semantics use `rows.len()` (not rowsAffected).
-pub fn map_query_rows(row_set: MappedRowSet, duration: Duration) -> QueryResultData {
-    QueryResultData {
-        columns: row_set.columns,
-        rows: row_set.rows,
-        rows_affected: None,
-        duration_ms: duration.as_millis() as u64,
-    }
 }
 
 /// Run a SQL statement with bound parameters; SELECT returns rows, others set rowsAffected.
@@ -113,40 +90,14 @@ async fn run_single_query(
     params: &[JsonValue],
     started: Instant,
 ) -> Result<QueryResultData, MappedIpcError> {
-    let owned = json_params_to_owned(params)?;
-    let binds: Vec<&(dyn ToSql + Sync)> = owned
-        .iter()
-        .map(|p| p.as_ref() as &(dyn ToSql + Sync))
-        .collect();
-
-    if looks_like_select(sql) {
-        // Prepare first so empty result sets still expose column metadata.
-        let statement = client
-            .prepare(sql)
-            .await
-            .map_err(|e| map_tokio_postgres_error(&e))?;
-        let columns: Vec<String> = statement
-            .columns()
-            .iter()
-            .map(|c| c.name().to_string())
-            .collect();
-        let rows = client
-            .query(&statement, &binds)
-            .await
-            .map_err(|e| map_tokio_postgres_error(&e))?;
-        let duration = started.elapsed();
-        let mapped_rows: Vec<Vec<Value>> = rows
-            .iter()
-            .map(|row| (0..row.len()).map(|i| cell_value(row, i)).collect())
-            .collect();
-        Ok(map_query_rows(
-            MappedRowSet {
-                columns,
-                rows: mapped_rows,
-            },
-            duration,
-        ))
+    if params.is_empty() || looks_like_select(sql) {
+        run_text_query(client, sql, params, started).await
     } else {
+        let owned = json_params_to_owned(params)?;
+        let binds: Vec<&(dyn ToSql + Sync)> = owned
+            .iter()
+            .map(|p| p.as_ref() as &(dyn ToSql + Sync))
+            .collect();
         let result = client
             .execute(sql, &binds)
             .await
@@ -157,6 +108,122 @@ async fn run_single_query(
             rows_affected: Some(result),
             duration_ms: started.elapsed().as_millis() as u64,
         })
+    }
+}
+
+async fn run_text_query(
+    client: &Client,
+    sql: &str,
+    params: &[JsonValue],
+    started: Instant,
+) -> Result<QueryResultData, MappedIpcError> {
+    let prepared_columns = client.prepare(sql).await.ok().map(|statement| {
+        statement
+            .columns()
+            .iter()
+            .map(|column| {
+                TextColumn::new(column.name(), column.type_().name(), column.type_().oid())
+            })
+            .collect::<Vec<_>>()
+    });
+
+    let messages = match execution_route(sql, params.len()) {
+        ExecutionRoute::SimpleQuery => client
+            .simple_query(sql)
+            .await
+            .map_err(|error| map_tokio_postgres_error(&error))?,
+        ExecutionRoute::BoundCursor {
+            declare_sql,
+            fetch_sql,
+        } => {
+            let owned = json_params_to_owned(params)?;
+            let binds: Vec<&(dyn ToSql + Sync)> = owned
+                .iter()
+                .map(|param| param.as_ref() as &(dyn ToSql + Sync))
+                .collect();
+            client
+                .batch_execute("BEGIN")
+                .await
+                .map_err(|error| map_tokio_postgres_error(&error))?;
+            if let Err(error) = client.execute(declare_sql.as_str(), &binds).await {
+                let _ = client.batch_execute("ROLLBACK").await;
+                return Err(map_tokio_postgres_error(&error));
+            }
+            let messages = match client.simple_query(&fetch_sql).await {
+                Ok(messages) => messages,
+                Err(error) => {
+                    let _ = client.batch_execute("ROLLBACK").await;
+                    return Err(map_tokio_postgres_error(&error));
+                }
+            };
+            let close_and_commit = format!("CLOSE {DISPLAY_CURSOR_NAME}; COMMIT");
+            client
+                .batch_execute(&close_and_commit)
+                .await
+                .map_err(|error| map_tokio_postgres_error(&error))?;
+            messages
+        }
+    };
+
+    Ok(map_text_messages(
+        messages,
+        prepared_columns,
+        started.elapsed(),
+    ))
+}
+
+fn map_text_messages(
+    messages: Vec<SimpleQueryMessage>,
+    prepared_columns: Option<Vec<TextColumn>>,
+    duration: Duration,
+) -> QueryResultData {
+    let mut columns = prepared_columns.unwrap_or_default();
+    let mut rows = Vec::new();
+    let mut rows_affected = Some(0);
+
+    for message in messages {
+        match message {
+            SimpleQueryMessage::RowDescription(description) => {
+                if columns.len() != description.len() {
+                    columns = fallback_protocol_columns(description.iter().map(|col| col.name()));
+                }
+                rows_affected = None;
+            }
+            SimpleQueryMessage::Row(row) => {
+                if columns.len() != row.len() {
+                    columns = fallback_protocol_columns(row.columns().iter().map(|col| col.name()));
+                }
+                let mapped = (0..row.len())
+                    .map(|index| match row.try_get(index) {
+                        Ok(value) => map_cell(value.map(str::as_bytes), &columns[index]),
+                        Err(_) => ResultCell::Unreadable {
+                            type_name: columns[index].type_name.clone(),
+                        },
+                    })
+                    .collect();
+                rows.push(mapped);
+                rows_affected = None;
+            }
+            SimpleQueryMessage::CommandComplete(affected) if rows_affected.is_some() => {
+                rows_affected = Some(affected);
+            }
+            SimpleQueryMessage::CommandComplete(_) => {}
+            _ => {}
+        }
+    }
+
+    QueryResultData {
+        columns: columns
+            .into_iter()
+            .map(|column| ResultColumn {
+                name: column.name,
+                type_name: column.type_name,
+                type_oid: column.type_oid,
+            })
+            .collect(),
+        rows,
+        rows_affected,
+        duration_ms: duration.as_millis() as u64,
     }
 }
 
@@ -438,106 +505,9 @@ fn keyword_at(s: &str, keyword: &str) -> bool {
     }
 }
 
-fn cell_value(row: &tokio_postgres::Row, idx: usize) -> Value {
-    let col = &row.columns()[idx];
-    match *col.type_() {
-        Type::BOOL => row
-            .try_get::<_, Option<bool>>(idx)
-            .ok()
-            .flatten()
-            .map(Value::Bool)
-            .unwrap_or(Value::Null),
-        // FromSql accepts are type-exact — decode native widths then widen.
-        Type::INT2 => row
-            .try_get::<_, Option<i16>>(idx)
-            .ok()
-            .flatten()
-            .map(|v| Value::Int(i64::from(v)))
-            .unwrap_or(Value::Null),
-        Type::INT4 => row
-            .try_get::<_, Option<i32>>(idx)
-            .ok()
-            .flatten()
-            .map(|v| Value::Int(i64::from(v)))
-            .unwrap_or(Value::Null),
-        Type::INT8 => row
-            .try_get::<_, Option<i64>>(idx)
-            .ok()
-            .flatten()
-            .map(Value::Int)
-            .unwrap_or(Value::Null),
-        Type::FLOAT4 => row
-            .try_get::<_, Option<f32>>(idx)
-            .ok()
-            .flatten()
-            .map(|v| Value::Float(f64::from(v)))
-            .unwrap_or(Value::Null),
-        Type::FLOAT8 => row
-            .try_get::<_, Option<f64>>(idx)
-            .ok()
-            .flatten()
-            .map(Value::Float)
-            .unwrap_or(Value::Null),
-        Type::TEXT | Type::VARCHAR | Type::NAME | Type::BPCHAR => row
-            .try_get::<_, Option<String>>(idx)
-            .ok()
-            .flatten()
-            .map(Value::Text)
-            .unwrap_or(Value::Null),
-        _ => row
-            .try_get::<_, Option<String>>(idx)
-            .ok()
-            .flatten()
-            .map(Value::Text)
-            .unwrap_or(Value::Null),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn query_result_mapper_uses_rows_len_for_select_count_semantics() {
-        let mapped = map_query_rows(
-            MappedRowSet {
-                columns: vec!["id".into(), "name".into()],
-                rows: vec![vec![Value::Int(1), Value::Text("a".into())]],
-            },
-            Duration::from_millis(42),
-        );
-        assert_eq!(mapped.columns, vec!["id", "name"]);
-        assert_eq!(mapped.rows.len(), 1);
-        assert_eq!(mapped.duration_ms, 42);
-        // UI status N = rows.len(), not rows_affected
-        assert_eq!(mapped.rows.len() as i64, 1);
-    }
-
-    #[test]
-    fn query_result_mapper_zero_rows_is_explicit_empty() {
-        let mapped = map_query_rows(
-            MappedRowSet {
-                columns: vec!["id".into()],
-                rows: vec![],
-            },
-            Duration::from_millis(5),
-        );
-        assert_eq!(mapped.rows.len(), 0);
-        assert_eq!(mapped.duration_ms, 5);
-    }
-
-    #[test]
-    fn empty_select_row_set_keeps_column_names() {
-        let mapped = map_query_rows(
-            MappedRowSet {
-                columns: vec!["id".into(), "name".into()],
-                rows: vec![],
-            },
-            Duration::from_millis(1),
-        );
-        assert_eq!(mapped.columns, vec!["id", "name"]);
-        assert!(mapped.rows.is_empty());
-    }
 
     #[test]
     fn looks_like_select_handles_comments_and_with() {
