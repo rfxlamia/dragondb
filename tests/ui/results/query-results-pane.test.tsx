@@ -80,6 +80,69 @@ describe("QueryResultsPane", () => {
     expect(screen.getByTestId(ResultsAccessibility.grid)).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "id" })).toBeInTheDocument();
     expect(screen.getByText(ResultsCopy.noRowsFound)).toBeInTheDocument();
+    expect(screen.queryByText(/^Query finished\./)).toBeNull();
+  });
+
+  it.each([
+    [3, "Query finished. 3 rows affected."],
+    [1, "Query finished. 1 row affected."],
+    [0, "Query finished. 0 rows affected."],
+  ])("shows no-column success copy for %i affected rows", (rowsAffected, copy) => {
+    renderPane({ kind: "ok", rowCount: 0, durationMs: 2, rowsAffected }, null);
+
+    expect(screen.getByText(copy)).toBeInTheDocument();
+    expect(screen.queryByRole("table")).toBeNull();
+    expect(screen.queryByText(ResultsCopy.noRowsFound)).toBeNull();
+  });
+
+  it("shows quiet completion copy for a no-column utility statement", () => {
+    renderPane({ kind: "ok", rowCount: 0, durationMs: 2 }, null);
+
+    expect(screen.getByText("Query finished.")).toBeInTheDocument();
+    expect(screen.queryByRole("table")).toBeNull();
+    expect(screen.queryByText(ResultsCopy.noRowsFound)).toBeNull();
+  });
+
+  it("shows truthful multi-statement context as non-interactive status text", () => {
+    const grid = { columns: ["id"], rows: resultRows([[1]]) };
+    const view = render(
+      <QueryResultsPane
+        status={{
+          kind: "ok",
+          rowCount: 1,
+          durationMs: 2,
+          statementCount: 2,
+          statementIndex: 2,
+        }}
+        compact={grid}
+      />,
+    );
+
+    const statementStatus = screen.getByText("Statement 2 of 2");
+    expect(statementStatus.closest("button, a, select")).toBeNull();
+    expect(screen.getByRole("table")).toBeInTheDocument();
+
+    view.rerender(
+      <QueryResultsPane
+        status={{
+          kind: "ok",
+          rowCount: 1,
+          durationMs: 2,
+          statementCount: 1,
+          statementIndex: 1,
+        }}
+        compact={grid}
+      />,
+    );
+    expect(screen.queryByText(/^Statement /)).toBeNull();
+
+    view.rerender(
+      <QueryResultsPane
+        status={{ kind: "ok", rowCount: 1, durationMs: 2, statementCount: 2 }}
+        compact={grid}
+      />,
+    );
+    expect(screen.queryByText(/^Statement /)).toBeNull();
   });
 
   it("error shows Query Failed and the message with no grid", () => {

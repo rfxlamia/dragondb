@@ -2246,7 +2246,9 @@ describe("App native menu and accelerators (SP-4b)", () => {
       profile: { ...fixtureProfileFields(), name: "dev" },
       secrets: { password: "pw" },
     });
-    const runQuery = vi.spyOn(ipc, "runQuery");
+    const runQuery = vi
+      .spyOn(ipc, "runQuery")
+      .mockResolvedValue(resultFixture({ columns: ["id"], rows: [[1]], durationMs: 1 }));
     render(<App ipc={ipc} />);
     await connectFirst(user, ipc, { queriesTab: true });
     await addSelectFromUsers(user);
@@ -2294,7 +2296,9 @@ describe("App native menu and accelerators (SP-4b)", () => {
       profile: { ...fixtureProfileFields(), name: "dev" },
       secrets: { password: "pw" },
     });
-    const runQuery = vi.spyOn(ipc, "runQuery");
+    const runQuery = vi
+      .spyOn(ipc, "runQuery")
+      .mockResolvedValue(resultFixture({ columns: ["id"], rows: [[1]], durationMs: 1 }));
     render(<App ipc={ipc} />);
     await screen.findByTestId(VisualQueryAccessibility.runQuery);
     expect(screen.getByTestId(VisualQueryAccessibility.runQuery)).toBeDisabled();
@@ -2975,6 +2979,9 @@ describe("App table browser host wiring", () => {
 
   it("clears browse results on disconnect and leaves them cleared after a failed reconnect", async () => {
     const ipc = createMockDragonIpc("happy");
+    vi.spyOn(ipc, "runQuery").mockResolvedValue(
+      resultFixture({ columns: ["id"], rows: [[1]], durationMs: 1 }),
+    );
     const user = userEvent.setup();
     render(<App ipc={ipc} />);
     await connectFirst(user, ipc);
