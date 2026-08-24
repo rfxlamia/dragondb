@@ -5,8 +5,19 @@ import { QUERY_FAILED_MESSAGE } from "../../src/lib/unknown-error-message";
 import { composeAppStores } from "../../src/stores/compose-app-stores";
 import { runSelectOnActiveTab } from "../../src/stores/run-select-on-active-tab";
 import { defined } from "../lib/defined";
+import { resultFixture, valueCell } from "../lib/result-fixture";
 
 const FIXTURE_SQL = { text: "SELECT 1", params: [] as unknown[] };
+
+it("builds a contract-valid result with aligned metadata and overridable cells", () => {
+  const result = resultFixture({
+    columns: ["id", "name"],
+    rows: [[valueCell("1"), valueCell("Ada")]],
+  });
+
+  expect(result.rows[0]?.[1]).toEqual({ state: "value", text: "Ada" });
+  expect(result.columnTypes.map((column) => column.name)).toEqual(result.columns);
+});
 
 function composeIpc(overrides: Partial<DragonIpc> = {}): DragonIpc {
   return {
