@@ -2,10 +2,10 @@
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { ColumnInfo, ResultColumn } from "../../../src/ipc/contract";
+import type { ColumnInfo, ResultCell, ResultColumn } from "../../../src/ipc/contract";
 import { compactCell } from "../../../src/lib/result-compactor";
 import type { TabResultGrid, TabRunStatus } from "../../../src/stores/tabs-store";
 import { QueryResultsPane } from "../../../src/ui/results/query-results-pane";
@@ -325,6 +325,81 @@ describe("QueryResultsPane", () => {
     expect(onRetryRowReload).toHaveBeenCalledTimes(1);
     expect(onUpdateRow).toHaveBeenCalledTimes(1);
   });
+
+  it("unwraps an exact int8 primary key for update and delete callbacks", async () => {
+    const user = userEvent.setup();
+    const onUpdateRow = vi.fn(async () => ({ kind: "ok" as const }));
+    const onDeleteRows = vi.fn(async () => ({ kind: "ok" as const }));
+    const int8Max = "9223372036854775807";
+    const rows = resultRows([[int8Max, "before"]]);
+    render(
+      <QueryResultsPane
+        status={{ kind: "ok", rowCount: 1, durationMs: 1 }}
+        compact={{ columns: ["id", "note"], rows }}
+        raw={{ columns: ["id", "note"], rows }}
+        sourceTable={{ schema: "public", name: "orders" }}
+        columnMetadata={[
+          column({ name: "id", dataType: "bigint", isPrimaryKey: true }),
+          column({ name: "note" }),
+        ]}
+        onUpdateRow={onUpdateRow}
+        onDeleteRows={onDeleteRows}
+      />,
+    );
+
+    await user.click(defined(screen.getAllByRole("row")[1], "expected first data row"));
+    await user.click(screen.getByRole("button", { name: ResultsCopy.edit }));
+    await user.clear(screen.getByLabelText("note"));
+    await user.type(screen.getByLabelText("note"), "after");
+    await user.click(screen.getByRole("button", { name: ResultsCopy.save }));
+
+    expect(onUpdateRow).toHaveBeenCalledWith({ note: "after" }, { id: int8Max });
+
+    await user.click(screen.getByRole("button", { name: ResultsCopy.delete }));
+    const dialog = screen.getByRole("dialog", { name: "Delete 1 row(s)?" });
+    await user.click(within(dialog).getByRole("button", { name: ResultsCopy.delete }));
+
+    expect(onDeleteRows).toHaveBeenCalledWith([{ id: int8Max }]);
+  });
+
+  it.each([
+    ["unreadable", { state: "unreadable", typeName: "int8" }],
+    ["truncated", { state: "truncated", text: "922337203685477" }],
+  ] satisfies Array<[string, ResultCell]>)(
+    "disables row mutations for a %s primary key",
+    async (_state, primaryKey) => {
+      const user = userEvent.setup();
+      const onUpdateRow = vi.fn(async () => ({ kind: "ok" as const }));
+      const onDeleteRows = vi.fn(async () => ({ kind: "ok" as const }));
+      const rows = resultRows([[primaryKey, "before"]]);
+      render(
+        <QueryResultsPane
+          status={{ kind: "ok", rowCount: 1, durationMs: 1 }}
+          compact={{ columns: ["id", "note"], rows }}
+          raw={{ columns: ["id", "note"], rows }}
+          sourceTable={{ schema: "public", name: "orders" }}
+          columnMetadata={[
+            column({ name: "id", dataType: "bigint", isPrimaryKey: true }),
+            column({ name: "note" }),
+          ]}
+          onUpdateRow={onUpdateRow}
+          onDeleteRows={onDeleteRows}
+        />,
+      );
+
+      await user.click(defined(screen.getAllByRole("row")[1], "expected first data row"));
+      const editButton = screen.getByRole("button", { name: ResultsCopy.edit });
+      const deleteButton = screen.getByRole("button", { name: ResultsCopy.delete });
+
+      expect(editButton).toBeDisabled();
+      expect(deleteButton).toBeDisabled();
+      await user.click(editButton);
+      await user.click(deleteButton);
+      expect(screen.queryByRole("dialog")).toBeNull();
+      expect(onUpdateRow).not.toHaveBeenCalled();
+      expect(onDeleteRows).not.toHaveBeenCalled();
+    },
+  );
 
   it("Space opens JSON viewer when a row is selected", async () => {
     const user = userEvent.setup();

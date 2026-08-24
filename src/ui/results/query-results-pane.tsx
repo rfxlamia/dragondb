@@ -229,8 +229,12 @@ function ResultGrid(
   function selectedPrimaryKeys(): Record<string, unknown>[] {
     const source = rawGrid?.rows ?? rows;
     const cols = rawGrid?.columns ?? columns;
-    return selected.map((index) => primaryKeyOf(cols, source[index] ?? [], pkColumns));
+    const keys = selected.map((index) => primaryKeyOf(cols, source[index] ?? [], pkColumns));
+    return keys.some((key) => key === null) ? [] : (keys as Record<string, unknown>[]);
   }
+
+  const selectedPrimaryKeysAreSafe =
+    selected.length > 0 && selectedPrimaryKeys().length === selected.length;
 
   function openJson(): void {
     if (selected.length === 0) return;
@@ -254,14 +258,19 @@ function ResultGrid(
       return;
     }
     if (event.key === "Delete" || event.key === "Backspace") {
-      if (!canEdit || selected.length === 0) return;
+      if (!canEdit || !selectedPrimaryKeysAreSafe) return;
       event.preventDefault();
       setDeleteOpen(true);
     }
   }
 
   async function confirmDelete(): Promise<void> {
-    const outcome = await props.onDeleteRows?.(selectedPrimaryKeys());
+    const primaryKeys = selectedPrimaryKeys();
+    if (primaryKeys.length !== selected.length) {
+      setDeleteOpen(false);
+      return;
+    }
+    const outcome = await props.onDeleteRows?.(primaryKeys);
     setDeleteOpen(false);
     setSelected([]);
     if (outcome !== undefined && outcome.kind === "reloadFailed") {
@@ -329,7 +338,7 @@ function ResultGrid(
             type="button"
             className="ui-icon-btn"
             aria-label={ResultsCopy.edit}
-            disabled={!canEdit || selected.length === 0}
+            disabled={!canEdit || !selectedPrimaryKeysAreSafe}
             title={canEdit ? ResultsCopy.edit : editTitle}
             onClick={() => setEditorOpen(true)}
           >
@@ -339,7 +348,7 @@ function ResultGrid(
             type="button"
             className="ui-icon-btn ui-icon-btn--danger"
             aria-label={ResultsCopy.delete}
-            disabled={!canEdit || selected.length === 0}
+            disabled={!canEdit || !selectedPrimaryKeysAreSafe}
             title={canEdit ? ResultsCopy.delete : editTitle}
             onClick={() => setDeleteOpen(true)}
           >
@@ -585,11 +594,13 @@ function primaryKeyOf(
   columns: string[],
   row: unknown[],
   pkColumns: string[],
-): Record<string, unknown> {
+): Record<string, unknown> | null {
   const pk: Record<string, unknown> = {};
   for (const name of pkColumns) {
     const index = columns.indexOf(name);
-    pk[name] = index === -1 ? null : (row[index] ?? null);
+    const cell = index === -1 ? null : (row[index] ?? null);
+    if (!isValueCell(cell)) return null;
+    pk[name] = cell.text;
   }
   return pk;
 }
