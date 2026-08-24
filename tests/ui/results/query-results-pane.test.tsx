@@ -12,7 +12,7 @@ import { QueryResultsPane } from "../../../src/ui/results/query-results-pane";
 import { ResultsAccessibility } from "../../../src/ui/results/results-accessibility";
 import { ResultsCopy } from "../../../src/ui/results/results-copy";
 import { defined } from "../../lib/defined";
-import { resultRows } from "../../lib/result-fixture";
+import { resultFixture, resultRows } from "../../lib/result-fixture";
 
 afterEach(() => {
   cleanup();
@@ -496,5 +496,56 @@ describe("QueryResultsPane", () => {
     await user.click(defined(screen.getAllByRole("row")[1], "expected first data row"));
     await user.keyboard(" ");
     expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+
+  it("Sorting and filtering in the pane use type metadata", async () => {
+    const user = userEvent.setup();
+    const fixture = resultFixture({
+      columns: ["qty", "occurred_on"],
+      columnTypes: [
+        { name: "qty", typeName: "int4", typeOid: 23 },
+        { name: "occurred_on", typeName: "date", typeOid: 1082 },
+      ],
+      rows: [
+        ["-5", "2024-01-15"],
+        ["3", "2024-02-01"],
+        ["-10", "2024-03-01"],
+      ],
+    });
+    const grid = {
+      columns: fixture.columns,
+      columnTypes: fixture.columnTypes,
+      rows: fixture.rows,
+    };
+
+    render(
+      <QueryResultsPane
+        status={{ kind: "ok", rowCount: 3, durationMs: 1 }}
+        compact={grid}
+        raw={grid}
+        dateFormat="us"
+      />,
+    );
+
+    await user.click(screen.getByRole("columnheader", { name: "qty" }));
+    const dataRows = screen.getAllByRole("row").slice(1);
+    const qtyOrder = dataRows.map((row) => within(row).getAllByRole("cell")[0]?.textContent);
+    expect(qtyOrder).toEqual(["-10", "-5", "3"]);
+
+    const filter = screen.getByRole("searchbox");
+    await user.type(filter, "2024-01");
+    expect(screen.getByText("1/15/2024")).toBeInTheDocument();
+    expect(screen.getAllByRole("row").slice(1)).toHaveLength(1);
+
+    await user.clear(filter);
+    await user.type(filter, "1/15");
+    expect(screen.getByText("1/15/2024")).toBeInTheDocument();
+    expect(screen.getAllByRole("row").slice(1)).toHaveLength(1);
+
+    const paneSource = readFileSync(
+      join(process.cwd(), "src/ui/results/query-results-pane.tsx"),
+      "utf8",
+    );
+    expect(paneSource).not.toMatch(/function compareNonNull/);
   });
 });

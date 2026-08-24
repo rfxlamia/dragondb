@@ -24,6 +24,7 @@ import { SqlHatchCopy } from "../sql-editor/sql-hatch-copy";
 import { BrowseTimeoutContext, BrowseTimeoutDialog } from "./browse-timeout-dialog";
 import { formatResultCell } from "./format-result-cell";
 import { JsonViewer } from "./json-viewer";
+import { compareResultCells, resultCellSortText } from "./result-comparator";
 import { ResultsAccessibility } from "./results-accessibility";
 import { deleteRowsPrompt, ResultsCopy } from "./results-copy";
 import { RowEditor } from "./row-editor";
@@ -501,7 +502,9 @@ function visibleRows(
   }
   if (sort === null) return listed;
   const { column, dir } = sort;
-  return listed.slice().sort((a, b) => compareCells(a.cells[column], b.cells[column], dir));
+  return listed.slice().sort((a, b) =>
+    compareCells(a.cells[column], b.cells[column], columnTypes[column], dir),
+  );
 }
 
 function rowMatches(
@@ -512,40 +515,25 @@ function rowMatches(
   dateFormat: QueryResultsDateFormat,
 ): boolean {
   for (const [index] of columns.entries()) {
-    if (
-      formatResultCell(cells[index], columnTypes[index], dateFormat).toLowerCase().includes(needle)
-    ) {
+    const cell = cells[index];
+    const columnMetadata = columnTypes[index];
+    const displayed = formatResultCell(cell, columnMetadata, dateFormat).toLowerCase();
+    const raw = resultCellSortText(cell).toLowerCase();
+    if (displayed.includes(needle) || raw.includes(needle)) {
       return true;
     }
   }
   return false;
 }
 
-function compareCells(a: unknown, b: unknown, dir: "asc" | "desc"): number {
-  const aNull = a === null || a === undefined;
-  const bNull = b === null || b === undefined;
-  if (aNull && bNull) return 0;
-  if (aNull) return 1;
-  if (bNull) return -1;
-  const cmp = compareNonNull(a, b);
+function compareCells(
+  a: unknown,
+  b: unknown,
+  columnMetadata: ResultColumn | undefined,
+  dir: "asc" | "desc",
+): number {
+  const cmp = compareResultCells(a, b, columnMetadata);
   return dir === "asc" ? cmp : -cmp;
-}
-
-function compareNonNull(a: unknown, b: unknown): number {
-  if (typeof a === "number" && typeof b === "number") return a - b;
-  return cellCompareText(a).localeCompare(cellCompareText(b), undefined, {
-    numeric: true,
-    sensitivity: "base",
-  });
-}
-
-function cellCompareText(cell: unknown): string {
-  if (cell === null || cell === undefined) return "";
-  if (isValueCell(cell)) return cell.text;
-  if (typeof cell === "boolean") return cell ? "true" : "false";
-  if (typeof cell === "number") return String(cell);
-  if (typeof cell === "string") return cell;
-  return String(cell);
 }
 
 function headerCells(

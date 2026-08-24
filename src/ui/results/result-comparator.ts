@@ -13,7 +13,8 @@ function isNullish(cell: unknown): boolean {
   return isNullCell(cell) || cell === undefined;
 }
 
-function cellSortText(cell: unknown): string {
+/** Raw text used for sort/filter matching (not display formatting). */
+export function resultCellSortText(cell: unknown): string {
   if (isUnreadableCell(cell)) return UNREADABLE_EXPORT_SENTINEL;
   if (isTruncatedCell(cell)) return cell.text + TRUNCATION_SUFFIX;
   if (isValueCell(cell)) return cell.text;
@@ -104,8 +105,8 @@ export function compareResultCells(
   if (bNull) return -1;
 
   const { category, exactPrecision } = categorizeColumnType(columnMetadata?.typeOid ?? 0);
-  const aText = cellSortText(a);
-  const bText = cellSortText(b);
+  const aText = resultCellSortText(a);
+  const bText = resultCellSortText(b);
 
   switch (category) {
     case "number":
