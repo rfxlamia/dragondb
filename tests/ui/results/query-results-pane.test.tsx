@@ -5,19 +5,20 @@ import { join } from "node:path";
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { ColumnInfo } from "../../../src/ipc/contract";
+import type { ColumnInfo, ResultColumn } from "../../../src/ipc/contract";
 import { compactCell } from "../../../src/lib/result-compactor";
 import type { TabResultGrid, TabRunStatus } from "../../../src/stores/tabs-store";
 import { QueryResultsPane } from "../../../src/ui/results/query-results-pane";
 import { ResultsAccessibility } from "../../../src/ui/results/results-accessibility";
 import { ResultsCopy } from "../../../src/ui/results/results-copy";
 import { defined } from "../../lib/defined";
+import { resultRows } from "../../lib/result-fixture";
 
 afterEach(() => {
   cleanup();
 });
 
-const cachedCompact: TabResultGrid = { columns: ["id"], rows: [["cached"]] };
+const cachedCompact: TabResultGrid = { columns: ["id"], rows: resultRows([["cached"]]) };
 
 const column = (overrides: Partial<ColumnInfo>): ColumnInfo => ({
   name: "value",
@@ -58,7 +59,7 @@ describe("QueryResultsPane", () => {
   it("ok with null/false/0/empty-string cells formats tokens without treating them as SQL null", () => {
     renderPane(
       { kind: "ok", rowCount: 4, durationMs: 1 },
-      { columns: ["id"], rows: [[null], [false], [0], [""]] },
+      { columns: ["id"], rows: resultRows([[null], [false], [0], [""]]) },
     );
     const grid = screen.getByTestId(ResultsAccessibility.grid);
     expect(grid).toBeInTheDocument();
@@ -96,7 +97,7 @@ describe("QueryResultsPane", () => {
   it("long cells stay single-line via nowrap / overflow-x in query-results.css", () => {
     renderPane(
       { kind: "ok", rowCount: 1, durationMs: 1 },
-      { columns: ["id"], rows: [["x".repeat(200)]] },
+      { columns: ["id"], rows: resultRows([["x".repeat(200)]]) },
     );
     expect(screen.getByTestId(ResultsAccessibility.grid)).toBeInTheDocument();
     const css = readFileSync(join(process.cwd(), "src/ui/results/query-results.css"), "utf8");
@@ -132,7 +133,7 @@ describe("QueryResultsPane", () => {
   it("ok grid renders one cell per column even when a compact row is short", () => {
     renderPane(
       { kind: "ok", rowCount: 1, durationMs: 1 },
-      { columns: ["id", "name", "email"], rows: [[1]] },
+      { columns: ["id", "name", "email"], rows: resultRows([[1]]) },
     );
     expect(screen.getAllByRole("columnheader")).toHaveLength(3);
     expect(screen.getAllByRole("cell")).toHaveLength(3);
@@ -143,8 +144,8 @@ describe("QueryResultsPane", () => {
     render(
       <QueryResultsPane
         status={{ kind: "ok", rowCount: 3, durationMs: 1 }}
-        compact={{ columns: ["x"], rows: [["alpha"], ["beta"], [null]] }}
-        raw={{ columns: ["x"], rows: [["alpha"], ["beta"], [null]] }}
+        compact={{ columns: ["x"], rows: resultRows([["alpha"], ["beta"], [null]]) }}
+        raw={{ columns: ["x"], rows: resultRows([["alpha"], ["beta"], [null]]) }}
       />,
     );
     await user.type(screen.getByRole("searchbox"), "ALP");
@@ -157,11 +158,24 @@ describe("QueryResultsPane", () => {
   });
 
   it("formats a date cell with the Settings US pattern", () => {
+    const createdColumn: ResultColumn = {
+      name: "created",
+      typeName: "timestamptz",
+      typeOid: 1184,
+    };
     render(
       <QueryResultsPane
         status={{ kind: "ok", rowCount: 1, durationMs: 1 }}
-        compact={{ columns: ["created"], rows: [["2026-08-15T12:00:00Z"]] }}
-        raw={{ columns: ["created"], rows: [["2026-08-15T12:00:00Z"]] }}
+        compact={{
+          columns: ["created"],
+          columnTypes: [createdColumn],
+          rows: resultRows([["2026-08-15T12:00:00Z"]]),
+        }}
+        raw={{
+          columns: ["created"],
+          columnTypes: [createdColumn],
+          rows: resultRows([["2026-08-15T12:00:00Z"]]),
+        }}
         dateFormat="us"
       />,
     );
@@ -176,8 +190,8 @@ describe("QueryResultsPane", () => {
     render(
       <QueryResultsPane
         status={{ kind: "ok", rowCount: 1, durationMs: 1 }}
-        compact={{ columns: ["body"], rows: [[compactDisplay]] }}
-        raw={{ columns: ["body"], rows: [[raw]] }}
+        compact={{ columns: ["body"], rows: resultRows([[compactDisplay]]) }}
+        raw={{ columns: ["body"], rows: resultRows([[raw]]) }}
         onSaveCsv={onSaveCsv}
       />,
     );
@@ -193,8 +207,8 @@ describe("QueryResultsPane", () => {
     render(
       <QueryResultsPane
         status={{ kind: "ok", rowCount: 1, durationMs: 1 }}
-        compact={{ columns: ["id"], rows: [["1"]] }}
-        raw={{ columns: ["id"], rows: [["1"]] }}
+        compact={{ columns: ["id"], rows: resultRows([["1"]]) }}
+        raw={{ columns: ["id"], rows: resultRows([["1"]]) }}
         query="SELECT * FROM users"
       />,
     );
@@ -210,8 +224,8 @@ describe("QueryResultsPane", () => {
     render(
       <QueryResultsPane
         status={{ kind: "ok", rowCount: 1, durationMs: 1 }}
-        compact={{ columns: ["id"], rows: [["1"]] }}
-        raw={{ columns: ["id"], rows: [["1"]] }}
+        compact={{ columns: ["id"], rows: resultRows([["1"]]) }}
+        raw={{ columns: ["id"], rows: resultRows([["1"]]) }}
         query="SELECT * FROM users"
         sourceTable={{ schema: "public", name: "users" }}
         columnMetadata={[]}
@@ -226,8 +240,8 @@ describe("QueryResultsPane", () => {
     render(
       <QueryResultsPane
         status={{ kind: "ok", rowCount: 1, durationMs: 1 }}
-        compact={{ columns: ["id"], rows: [["1"]] }}
-        raw={{ columns: ["id"], rows: [["1"]] }}
+        compact={{ columns: ["id"], rows: resultRows([["1"]]) }}
+        raw={{ columns: ["id"], rows: resultRows([["1"]]) }}
         query="SELECT * FROM a JOIN b ON a.id = b.id"
       />,
     );
@@ -244,8 +258,8 @@ describe("QueryResultsPane", () => {
     render(
       <QueryResultsPane
         status={{ kind: "ok", rowCount: 1, durationMs: 1 }}
-        compact={{ columns: ["id"], rows: [["1"]] }}
-        raw={{ columns: ["id"], rows: [["1"]] }}
+        compact={{ columns: ["id"], rows: resultRows([["1"]]) }}
+        raw={{ columns: ["id"], rows: resultRows([["1"]]) }}
         query="SELECT * FROM a JOIN b ON a.id = b.id"
         sourceTable={{ schema: "public", name: "orders" }}
         columnMetadata={[column({ name: "id", isPrimaryKey: true })]}
@@ -267,8 +281,8 @@ describe("QueryResultsPane", () => {
     render(
       <QueryResultsPane
         status={{ kind: "ok", rowCount: 1, durationMs: 1 }}
-        compact={{ columns: ["id", "occurred_on"], rows: [[42, "2026-08-18"]] }}
-        raw={{ columns: ["id", "occurred_on"], rows: [[42, "2026-08-18"]] }}
+        compact={{ columns: ["id", "occurred_on"], rows: resultRows([[42, "2026-08-18"]]) }}
+        raw={{ columns: ["id", "occurred_on"], rows: resultRows([[42, "2026-08-18"]]) }}
         sourceTable={{ schema: "public", name: "events" }}
         columnMetadata={columns}
       />,
@@ -289,8 +303,8 @@ describe("QueryResultsPane", () => {
     render(
       <QueryResultsPane
         status={{ kind: "ok", rowCount: 1, durationMs: 1 }}
-        compact={{ columns: ["id", "note"], rows: [[1, "before"]] }}
-        raw={{ columns: ["id", "note"], rows: [[1, "before"]] }}
+        compact={{ columns: ["id", "note"], rows: resultRows([[1, "before"]]) }}
+        raw={{ columns: ["id", "note"], rows: resultRows([[1, "before"]]) }}
         sourceTable={{ schema: "public", name: "orders" }}
         columnMetadata={[
           column({ name: "id", dataType: "bigint", isPrimaryKey: true }),
@@ -317,8 +331,8 @@ describe("QueryResultsPane", () => {
     render(
       <QueryResultsPane
         status={{ kind: "ok", rowCount: 1, durationMs: 1 }}
-        compact={{ columns: ["id"], rows: [["1"]] }}
-        raw={{ columns: ["id"], rows: [["1"]] }}
+        compact={{ columns: ["id"], rows: resultRows([["1"]]) }}
+        raw={{ columns: ["id"], rows: resultRows([["1"]]) }}
       />,
     );
     await user.click(defined(screen.getAllByRole("row")[1], "expected first data row"));

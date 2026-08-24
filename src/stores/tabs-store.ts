@@ -8,13 +8,19 @@
  * Hydration sets tabsReady after listTabStates; creates one empty tab if none remain.
  */
 import { createStore, type StoreApi } from "zustand/vanilla";
-import type { ConnectionId, DragonIpc, ResultColumn, TabStateDto } from "../ipc/contract";
+import type {
+  ConnectionId,
+  DragonIpc,
+  ResultCell,
+  ResultColumn,
+  TabStateDto,
+} from "../ipc/contract";
 import { isTruncatedCell, isUnreadableCell, isValueCell } from "../lib/result-cell";
 import { compactCell } from "../lib/result-compactor";
 
 export type TabResultGrid = {
   columns: string[];
-  rows: unknown[][];
+  rows: ResultCell[][];
   columnTypes?: ResultColumn[];
 };
 
@@ -58,7 +64,7 @@ export type TabsSessionGetters = {
 
 export type TabRunResult = {
   columns: string[];
-  rows: unknown[][];
+  rows: ResultCell[][];
   durationMs: number;
   columnTypes?: ResultColumn[];
   rowsAffected?: number | null;
@@ -178,10 +184,10 @@ function parseCachedResults(data: string | null): ParsedCachedResults {
     if (!Array.isArray(parsed.columnTypes)) {
       return { kind: "previous" };
     }
-    const rows: unknown[][] = [];
+    const rows: ResultCell[][] = [];
     for (const row of parsed.rows) {
       if (!Array.isArray(row)) return { kind: "invalid" };
-      rows.push(row);
+      rows.push(row as ResultCell[]);
     }
     const columnTypes = parsed.columnTypes.map((entry) => {
       const col = entry as { name?: unknown; typeName?: unknown; typeOid?: unknown };
@@ -204,7 +210,7 @@ function parseCachedResults(data: string | null): ParsedCachedResults {
   }
 }
 
-function compactCells(row: unknown): unknown[] {
+function compactCells(row: unknown): ResultCell[] {
   const cells = Array.isArray(row) ? row : [];
   return cells.map((cell) => {
     if (cell === null) return null;
@@ -213,7 +219,7 @@ function compactCells(row: unknown): unknown[] {
     if (isTruncatedCell(cell)) return { ...cell, text: compactCell(cell.text) };
     if (typeof cell === "string") return compactCell(cell);
     return cell;
-  });
+  }) as ResultCell[];
 }
 
 function compactGrid(raw: TabResultGrid): TabResultGrid {

@@ -4,7 +4,7 @@ import type { QueryResultsDateFormat } from "./date-format-setting";
 export const DATE_PARSE_MAX_CHARS = 64;
 
 const ISO_DATE_PREFIX = /^\d{4}-\d{2}-\d{2}/;
-const POSTGRES_OFFSET = /(?:Z|[+-]\d{2}(?::\d{2})?)$/i;
+const POSTGRES_OFFSET = /(?:[ T]\d{2}:\d{2}:\d{2}(?:\.\d+)?)(?:Z|[+-]\d{2}(?::\d{2})?)$/i;
 
 type CalendarDate = { year: number; month: number; day: number };
 
@@ -45,7 +45,14 @@ function parseQueryDate(value: string): ParsedQueryDate | null {
     if (naive === null) return null;
     const calendar = calendarFromMatch(naive);
     const instant = new Date(
-      Date.UTC(calendar.year, calendar.month - 1, calendar.day, calendar.hour, calendar.minute, calendar.second),
+      Date.UTC(
+        calendar.year,
+        calendar.month - 1,
+        calendar.day,
+        calendar.hour,
+        calendar.minute,
+        calendar.second,
+      ),
     );
     return { instant, calendar: { year: calendar.year, month: calendar.month, day: calendar.day } };
   }

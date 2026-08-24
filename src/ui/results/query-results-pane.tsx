@@ -1,9 +1,14 @@
 import { useContext, useMemo, useState } from "react";
-import type { ColumnInfo } from "../../ipc/contract";
+import type { ColumnInfo, ResultCell, ResultColumn } from "../../ipc/contract";
 import { toCsv } from "../../lib/csv-exporter";
 import type { QueryResultsDateFormat } from "../../lib/date-format-setting";
 import { determineEditability } from "../../lib/query-editability";
-import { isValueCell } from "../../lib/result-cell";
+import {
+  isTruncatedCell,
+  isUnreadableCell,
+  isValueCell,
+  resultCellToExportValue,
+} from "../../lib/result-cell";
 import type { BrowseLifecycle } from "../../stores/browse-session-store";
 import type { TabResultGrid, TabRunStatus } from "../../stores/tabs-store";
 import {
@@ -187,9 +192,10 @@ function ResultGrid(
     editTitle = editability.reason?.title;
   }
 
+  const columnTypes = compact?.columnTypes ?? [];
   const visible = useMemo(
-    () => visibleRows(rows, columns, filter, sort, dateFormat),
-    [rows, columns, filter, sort, dateFormat],
+    () => visibleRows(rows, columns, columnTypes, filter, sort, dateFormat),
+    [rows, columns, columnTypes, filter, sort, dateFormat],
   );
 
   function toggleSort(columnIndex: number): void {
@@ -346,7 +352,9 @@ function ResultGrid(
           <thead>
             <tr>{headerCells(columns, sort, toggleSort)}</tr>
           </thead>
-          <tbody>{bodyRows(columns, visible, selected, dateFormat, selectRow, onRowKeyDown)}</tbody>
+          <tbody>
+            {bodyRows(columns, columnTypes, visible, selected, dateFormat, selectRow, onRowKeyDown)}
+          </tbody>
         </table>
       </div>
       {rows.length === 0 ? (
@@ -419,11 +427,12 @@ function ResultGrid(
   );
 }
 
-type VisibleRow = { origin: number; cells: unknown[] };
+type VisibleRow = { origin: number; cells: ResultCell[] };
 
 function visibleRows(
-  rows: unknown[][],
+  rows: ResultCell[][],
   columns: string[],
+  columnTypes: ResultColumn[],
   filter: string,
   sort: { column: number; dir: "asc" | "desc" } | null,
   dateFormat: QueryResultsDateFormat,
@@ -432,7 +441,7 @@ function visibleRows(
   const listed: VisibleRow[] = [];
   for (const [origin, row] of rows.entries()) {
     const cells = Array.isArray(row) ? row : [];
-    if (needle !== "" && !rowMatches(cells, columns, needle, dateFormat)) continue;
+    if (needle !== "" && !rowMatches(cells, columns, columnTypes, needle, dateFormat)) continue;
     listed.push({ origin, cells });
   }
   if (sort === null) return listed;
@@ -441,13 +450,18 @@ function visibleRows(
 }
 
 function rowMatches(
-  cells: unknown[],
+  cells: ResultCell[],
   columns: string[],
+  columnTypes: ResultColumn[],
   needle: string,
   dateFormat: QueryResultsDateFormat,
 ): boolean {
   for (const [index] of columns.entries()) {
-    if (formatResultCell(cells[index], dateFormat).toLowerCase().includes(needle)) return true;
+    if (
+      formatResultCell(cells[index], columnTypes[index], dateFormat).toLowerCase().includes(needle)
+    ) {
+      return true;
+    }
   }
   return false;
 }
@@ -464,7 +478,19 @@ function compareCells(a: unknown, b: unknown, dir: "asc" | "desc"): number {
 
 function compareNonNull(a: unknown, b: unknown): number {
   if (typeof a === "number" && typeof b === "number") return a - b;
-  return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: "base" });
+  return cellCompareText(a).localeCompare(cellCompareText(b), undefined, {
+    numeric: true,
+    sensitivity: "base",
+  });
+}
+
+function cellCompareText(cell: unknown): string {
+  if (cell === null || cell === undefined) return "";
+  if (isValueCell(cell)) return cell.text;
+  if (typeof cell === "boolean") return cell ? "true" : "false";
+  if (typeof cell === "number") return String(cell);
+  if (typeof cell === "string") return cell;
+  return String(cell);
 }
 
 function headerCells(
@@ -497,6 +523,7 @@ function headerCells(
 
 function bodyRows(
   columns: string[],
+  columnTypes: ResultColumn[],
   visible: VisibleRow[],
   selected: number[],
   dateFormat: QueryResultsDateFormat,
@@ -509,7 +536,7 @@ function bodyRows(
     for (const [cellIndex, column] of columns.entries()) {
       cells.push(
         <td key={`${column}-${cellIndex}`}>
-          {renderResultCellText(row.cells[cellIndex], dateFormat)}
+          {renderResultCellText(row.cells[cellIndex], columnTypes[cellIndex], dateFormat)}
         </td>,
       );
     }
@@ -530,8 +557,12 @@ function bodyRows(
   return elements;
 }
 
-function renderResultCellText(cell: unknown, dateFormat: QueryResultsDateFormat): string {
-  return formatResultCell(isValueCell(cell) ? cell.text : cell, dateFormat);
+function renderResultCellText(
+  cell: ResultCell | undefined,
+  columnMetadata: ResultColumn | undefined,
+  dateFormat: QueryResultsDateFormat,
+): string {
+  return formatResultCell(cell, columnMetadata, dateFormat);
 }
 
 function metadataForResultColumns(resultColumns: string[], metadata: ColumnInfo[]): ColumnInfo[] {
@@ -566,6 +597,9 @@ function primaryKeyOf(
 function rowToCsvFields(row: unknown[]): Array<string | null> {
   return row.map((cell) => {
     if (cell === null || cell === undefined) return null;
+    if (isValueCell(cell) || isUnreadableCell(cell) || isTruncatedCell(cell)) {
+      return resultCellToExportValue(cell);
+    }
     if (typeof cell === "string") return cell;
     return String(cell);
   });

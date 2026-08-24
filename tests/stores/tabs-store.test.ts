@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { DragonIpc, ResultColumn, TabStateDto } from "../../src/ipc/contract";
 import { compactCell, MAX_CELL_CHARACTERS } from "../../src/lib/result-compactor";
 import { createTabsStore } from "../../src/stores/tabs-store";
+import { resultRows, valueCell } from "../lib/result-fixture";
 
 function defaultColumnTypes(columns: string[]): ResultColumn[] {
   return columns.map((name) => ({ name, typeName: "text", typeOid: 25 }));
@@ -320,8 +321,8 @@ describe("tabs-store", () => {
     store.setState({
       tabs: tabs.map((t) => ({
         ...t,
-        raw: { columns: ["c"], rows: [["prior"]] },
-        compact: { columns: ["c"], rows: [["prior"]] },
+        raw: { columns: ["c"], rows: resultRows([["prior"]]) },
+        compact: { columns: ["c"], rows: resultRows([["prior"]]) },
         status: { kind: "ok" as const, rowCount: 1, durationMs: 1 },
       })),
       activeTabId,
@@ -339,8 +340,8 @@ describe("tabs-store", () => {
       tabs: [
         {
           ...baseTab({ id: "T" }),
-          raw: { columns: ["c"], rows: [["live"]] },
-          compact: { columns: ["c"], rows: [["live"]] },
+          raw: { columns: ["c"], rows: resultRows([["live"]]) },
+          compact: { columns: ["c"], rows: resultRows([["live"]]) },
           status: { kind: "ok", rowCount: 1, durationMs: 5 },
         },
       ],
@@ -354,8 +355,8 @@ describe("tabs-store", () => {
       }),
     );
     const tab = store.getState().tabs.find((t) => t.id === "T");
-    expect(tab?.compact?.rows).toEqual([["live"]]);
-    expect(tab?.raw?.rows).toEqual([["live"]]);
+    expect(tab?.compact?.rows).toEqual(resultRows([["live"]]));
+    expect(tab?.raw?.rows).toEqual(resultRows([["live"]]));
     expect(tab?.status).toEqual({ kind: "ok", rowCount: 1, durationMs: 5 });
   });
 
@@ -369,8 +370,8 @@ describe("tabs-store", () => {
       tabs: [
         {
           ...baseTab({ id: "T" }),
-          raw: { columns: ["c"], rows: [["inflight"]] },
-          compact: { columns: ["c"], rows: [["inflight"]] },
+          raw: { columns: ["c"], rows: resultRows([["inflight"]]) },
+          compact: { columns: ["c"], rows: resultRows([["inflight"]]) },
           status: { kind: "running" },
         },
       ],
@@ -384,8 +385,8 @@ describe("tabs-store", () => {
       }),
     );
     const tab = store.getState().tabs.find((t) => t.id === "T");
-    expect(tab?.compact?.rows).toEqual([["inflight"]]);
-    expect(tab?.raw?.rows).toEqual([["inflight"]]);
+    expect(tab?.compact?.rows).toEqual(resultRows([["inflight"]]));
+    expect(tab?.raw?.rows).toEqual(resultRows([["inflight"]]));
     expect(tab?.status).toEqual({ kind: "running" });
   });
 
@@ -399,8 +400,8 @@ describe("tabs-store", () => {
       tabs: [
         {
           ...baseTab({ id: "T" }),
-          raw: { columns: ["c"], rows: [["old"]] },
-          compact: { columns: ["c"], rows: [["old"]] },
+          raw: { columns: ["c"], rows: resultRows([["old"]]) },
+          compact: { columns: ["c"], rows: resultRows([["old"]]) },
           status: { kind: "error", message: "boom" },
         },
       ],
@@ -414,8 +415,8 @@ describe("tabs-store", () => {
       }),
     );
     const tab = store.getState().tabs.find((t) => t.id === "T");
-    expect(tab?.compact?.rows).toEqual([["old"]]);
-    expect(tab?.raw?.rows).toEqual([["old"]]);
+    expect(tab?.compact?.rows).toEqual(resultRows([["old"]]));
+    expect(tab?.raw?.rows).toEqual(resultRows([["old"]]));
     expect(tab?.status).toEqual({ kind: "error", message: "boom" });
   });
 
@@ -704,12 +705,16 @@ describe("tabs-store", () => {
     const long = "x".repeat(3000);
     await store
       .getState()
-      .applyRunSuccess("T", { columns: ["c"], rows: [[long]], durationMs: 12 }, gen);
+      .applyRunSuccess("T", { columns: ["c"], rows: resultRows([[long]]), durationMs: 12 }, gen);
     const tab = store.getState().tabs.find((t) => t.id === "T");
-    expect(tab?.raw?.rows[0]?.[0]).toBe(long);
-    expect(tab?.compact?.rows[0]?.[0]).toBe(compactCell(long));
-    expect(tab?.compact?.rows[0]?.[0]).toMatch(/\.\.\. \[truncated\]$/);
-    expect(String(tab?.compact?.rows[0]?.[0]).length).toBe(2048);
+    expect(tab?.raw?.rows[0]?.[0]).toEqual(valueCell(long));
+    const compactCellValue = tab?.compact?.rows[0]?.[0];
+    expect(compactCellValue).toEqual(valueCell(compactCell(long)));
+    expect(compactCellValue).toMatchObject({
+      state: "value",
+      text: expect.stringMatching(/\.\.\. \[truncated\]$/),
+    });
+    expect(String((compactCellValue as { text: string }).text).length).toBe(2048);
     expect(tab?.status).toEqual({ kind: "ok", rowCount: 1, durationMs: 12 });
     expect(saveTabState).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -750,7 +755,9 @@ describe("tabs-store", () => {
       activeTabId: "T",
       pendingDeletedIds: new Set(["T"]),
     });
-    await store.getState().applyRunSuccess("T", { columns: ["c"], rows: [[1]], durationMs: 1 }, 1);
+    await store
+      .getState()
+      .applyRunSuccess("T", { columns: ["c"], rows: resultRows([[1]]), durationMs: 1 }, 1);
     expect(saveTabState).not.toHaveBeenCalled();
     expect(store.getState().tabs.find((t) => t.id === "T")?.status).not.toEqual(
       expect.objectContaining({ kind: "ok" }),
@@ -768,7 +775,11 @@ describe("tabs-store", () => {
     const gen = store.getState().beginRun("T");
     await store
       .getState()
-      .applyRunSuccess("T", { columns: ["c"], rows: [["stale"]], durationMs: 1 }, (gen ?? 0) - 1);
+      .applyRunSuccess(
+        "T",
+        { columns: ["c"], rows: resultRows([["stale"]]), durationMs: 1 },
+        (gen ?? 0) - 1,
+      );
     const tab = store.getState().tabs.find((t) => t.id === "T");
     expect(tab?.status).toEqual({ kind: "running" });
     expect(tab?.raw).toBeNull();
@@ -798,7 +809,7 @@ describe("tabs-store", () => {
     expect(tab?.status).toEqual({ kind: "idle" });
     await store
       .getState()
-      .applyRunSuccess("T", { columns: ["c"], rows: [[1]], durationMs: 1 }, gen);
+      .applyRunSuccess("T", { columns: ["c"], rows: resultRows([[1]]), durationMs: 1 }, gen);
     expect(store.getState().tabs.find((t) => t.id === "T")?.status).toEqual({ kind: "idle" });
   });
 
@@ -1003,7 +1014,7 @@ describe("tabs-store", () => {
       getConnectionId: () => "c1",
       getDatabaseName: () => "app",
     });
-    const compact = { columns: ["id"], rows: [[1]] };
+    const compact = { columns: ["id"], rows: resultRows([[1]]) };
     store.setState({
       tabs: [
         {
@@ -1044,7 +1055,7 @@ describe("tabs-store", () => {
     store.setState({ tabs: [{ ...baseTab({ id: "t1" }) }], activeTabId: "t1" });
     const staleGeneration = store.getState().beginRun("t1");
     const cached = {
-      compact: { columns: ["id"], rows: [[9]] },
+      compact: { columns: ["id"], rows: resultRows([[9]]) },
       status: { kind: "ok" as const, rowCount: 1, durationMs: 7 },
     };
     store.getState().restoreSavedQueryResult("t1", cached);
@@ -1055,7 +1066,7 @@ describe("tabs-store", () => {
       .getState()
       .applyRunSuccess(
         "t1",
-        { columns: ["id"], rows: [[1]], durationMs: 1 },
+        { columns: ["id"], rows: resultRows([[1]]), durationMs: 1 },
         staleGeneration ?? undefined,
       );
     expect(store.getState().tabs[0]?.compact).toEqual(cached.compact);
@@ -1136,8 +1147,8 @@ describe("tabs-store", () => {
             selectedTableSchema: "public",
             selectedTableName: "orders",
           }),
-          raw: { columns: ["id"], rows: [[1]] },
-          compact: { columns: ["id"], rows: [[1]] },
+          raw: { columns: ["id"], rows: resultRows([[1]]) },
+          compact: { columns: ["id"], rows: resultRows([[1]]) },
           status: { kind: "ok", rowCount: 1, durationMs: 1 },
           browsePage: 2,
         },
@@ -1147,8 +1158,8 @@ describe("tabs-store", () => {
             queryText: "SELECT 1",
             visualDocumentJson: '{"statementKind":"select"}',
           }),
-          raw: { columns: ["?column?"], rows: [[1]] },
-          compact: { columns: ["?column?"], rows: [[1]] },
+          raw: { columns: ["?column?"], rows: resultRows([[1]]) },
+          compact: { columns: ["?column?"], rows: resultRows([[1]]) },
           status: { kind: "ok", rowCount: 1, durationMs: 1 },
         },
       ],
@@ -1165,8 +1176,8 @@ describe("tabs-store", () => {
     });
     expect(store.getState().tabs.find((tab) => tab.id === "sql")).toMatchObject({
       queryText: "SELECT 1",
-      raw: { rows: [[1]] },
-      compact: { rows: [[1]] },
+      raw: { rows: resultRows([[1]]) },
+      compact: { rows: resultRows([[1]]) },
     });
   });
 });
