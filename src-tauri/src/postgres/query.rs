@@ -20,9 +20,11 @@ use super::{ResultCell, ResultColumn};
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QueryResultData {
-    pub columns: Vec<ResultColumn>,
+    pub columns: Vec<String>,
+    pub column_types: Vec<ResultColumn>,
     pub rows: Vec<Vec<ResultCell>>,
     pub rows_affected: Option<u64>,
+    pub statement_count: u64,
     pub duration_ms: u64,
 }
 
@@ -37,8 +39,10 @@ pub async fn run_query(
     if statements.is_empty() {
         return Ok(QueryResultData {
             columns: vec![],
+            column_types: vec![],
             rows: vec![],
             rows_affected: Some(0),
+            statement_count: 1,
             duration_ms: 0,
         });
     }
@@ -52,8 +56,10 @@ pub async fn run_query(
     }
     let mut last = QueryResultData {
         columns: vec![],
+        column_types: vec![],
         rows: vec![],
         rows_affected: Some(0),
+        statement_count: 1,
         duration_ms: 0,
     };
     let mut saw_row_result = false;
@@ -106,8 +112,10 @@ async fn run_single_query(
             .map_err(|e| map_tokio_postgres_error(&e))?;
         Ok(QueryResultData {
             columns: vec![],
+            column_types: vec![],
             rows: vec![],
             rows_affected: Some(result),
+            statement_count: 1,
             duration_ms: started.elapsed().as_millis() as u64,
         })
     }
@@ -314,17 +322,25 @@ fn map_text_messages(
         }
     }
 
-    QueryResultData {
-        columns: columns
-            .into_iter()
-            .map(|column| ResultColumn {
-                name: column.name,
+    let (column_names, column_types) = columns
+        .into_iter()
+        .map(|column| {
+            let name = column.name;
+            let metadata = ResultColumn {
+                name: name.clone(),
                 type_name: column.type_name,
                 type_oid: column.type_oid,
-            })
-            .collect(),
+            };
+            (name, metadata)
+        })
+        .unzip();
+
+    QueryResultData {
+        columns: column_names,
+        column_types,
         rows,
         rows_affected,
+        statement_count: 1,
         duration_ms: duration.as_millis() as u64,
     }
 }
@@ -627,6 +643,31 @@ fn keyword_at(s: &str, keyword: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn query_result_serializes_the_typescript_wire_shape() {
+        let result = map_text_messages(
+            vec![],
+            Some(vec![TextColumn::new("account_id", "int8", 20)]),
+            Duration::from_millis(7),
+        );
+
+        assert_eq!(
+            serde_json::to_value(result).expect("serialize query result"),
+            serde_json::json!({
+                "columns": ["account_id"],
+                "columnTypes": [{
+                    "name": "account_id",
+                    "typeName": "int8",
+                    "typeOid": 20
+                }],
+                "rows": [],
+                "rowsAffected": 0,
+                "statementCount": 1,
+                "durationMs": 7
+            })
+        );
+    }
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     enum CursorOperation {

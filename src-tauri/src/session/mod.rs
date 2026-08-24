@@ -2178,7 +2178,8 @@ fn sample_columns() -> Vec<ColumnInfoRow> {
 
 fn sample_query_result() -> QueryResultData {
     QueryResultData {
-        columns: vec![crate::postgres::ResultColumn {
+        columns: vec!["?column?".into()],
+        column_types: vec![crate::postgres::ResultColumn {
             name: "?column?".into(),
             type_name: "int4".into(),
             type_oid: 23,
@@ -2187,6 +2188,7 @@ fn sample_query_result() -> QueryResultData {
             text: "1".into(),
         }]],
         rows_affected: None,
+        statement_count: 1,
         duration_ms: 1,
     }
 }
