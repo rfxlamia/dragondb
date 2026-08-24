@@ -4,55 +4,87 @@ import type { QueryResultsDateFormat } from "./date-format-setting";
 export const DATE_PARSE_MAX_CHARS = 64;
 
 const ISO_DATE_PREFIX = /^\d{4}-\d{2}-\d{2}/;
+const POSTGRES_OFFSET = /(?:Z|[+-]\d{2}(?::\d{2})?)$/i;
+
+type CalendarDate = { year: number; month: number; day: number };
+
+type ParsedQueryDate = {
+  instant: Date;
+  calendar: CalendarDate;
+};
 
 /**
  * Format a compact-grid cell with the Settings date pattern.
  * Parse guards live here so callers (formatResultCell) do not duplicate them.
  */
 export function formatQueryDate(value: string, format: QueryResultsDateFormat): string {
-  const date = parseQueryDate(value);
-  if (date === null) return value;
+  const parsed = parseQueryDate(value);
+  if (parsed === null) return value;
   switch (format) {
     case "iso8601":
       return value;
     case "iso8601DateOnly":
-      return utcYmd(date);
+      return formatYmd(parsed.calendar);
     case "us":
-      return `${date.getUTCMonth() + 1}/${date.getUTCDate()}/${date.getUTCFullYear()}`;
+      return `${parsed.calendar.month}/${parsed.calendar.day}/${parsed.calendar.year}`;
     case "european":
-      return `${date.getUTCDate()}/${date.getUTCMonth() + 1}/${date.getUTCFullYear()}`;
+      return `${parsed.calendar.day}/${parsed.calendar.month}/${parsed.calendar.year}`;
     case "relative":
-      return relativeFrom(date.getTime());
+      return relativeFrom(parsed.instant.getTime());
   }
 }
 
 const NAIVE_TIMESTAMP = /^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}):(\d{2})(?:\.\d+)?)?$/;
-const HAS_EXPLICIT_OFFSET = /(?:Z|[+-]\d{2}:\d{2})$/i;
 
-function parseQueryDate(value: string): Date | null {
+function parseQueryDate(value: string): ParsedQueryDate | null {
   if (value.length === 0 || value.length > DATE_PARSE_MAX_CHARS) return null;
   if (!ISO_DATE_PREFIX.test(value)) return null;
   const normalized = value.includes(" ") ? value.replace(" ", "T") : value;
-  if (!HAS_EXPLICIT_OFFSET.test(normalized)) {
+  if (!POSTGRES_OFFSET.test(normalized)) {
     const naive = NAIVE_TIMESTAMP.exec(normalized);
     if (naive === null) return null;
-    const year = Number(naive[1]);
-    const month = Number(naive[2]);
-    const day = Number(naive[3]);
-    const hour = Number(naive[4] ?? "0");
-    const minute = Number(naive[5] ?? "0");
-    const second = Number(naive[6] ?? "0");
-    return new Date(Date.UTC(year, month - 1, day, hour, minute, second));
+    const calendar = calendarFromMatch(naive);
+    const instant = new Date(
+      Date.UTC(calendar.year, calendar.month - 1, calendar.day, calendar.hour, calendar.minute, calendar.second),
+    );
+    return { instant, calendar: { year: calendar.year, month: calendar.month, day: calendar.day } };
   }
-  const ms = Date.parse(normalized);
+  const withOffset = NAIVE_TIMESTAMP.exec(normalized.replace(POSTGRES_OFFSET, ""));
+  if (withOffset === null) return null;
+  const calendar = calendarFromMatch(withOffset);
+  const parseable = normalizePostgresOffset(normalized);
+  const ms = Date.parse(parseable);
   if (Number.isNaN(ms)) return null;
-  return new Date(ms);
+  return {
+    instant: new Date(ms),
+    calendar: { year: calendar.year, month: calendar.month, day: calendar.day },
+  };
 }
 
-function utcYmd(date: Date): string {
-  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
-  const day = String(date.getUTCDate()).padStart(2, "0");
-  return `${date.getUTCFullYear()}-${month}-${day}`;
+function calendarFromMatch(match: RegExpExecArray): CalendarDate & {
+  hour: number;
+  minute: number;
+  second: number;
+} {
+  return {
+    year: Number(match[1]),
+    month: Number(match[2]),
+    day: Number(match[3]),
+    hour: Number(match[4] ?? "0"),
+    minute: Number(match[5] ?? "0"),
+    second: Number(match[6] ?? "0"),
+  };
+}
+
+/** PostgreSQL whole-hour offsets (`+07`) need `:00` for Date.parse. */
+function normalizePostgresOffset(value: string): string {
+  return value.replace(/([+-]\d{2})$/, "$1:00");
+}
+
+function formatYmd(calendar: CalendarDate): string {
+  const month = String(calendar.month).padStart(2, "0");
+  const day = String(calendar.day).padStart(2, "0");
+  return `${calendar.year}-${month}-${day}`;
 }
 
 function relativeFrom(thenMs: number, nowMs: number = Date.now()): string {

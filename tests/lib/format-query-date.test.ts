@@ -14,4 +14,16 @@ describe("formatQueryDate", () => {
     expect(formatQueryDate("2026-01-01 00:30:00", "us")).toBe("1/1/2026");
     expect(formatQueryDate("2026-01-01 00:30:00", "european")).toBe("1/1/2026");
   });
+
+  it("parses PostgreSQL offset forms and keeps their calendar day", () => {
+    const wholeHour = "2026-08-03 01:00:00+07";
+    const utc = "2026-08-03 01:00:00+00";
+    const halfHour = "2026-08-03 01:00:00+05:30";
+
+    expect(formatQueryDate(wholeHour, "us")).toBe("8/3/2026");
+    expect(formatQueryDate(utc, "us")).toBe("8/3/2026");
+    expect(formatQueryDate(halfHour, "us")).toBe("8/3/2026");
+    expect(formatQueryDate(wholeHour, "us")).not.toBe(wholeHour);
+    expect(formatQueryDate("not-a-date", "us")).toBe("not-a-date");
+  });
 });
