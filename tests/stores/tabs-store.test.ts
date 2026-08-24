@@ -496,7 +496,11 @@ describe("tabs-store", () => {
     store.getState().hydrateFromDto(
       baseTab({
         id: "T",
-        cachedResultsData: newShapeCache(["id", "name"], [[{ state: "value", text: "ada" }]], columnTypes),
+        cachedResultsData: newShapeCache(
+          ["id", "name"],
+          [[{ state: "value", text: "ada" }]],
+          columnTypes,
+        ),
         cachedColumnNames: ["id", "name"],
       }),
     );
@@ -608,6 +612,82 @@ describe("tabs-store", () => {
     expect(tab?.status).toEqual({ kind: "ok", rowCount: 1, durationMs: 4 });
     expect(tab?.status).not.toHaveProperty("statementCount");
     expect(tab?.status).not.toHaveProperty("statementIndex");
+  });
+
+  it("compactGrid shortens oversized value cells and leaves raw untouched", async () => {
+    const ipc = mockTabsIpc();
+    const store = tabsWithResults(ipc, [baseTab({ id: "T" })], "T");
+    const gen = store.getState().beginRun("T");
+    if (gen === null) throw new Error("expected generation");
+    const long = "x".repeat(3000);
+    const valueCell = { state: "value" as const, text: long };
+    await store.getState().applyRunSuccess(
+      "T",
+      {
+        columns: ["c"],
+        rows: [[valueCell]],
+        durationMs: 2,
+        columnTypes: [{ name: "c", typeName: "text", typeOid: 25 }],
+      },
+      gen,
+    );
+    const tab = store.getState().tabs.find((t) => t.id === "T");
+    expect(tab?.raw?.rows[0]?.[0]).toEqual(valueCell);
+    const compact = tab?.compact?.rows[0]?.[0];
+    expect(compact).toMatchObject({ state: "value" });
+    expect((compact as { text: string }).text).toMatch(/\.\.\. \[truncated\]$/);
+    expect((compact as { text: string }).text.length).toBe(MAX_CELL_CHARACTERS);
+  });
+
+  it("compactGrid passes null and unreadable cells through unchanged", async () => {
+    const ipc = mockTabsIpc();
+    const store = tabsWithResults(ipc, [baseTab({ id: "T" })], "T");
+    const gen = store.getState().beginRun("T");
+    if (gen === null) throw new Error("expected generation");
+    const unreadable = { state: "unreadable" as const, typeName: "bytea" };
+    await store.getState().applyRunSuccess(
+      "T",
+      {
+        columns: ["a", "b"],
+        rows: [[null, unreadable]],
+        durationMs: 1,
+        columnTypes: [
+          { name: "a", typeName: "text", typeOid: 25 },
+          { name: "b", typeName: "bytea", typeOid: 17 },
+        ],
+      },
+      gen,
+    );
+    const tab = store.getState().tabs.find((t) => t.id === "T");
+    expect(tab?.compact?.rows[0]?.[0]).toBeNull();
+    expect(tab?.compact?.rows[0]?.[1]).toEqual(unreadable);
+    expect(tab?.raw?.rows[0]?.[0]).toBeNull();
+    expect(tab?.raw?.rows[0]?.[1]).toEqual(unreadable);
+  });
+
+  it("compactGrid bounds truncated cell display text by MAX_CELL_CHARACTERS", async () => {
+    const ipc = mockTabsIpc();
+    const store = tabsWithResults(ipc, [baseTab({ id: "T" })], "T");
+    const gen = store.getState().beginRun("T");
+    if (gen === null) throw new Error("expected generation");
+    const long = "y".repeat(3000);
+    const truncated = { state: "truncated" as const, text: long };
+    await store.getState().applyRunSuccess(
+      "T",
+      {
+        columns: ["c"],
+        rows: [[truncated]],
+        durationMs: 1,
+        columnTypes: [{ name: "c", typeName: "text", typeOid: 25 }],
+      },
+      gen,
+    );
+    const tab = store.getState().tabs.find((t) => t.id === "T");
+    expect(tab?.raw?.rows[0]?.[0]).toEqual(truncated);
+    const compact = tab?.compact?.rows[0]?.[0];
+    expect(compact).toMatchObject({ state: "truncated" });
+    expect((compact as { text: string }).text).toMatch(/\.\.\. \[truncated\]$/);
+    expect((compact as { text: string }).text.length).toBe(MAX_CELL_CHARACTERS);
   });
 
   it("applyRunSuccess writes raw+compact+ok status and persists blob with matching generation", async () => {

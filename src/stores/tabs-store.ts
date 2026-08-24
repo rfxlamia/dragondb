@@ -9,7 +9,7 @@
  */
 import { createStore, type StoreApi } from "zustand/vanilla";
 import type { ConnectionId, DragonIpc, ResultColumn, TabStateDto } from "../ipc/contract";
-import { isValueCell } from "../lib/result-cell";
+import { isTruncatedCell, isUnreadableCell, isValueCell } from "../lib/result-cell";
 import { compactCell } from "../lib/result-compactor";
 
 export type TabResultGrid = {
@@ -21,7 +21,14 @@ export type TabResultGrid = {
 export type TabRunStatus =
   | { kind: "idle" }
   | { kind: "running" }
-  | { kind: "ok"; rowCount: number; durationMs: number; rowsAffected?: number | null; statementCount?: number; statementIndex?: number }
+  | {
+      kind: "ok";
+      rowCount: number;
+      durationMs: number;
+      rowsAffected?: number | null;
+      statementCount?: number;
+      statementIndex?: number;
+    }
   | { kind: "error"; message: string }
   | { kind: "cancelled" };
 
@@ -200,8 +207,11 @@ function parseCachedResults(data: string | null): ParsedCachedResults {
 function compactCells(row: unknown): unknown[] {
   const cells = Array.isArray(row) ? row : [];
   return cells.map((cell) => {
-    if (typeof cell === "string") return compactCell(cell);
+    if (cell === null) return null;
+    if (isUnreadableCell(cell)) return cell;
     if (isValueCell(cell)) return { ...cell, text: compactCell(cell.text) };
+    if (isTruncatedCell(cell)) return { ...cell, text: compactCell(cell.text) };
+    if (typeof cell === "string") return compactCell(cell);
     return cell;
   });
 }
