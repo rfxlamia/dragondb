@@ -149,12 +149,28 @@ function renderPaneBody(
     case "ok": {
       const hasResultColumns =
         (props.compact?.columns.length ?? props.raw?.columns.length ?? 0) > 0;
+      const statementStatus = statementStatusCopy(props.status);
       if (!hasResultColumns) {
         return (
-          <p className="query-results__empty">{noColumnSuccessCopy(props.status.rowsAffected)}</p>
+          <p className="query-results__empty">
+            <span>{noColumnSuccessCopy(props.status.rowsAffected)}</span>
+            {statementStatus === null ? null : (
+              <>
+                {"\u00a0"}
+                <span className="ui-section-label">{statementStatus}</span>
+              </>
+            )}
+          </p>
         );
       }
-      return <ResultGrid {...props} dateFormat={dateFormat} onReloadFailed={onReloadFailed} />;
+      return (
+        <ResultGrid
+          {...props}
+          dateFormat={dateFormat}
+          onReloadFailed={onReloadFailed}
+          statementStatus={statementStatus}
+        />
+      );
     }
   }
 }
@@ -165,10 +181,23 @@ function noColumnSuccessCopy(rowsAffected: number | null | undefined): string {
   return `Query finished. ${rowsAffected} ${unit} affected.`;
 }
 
+function statementStatusCopy(status: TabRunStatus): string | null {
+  if (
+    status.kind !== "ok" ||
+    status.statementCount === undefined ||
+    status.statementCount <= 1 ||
+    status.statementIndex === undefined
+  ) {
+    return null;
+  }
+  return `Statement ${status.statementIndex} of ${status.statementCount}`;
+}
+
 function ResultGrid(
   props: Parameters<typeof QueryResultsPane>[0] & {
     dateFormat: QueryResultsDateFormat;
     onReloadFailed: (recovery: RowReloadRecovery) => void;
+    statementStatus: string | null;
   },
 ): React.JSX.Element {
   const compact = props.compact;
@@ -306,13 +335,6 @@ function ResultGrid(
   const editorValues =
     selected[0] !== undefined ? (rawGrid?.rows[selected[0]] ?? rows[selected[0]]) : undefined;
   const editorColumns = metadataForResultColumns(rawGrid?.columns ?? columns, columnMetadata);
-  const statementStatus =
-    props.status.kind === "ok" &&
-    props.status.statementCount !== undefined &&
-    props.status.statementCount > 1 &&
-    props.status.statementIndex !== undefined
-      ? `Statement ${props.status.statementIndex} of ${props.status.statementCount}`
-      : null;
 
   return (
     <div className="query-results__grid-wrap" data-testid={ResultsAccessibility.grid}>
@@ -331,7 +353,9 @@ function ResultGrid(
             onChange={(event) => setFilter(event.target.value)}
           />
         </div>
-        {statementStatus === null ? null : <p className="ui-section-label">{statementStatus}</p>}
+        {props.statementStatus === null ? null : (
+          <p className="ui-section-label">{props.statementStatus}</p>
+        )}
         {/* Row actions are icon-only: their labels only ever apply to a
             selection, so four text buttons stated four times what the grid
             already implies. aria-label keeps the copy constants intact. */}

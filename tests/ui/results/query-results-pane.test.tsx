@@ -95,6 +95,26 @@ describe("QueryResultsPane", () => {
     expect(screen.queryByText(ResultsCopy.noRowsFound)).toBeNull();
   });
 
+  it("shows statement context alongside no-column completion status", () => {
+    renderPane(
+      {
+        kind: "ok",
+        rowCount: 0,
+        durationMs: 2,
+        rowsAffected: 0,
+        statementCount: 2,
+        statementIndex: 2,
+      },
+      null,
+    );
+
+    expect(screen.getByText("Query finished. 0 rows affected.")).toBeInTheDocument();
+    const statementStatus = screen.getByText("Statement 2 of 2");
+    expect(statementStatus.closest("button, a, select")).toBeNull();
+    expect(screen.queryByRole("table")).toBeNull();
+    expect(screen.queryByText(ResultsCopy.noRowsFound)).toBeNull();
+  });
+
   it("shows quiet completion copy for a no-column utility statement", () => {
     renderPane({ kind: "ok", rowCount: 0, durationMs: 2 }, null);
 
