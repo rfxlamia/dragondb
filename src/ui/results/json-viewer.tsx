@@ -1,5 +1,10 @@
 import { useEffect, useState } from "react";
+import type { ResultCell, ResultColumn } from "../../ipc/contract";
 import { toCsv } from "../../lib/csv-exporter";
+import {
+  resultCellToJsonExportValue,
+  resultRowToCsvFields,
+} from "../../lib/result-cell";
 import { ResultsAccessibility } from "./results-accessibility";
 import { ResultsCopy } from "./results-copy";
 import "./query-results.css";
@@ -8,13 +13,14 @@ const COPY_JSON_MS = 1750;
 
 export function JsonViewer(props: {
   columns: string[];
+  columnTypes?: ResultColumn[];
   rows: unknown[][];
   onClose?: () => void;
   onSaveCsv?: (csv: string) => void | Promise<void>;
 }): React.JSX.Element {
-  const { columns, rows, onClose, onSaveCsv } = props;
+  const { columns, columnTypes, rows, onClose, onSaveCsv } = props;
   const [copied, setCopied] = useState(false);
-  const pretty = prettyJsonFromRaw(columns, rows);
+  const pretty = prettyJsonFromRaw(columns, columnTypes, rows);
 
   useEffect(() => {
     if (!copied) return;
@@ -32,7 +38,10 @@ export function JsonViewer(props: {
   }
 
   function downloadCsv(): void {
-    const csv = toCsv(columns, rows.map(rowToCsvFields));
+    const csv = toCsv(
+      columns,
+      rows.map((row) => resultRowToCsvFields(row as ResultCell[])),
+    );
     void onSaveCsv?.(csv);
   }
 
@@ -63,26 +72,18 @@ export function JsonViewer(props: {
   );
 }
 
-function prettyJsonFromRaw(columns: string[], rows: unknown[][]): string {
+function prettyJsonFromRaw(
+  columns: string[],
+  columnTypes: ResultColumn[] | undefined,
+  rows: unknown[][],
+): string {
   const objects = rows.map((row) => {
     const record: Record<string, unknown> = {};
     for (const [index, column] of columns.entries()) {
-      record[column] = jsonCell(row[index]);
+      const cell = (row[index] ?? null) as ResultCell;
+      record[column] = resultCellToJsonExportValue(cell, columnTypes?.[index]);
     }
     return record;
   });
   return JSON.stringify(objects, null, 2);
-}
-
-/** Stringify raw cell values for JSON export. */
-function jsonCell(value: unknown): unknown {
-  return value ?? null;
-}
-
-function rowToCsvFields(row: unknown[]): Array<string | null> {
-  return row.map((cell) => {
-    if (cell === null || cell === undefined) return null;
-    if (typeof cell === "string") return cell;
-    return String(cell);
-  });
 }

@@ -1,4 +1,5 @@
-import type { ResultCell, TruncatedCell, UnreadableCell, ValueCell } from "../ipc/contract";
+import type { ResultCell, ResultColumn, TruncatedCell, UnreadableCell, ValueCell } from "../ipc/contract";
+import { categorizeColumnType } from "./column-type";
 import { TRUNCATION_SUFFIX } from "./result-compactor";
 
 export const UNREADABLE_EXPORT_SENTINEL = "[unreadable]";
@@ -28,4 +29,31 @@ export function resultCellToExportValue(cell: ResultCell): string | null {
   if (isUnreadableCell(cell)) return UNREADABLE_EXPORT_SENTINEL;
   if (isTruncatedCell(cell)) return cell.text + TRUNCATION_SUFFIX;
   return cell.text;
+}
+
+/** JSON export value with natural types where lossless; int8 and numeric stay strings. */
+export function resultCellToJsonExportValue(
+  cell: ResultCell,
+  columnMetadata?: ResultColumn,
+): unknown {
+  if (isNullCell(cell)) return null;
+  if (isUnreadableCell(cell)) return UNREADABLE_EXPORT_SENTINEL;
+  if (isTruncatedCell(cell)) return cell.text + TRUNCATION_SUFFIX;
+  if (!isValueCell(cell)) return null;
+
+  const text = cell.text;
+  if (columnMetadata === undefined) return text;
+
+  const { category, exactPrecision } = categorizeColumnType(columnMetadata.typeOid);
+  if (exactPrecision) return text;
+  if (category === "boolean") return text === "true";
+  if (category === "number") {
+    const num = Number(text);
+    return Number.isFinite(num) ? num : text;
+  }
+  return text;
+}
+
+export function resultRowToCsvFields(row: ResultCell[]): Array<string | null> {
+  return row.map(resultCellToExportValue);
 }
