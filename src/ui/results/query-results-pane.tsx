@@ -7,7 +7,7 @@ import {
   isTruncatedCell,
   isUnreadableCell,
   isValueCell,
-  resultCellToExportValue,
+  resultRowToCsvFields,
 } from "../../lib/result-cell";
 import type { BrowseLifecycle } from "../../stores/browse-session-store";
 import type { TabResultGrid, TabRunStatus } from "../../stores/tabs-store";
@@ -286,7 +286,10 @@ function ResultGrid(
   }
 
   function downloadSelectedCsv(): void {
-    const csv = toCsv(rawGrid?.columns ?? columns, selectedRawRows().map(rowToCsvFields));
+    const csv = toCsv(
+      rawGrid?.columns ?? columns,
+      selectedRawRows().map((row) => resultRowToCsvFields(row as ResultCell[])),
+    );
     void props.onSaveCsv?.(csv);
   }
 
@@ -439,6 +442,7 @@ function ResultGrid(
       {jsonOpen ? (
         <JsonViewer
           columns={rawGrid?.columns ?? columns}
+          columnTypes={rawGrid?.columnTypes ?? columnTypes}
           rows={selectedRawRows()}
           onClose={() => setJsonOpen(false)}
           onSaveCsv={props.onSaveCsv}
@@ -637,15 +641,4 @@ function primaryKeyOf(
     pk[name] = cell.text;
   }
   return pk;
-}
-
-function rowToCsvFields(row: unknown[]): Array<string | null> {
-  return row.map((cell) => {
-    if (cell === null || cell === undefined) return null;
-    if (isValueCell(cell) || isUnreadableCell(cell) || isTruncatedCell(cell)) {
-      return resultCellToExportValue(cell);
-    }
-    if (typeof cell === "string") return cell;
-    return String(cell);
-  });
 }

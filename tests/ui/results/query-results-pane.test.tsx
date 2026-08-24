@@ -6,13 +6,14 @@ import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ColumnInfo, ResultCell, ResultColumn } from "../../../src/ipc/contract";
+import { UNREADABLE_EXPORT_SENTINEL } from "../../../src/lib/result-cell";
 import { compactCell } from "../../../src/lib/result-compactor";
 import type { TabResultGrid, TabRunStatus } from "../../../src/stores/tabs-store";
 import { QueryResultsPane } from "../../../src/ui/results/query-results-pane";
 import { ResultsAccessibility } from "../../../src/ui/results/results-accessibility";
 import { ResultsCopy } from "../../../src/ui/results/results-copy";
 import { defined } from "../../lib/defined";
-import { resultFixture, resultRows } from "../../lib/result-fixture";
+import { resultFixture, resultRows, valueCell } from "../../lib/result-fixture";
 
 afterEach(() => {
   cleanup();
@@ -263,6 +264,39 @@ describe("QueryResultsPane", () => {
       />,
     );
     expect(screen.getByText(/8\/15\/2026/)).toBeInTheDocument();
+  });
+
+  it("CSV export names unreadable", async () => {
+    const user = userEvent.setup();
+    const onSaveCsv = vi.fn();
+    const columns = ["value", "note", "secret", "big"];
+    const rows = resultRows([
+      [
+        valueCell("hello"),
+        null,
+        { state: "unreadable", typeName: "bytea" },
+        { state: "truncated", text: "partial" },
+      ],
+    ]);
+    render(
+      <QueryResultsPane
+        status={{ kind: "ok", rowCount: 1, durationMs: 1 }}
+        compact={{ columns, rows }}
+        raw={{ columns, rows }}
+        onSaveCsv={onSaveCsv}
+      />,
+    );
+    await user.click(defined(screen.getAllByRole("row")[1], "expected first data row"));
+    await user.click(screen.getByRole("button", { name: ResultsCopy.downloadCsv }));
+    expect(onSaveCsv).toHaveBeenCalledTimes(1);
+    const csv = defined(onSaveCsv.mock.calls[0]?.[0], "expected csv arg");
+    expect(csv).toContain("hello");
+    expect(csv).toContain(UNREADABLE_EXPORT_SENTINEL);
+    expect(csv).toContain("partial... [truncated]");
+    expect(csv).not.toContain("[object Object]");
+    expect(csv).not.toMatch(/\{"state":/);
+    const fields = csv.split("\n")[1]?.split(",") ?? [];
+    expect(fields[1]).toBe("");
   });
 
   it("Download CSV uses raw buffer through pane, not compact cells", async () => {
