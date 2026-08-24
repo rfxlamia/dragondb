@@ -10,6 +10,7 @@ pub mod connection_test;
 pub mod database_admin;
 pub mod error;
 pub mod query;
+pub mod result_cell;
 pub mod row_ops;
 pub mod ssl;
 pub mod table_admin;
@@ -29,6 +30,7 @@ pub use error::{
 pub use query::{
     json_params_to_owned, map_query_rows, run_query, MappedRowSet, QueryResultData, Value,
 };
+pub use result_cell::{ResultCell, ResultColumn};
 pub use row_ops::{
     delete_rows, fetch_primary_key_columns, update_row, validate_delete_preconditions,
     validate_update_preconditions, RowOperationError, RowOperationErrorKind,
