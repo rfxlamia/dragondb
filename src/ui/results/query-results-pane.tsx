@@ -3,12 +3,7 @@ import type { ColumnInfo, ResultCell, ResultColumn } from "../../ipc/contract";
 import { toCsv } from "../../lib/csv-exporter";
 import type { QueryResultsDateFormat } from "../../lib/date-format-setting";
 import { determineEditability } from "../../lib/query-editability";
-import {
-  isTruncatedCell,
-  isUnreadableCell,
-  isValueCell,
-  resultRowToCsvFields,
-} from "../../lib/result-cell";
+import { isValueCell, resultRowToCsvFields } from "../../lib/result-cell";
 import type { BrowseLifecycle } from "../../stores/browse-session-store";
 import type { TabResultGrid, TabRunStatus } from "../../stores/tabs-store";
 import {
@@ -506,9 +501,9 @@ function visibleRows(
   }
   if (sort === null) return listed;
   const { column, dir } = sort;
-  return listed.slice().sort((a, b) =>
-    compareCells(a.cells[column], b.cells[column], columnTypes[column], dir),
-  );
+  return listed
+    .slice()
+    .sort((a, b) => compareCells(a.cells[column], b.cells[column], columnTypes[column], dir));
 }
 
 function rowMatches(

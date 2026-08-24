@@ -1,10 +1,7 @@
 import { useEffect, useState } from "react";
 import type { ResultCell, ResultColumn } from "../../ipc/contract";
 import { toCsv } from "../../lib/csv-exporter";
-import {
-  resultCellToJsonExportValue,
-  resultRowToCsvFields,
-} from "../../lib/result-cell";
+import { resultCellToJsonExportValue, resultRowToCsvFields } from "../../lib/result-cell";
 import { ResultsAccessibility } from "./results-accessibility";
 import { ResultsCopy } from "./results-copy";
 import "./query-results.css";

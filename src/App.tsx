@@ -856,7 +856,7 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
 
   async function handleFetchAllTable(
     table: TableRef,
-  ): Promise<Pick<QueryResult, "columns" | "rows">> {
+  ): Promise<Pick<QueryResult, "columns" | "columnTypes" | "rows">> {
     const liveId = stores.session.getState().connectionId;
     if (liveId === null) throw new Error("Not connected");
     const result = await ipc.runQuery(
@@ -867,7 +867,7 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
       },
       0,
     );
-    return { columns: result.columns, rows: result.rows };
+    return { columns: result.columns, columnTypes: result.columnTypes, rows: result.rows };
   }
 
   function handleNextPage(): void {

@@ -1,4 +1,10 @@
-import type { ResultCell, ResultColumn, TruncatedCell, UnreadableCell, ValueCell } from "../ipc/contract";
+import type {
+  ResultCell,
+  ResultColumn,
+  TruncatedCell,
+  UnreadableCell,
+  ValueCell,
+} from "../ipc/contract";
 import { categorizeColumnType } from "./column-type";
 import { TRUNCATION_SUFFIX } from "./result-compactor";
 

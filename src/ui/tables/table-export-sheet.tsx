@@ -1,10 +1,11 @@
 import { useState } from "react";
 import type { DragonIpc, QueryResult, TableRef } from "../../ipc/contract";
 import { toCsv } from "../../lib/csv-exporter";
+import { resultCellToJsonExportValue, resultRowToCsvFields } from "../../lib/result-cell";
 import { TablesAccessibility } from "./tables-accessibility";
 import { TablesCopy } from "./tables-copy";
 
-export type TableExportRows = Pick<QueryResult, "columns" | "rows">;
+export type TableExportRows = Pick<QueryResult, "columns" | "columnTypes" | "rows">;
 
 export function TableExportSheet(props: {
   open: boolean;
@@ -33,7 +34,10 @@ export function TableExportSheet(props: {
     setError(null);
     try {
       const data = await ensureRaw();
-      const csv = toCsv(data.columns, rawCsvRows(data.rows));
+      const csv = toCsv(
+        data.columns,
+        data.rows.map((row) => resultRowToCsvFields(row)),
+      );
       await saveCsvFile(csv, `${table.name}.csv`);
     } catch (err) {
       setError(
@@ -49,7 +53,7 @@ export function TableExportSheet(props: {
     setError(null);
     try {
       const data = await ensureRaw();
-      const text = JSON.stringify({ columns: data.columns, rows: data.rows }, null, 2);
+      const text = exportJsonDocument(data);
       await saveTextFile(text, `${table.name}.json`, { name: "JSON", extensions: ["json"] });
     } catch (err) {
       setError(
@@ -97,16 +101,9 @@ export function TableExportSheet(props: {
   );
 }
 
-/** Raw cell strings for RFC4180 export — never compact truncated display cells. */
-function rawCsvRows(rows: unknown[][]): Array<Array<string | null>> {
-  return rows.map((row) =>
-    row.map((cell) => {
-      if (cell === null || cell === undefined) return null;
-      if (typeof cell === "string") return cell;
-      if (typeof cell === "number" || typeof cell === "boolean" || typeof cell === "bigint") {
-        return String(cell);
-      }
-      return JSON.stringify(cell);
-    }),
+function exportJsonDocument(data: TableExportRows): string {
+  const rows = data.rows.map((row) =>
+    row.map((cell, index) => resultCellToJsonExportValue(cell, data.columnTypes[index])),
   );
+  return JSON.stringify({ columns: data.columns, rows }, null, 2);
 }

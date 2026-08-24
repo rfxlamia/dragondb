@@ -6,6 +6,7 @@ import { UNREADABLE_EXPORT_SENTINEL } from "../../../src/lib/result-cell";
 import { compactCell } from "../../../src/lib/result-compactor";
 import { JsonViewer } from "../../../src/ui/results/json-viewer";
 import { ResultsCopy } from "../../../src/ui/results/results-copy";
+import { defined } from "../../lib/defined";
 import { resultRows } from "../../lib/result-fixture";
 
 afterEach(() => cleanup());
@@ -43,10 +44,9 @@ describe("JsonViewer", () => {
     );
     await user.click(screen.getByRole("button", { name: ResultsCopy.copyJson }));
     expect(writeText).toHaveBeenCalledTimes(1);
-    const copied = writeText.mock.calls[0]?.[0];
-    expect(copied).toBeDefined();
+    const copied = defined(writeText.mock.calls[0]?.[0], "expected copied json");
     expect(copied).not.toContain("[object Object]");
-    const parsed = JSON.parse(copied!) as Record<string, unknown>[];
+    const parsed = JSON.parse(copied) as Record<string, unknown>[];
     expect(parsed[0]?.id).toBe("9223372036854775807");
     expect(parsed[0]?.qty).toBe(42);
     expect(parsed[0]?.active).toBe(true);
