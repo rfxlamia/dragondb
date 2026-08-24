@@ -9,6 +9,7 @@
  */
 import { createStore, type StoreApi } from "zustand/vanilla";
 import type { ConnectionId, DragonIpc, TabStateDto } from "../ipc/contract";
+import { isValueCell } from "../lib/result-cell";
 import { compactCell } from "../lib/result-compactor";
 
 export type TabResultGrid = {
@@ -167,7 +168,11 @@ function parseCachedResults(data: string | null): TabResultGrid | null {
 
 function compactCells(row: unknown): unknown[] {
   const cells = Array.isArray(row) ? row : [];
-  return cells.map((cell) => (typeof cell === "string" ? compactCell(cell) : cell));
+  return cells.map((cell) => {
+    if (typeof cell === "string") return compactCell(cell);
+    if (isValueCell(cell)) return { ...cell, text: compactCell(cell.text) };
+    return cell;
+  });
 }
 
 function compactGrid(raw: TabResultGrid): TabResultGrid {

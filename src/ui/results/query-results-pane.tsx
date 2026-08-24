@@ -3,6 +3,7 @@ import type { ColumnInfo } from "../../ipc/contract";
 import { toCsv } from "../../lib/csv-exporter";
 import type { QueryResultsDateFormat } from "../../lib/date-format-setting";
 import { determineEditability } from "../../lib/query-editability";
+import { isValueCell } from "../../lib/result-cell";
 import type { BrowseLifecycle } from "../../stores/browse-session-store";
 import type { TabResultGrid, TabRunStatus } from "../../stores/tabs-store";
 import {
@@ -508,7 +509,7 @@ function bodyRows(
     for (const [cellIndex, column] of columns.entries()) {
       cells.push(
         <td key={`${column}-${cellIndex}`}>
-          {formatResultCell(row.cells[cellIndex], dateFormat)}
+          {renderResultCellText(row.cells[cellIndex], dateFormat)}
         </td>,
       );
     }
@@ -527,6 +528,10 @@ function bodyRows(
     );
   }
   return elements;
+}
+
+function renderResultCellText(cell: unknown, dateFormat: QueryResultsDateFormat): string {
+  return formatResultCell(isValueCell(cell) ? cell.text : cell, dateFormat);
 }
 
 function metadataForResultColumns(resultColumns: string[], metadata: ColumnInfo[]): ColumnInfo[] {
