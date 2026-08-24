@@ -4,12 +4,14 @@ use std::time::{Duration, Instant};
 
 use serde::Serialize;
 use serde_json::Value as JsonValue;
+use tokio_postgres::error::SqlState;
 use tokio_postgres::types::ToSql;
 use tokio_postgres::{Client, SimpleQueryMessage};
 
 use super::error::{map_tokio_postgres_error, IpcErrorKind, MappedIpcError};
 use super::text_transport::{
-    execution_route, fallback_protocol_columns, map_cell, ExecutionRoute, TextColumn,
+    cursor_ownership_from_probe, execution_route, fallback_protocol_columns, map_cell,
+    CursorTransactionOwnership, CursorTransactionProbe, ExecutionRoute, TextColumn,
     DISPLAY_CURSOR_NAME,
 };
 use super::{ResultCell, ResultColumn};
@@ -136,31 +138,40 @@ async fn run_text_query(
             declare_sql,
             fetch_sql,
         } => {
+            let ownership = cursor_transaction_ownership(client).await?;
             let owned = json_params_to_owned(params)?;
             let binds: Vec<&(dyn ToSql + Sync)> = owned
                 .iter()
                 .map(|param| param.as_ref() as &(dyn ToSql + Sync))
                 .collect();
-            client
-                .batch_execute("BEGIN")
-                .await
-                .map_err(|error| map_tokio_postgres_error(&error))?;
+            if let Some(begin) = ownership.begin_command() {
+                client
+                    .batch_execute(begin)
+                    .await
+                    .map_err(|error| map_tokio_postgres_error(&error))?;
+            }
             if let Err(error) = client.execute(declare_sql.as_str(), &binds).await {
-                let _ = client.batch_execute("ROLLBACK").await;
+                rollback_if_path_owned(client, ownership).await;
                 return Err(map_tokio_postgres_error(&error));
             }
             let messages = match client.simple_query(&fetch_sql).await {
                 Ok(messages) => messages,
                 Err(error) => {
-                    let _ = client.batch_execute("ROLLBACK").await;
+                    rollback_if_path_owned(client, ownership).await;
                     return Err(map_tokio_postgres_error(&error));
                 }
             };
-            let close_and_commit = format!("CLOSE {DISPLAY_CURSOR_NAME}; COMMIT");
-            client
-                .batch_execute(&close_and_commit)
-                .await
-                .map_err(|error| map_tokio_postgres_error(&error))?;
+            let close = format!("CLOSE {DISPLAY_CURSOR_NAME}");
+            if let Err(error) = client.batch_execute(&close).await {
+                rollback_if_path_owned(client, ownership).await;
+                return Err(map_tokio_postgres_error(&error));
+            }
+            if let Some(commit) = ownership.commit_command() {
+                if let Err(error) = client.batch_execute(commit).await {
+                    let _ = client.batch_execute("ROLLBACK").await;
+                    return Err(map_tokio_postgres_error(&error));
+                }
+            }
             messages
         }
     };
@@ -170,6 +181,36 @@ async fn run_text_query(
         prepared_columns,
         started.elapsed(),
     ))
+}
+
+const CURSOR_OWNERSHIP_SAVEPOINT: &str = "dragondb_display_cursor_ownership";
+
+async fn cursor_transaction_ownership(
+    client: &Client,
+) -> Result<CursorTransactionOwnership, MappedIpcError> {
+    let savepoint = format!("SAVEPOINT {CURSOR_OWNERSHIP_SAVEPOINT}");
+    match client.batch_execute(&savepoint).await {
+        Ok(()) => {
+            let release = format!("RELEASE SAVEPOINT {CURSOR_OWNERSHIP_SAVEPOINT}");
+            client
+                .batch_execute(&release)
+                .await
+                .map_err(|error| map_tokio_postgres_error(&error))?;
+            Ok(cursor_ownership_from_probe(
+                CursorTransactionProbe::SavepointCreated,
+            ))
+        }
+        Err(error) if error.code() == Some(&SqlState::NO_ACTIVE_SQL_TRANSACTION) => Ok(
+            cursor_ownership_from_probe(CursorTransactionProbe::NoActiveTransaction),
+        ),
+        Err(error) => Err(map_tokio_postgres_error(&error)),
+    }
+}
+
+async fn rollback_if_path_owned(client: &Client, ownership: CursorTransactionOwnership) {
+    if let Some(rollback) = ownership.rollback_command() {
+        let _ = client.batch_execute(rollback).await;
+    }
 }
 
 fn map_text_messages(

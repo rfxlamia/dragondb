@@ -8,6 +8,93 @@ pub const MAX_CELL_BYTES: usize = 1024 * 1024;
 
 pub const DISPLAY_CURSOR_NAME: &str = "dragondb_display_cursor";
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CursorTransactionOwnership {
+    CallerOwned,
+    PathOwned,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CursorTransactionProbe {
+    SavepointCreated,
+    NoActiveTransaction,
+}
+
+pub fn cursor_ownership_from_probe(probe: CursorTransactionProbe) -> CursorTransactionOwnership {
+    match probe {
+        CursorTransactionProbe::SavepointCreated => CursorTransactionOwnership::CallerOwned,
+        CursorTransactionProbe::NoActiveTransaction => CursorTransactionOwnership::PathOwned,
+    }
+}
+
+impl CursorTransactionOwnership {
+    pub(crate) fn begin_command(self) -> Option<&'static str> {
+        (self == Self::PathOwned).then_some("BEGIN")
+    }
+
+    pub(crate) fn commit_command(self) -> Option<&'static str> {
+        (self == Self::PathOwned).then_some("COMMIT")
+    }
+
+    pub(crate) fn rollback_command(self) -> Option<&'static str> {
+        (self == Self::PathOwned).then_some("ROLLBACK")
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CursorFailure {
+    Declare,
+    Fetch,
+    Close,
+    Commit,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CursorStep {
+    Begin,
+    Declare,
+    Fetch,
+    Close,
+    Commit,
+    Rollback,
+}
+
+pub fn cursor_success_steps(ownership: CursorTransactionOwnership) -> Vec<CursorStep> {
+    let mut steps = Vec::new();
+    if ownership.begin_command().is_some() {
+        steps.push(CursorStep::Begin);
+    }
+    steps.extend([CursorStep::Declare, CursorStep::Fetch, CursorStep::Close]);
+    if ownership.commit_command().is_some() {
+        steps.push(CursorStep::Commit);
+    }
+    steps
+}
+
+pub fn cursor_failure_steps(
+    ownership: CursorTransactionOwnership,
+    failure: CursorFailure,
+) -> Vec<CursorStep> {
+    let mut steps = Vec::new();
+    if ownership.begin_command().is_some() {
+        steps.push(CursorStep::Begin);
+    }
+    steps.push(CursorStep::Declare);
+    if failure != CursorFailure::Declare {
+        steps.push(CursorStep::Fetch);
+    }
+    if matches!(failure, CursorFailure::Close | CursorFailure::Commit) {
+        steps.push(CursorStep::Close);
+    }
+    if failure == CursorFailure::Commit && ownership.commit_command().is_some() {
+        steps.push(CursorStep::Commit);
+    }
+    if ownership.rollback_command().is_some() {
+        steps.push(CursorStep::Rollback);
+    }
+    steps
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ExecutionRoute {
     SimpleQuery,
@@ -232,6 +319,53 @@ mod tests {
                 TextColumn::new("second", "unknown", 0),
             ]
         );
+    }
+
+    #[test]
+    fn cursor_transaction_plan_preserves_ownership() {
+        assert_eq!(
+            cursor_ownership_from_probe(CursorTransactionProbe::NoActiveTransaction),
+            CursorTransactionOwnership::PathOwned,
+            "autocommit requires a transaction owned by the cursor path"
+        );
+        assert_eq!(
+            cursor_ownership_from_probe(CursorTransactionProbe::SavepointCreated),
+            CursorTransactionOwnership::CallerOwned,
+            "an existing manual transaction stays caller-owned"
+        );
+        assert_eq!(
+            cursor_success_steps(CursorTransactionOwnership::PathOwned),
+            vec![
+                CursorStep::Begin,
+                CursorStep::Declare,
+                CursorStep::Fetch,
+                CursorStep::Close,
+                CursorStep::Commit,
+            ]
+        );
+        assert_eq!(
+            cursor_success_steps(CursorTransactionOwnership::CallerOwned),
+            vec![CursorStep::Declare, CursorStep::Fetch, CursorStep::Close]
+        );
+    }
+
+    #[test]
+    fn cursor_failure_cleanup_only_rolls_back_path_owned_transactions() {
+        for failure in [
+            CursorFailure::Declare,
+            CursorFailure::Fetch,
+            CursorFailure::Close,
+            CursorFailure::Commit,
+        ] {
+            let path_owned = cursor_failure_steps(CursorTransactionOwnership::PathOwned, failure);
+            assert_eq!(path_owned.last(), Some(&CursorStep::Rollback));
+
+            let caller_owned =
+                cursor_failure_steps(CursorTransactionOwnership::CallerOwned, failure);
+            assert!(!caller_owned.contains(&CursorStep::Begin));
+            assert!(!caller_owned.contains(&CursorStep::Commit));
+            assert!(!caller_owned.contains(&CursorStep::Rollback));
+        }
     }
 
     trait CellTextLen {
