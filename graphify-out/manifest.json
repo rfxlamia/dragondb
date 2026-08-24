@@ -20,8 +20,8 @@
     "semantic_hash": "856d31383162497e18d359457c3044a2"
   },
   "package.json": {
-    "mtime": 1787152586.3961024,
-    "ast_hash": "17695f9585b267d66052460d6629d46c",
+    "mtime": 1787205913.2655427,
+    "ast_hash": "9a8bedf2c04cdb0b9b6dcd75db4c6206",
     "semantic_hash": ""
   },
   "src-tauri/build.rs": {
@@ -35,8 +35,8 @@
     "semantic_hash": "fea2c09b116a57d28360f14cc69d30fd"
   },
   "src-tauri/src/commands.rs": {
-    "mtime": 1787152586.420727,
-    "ast_hash": "e731069c313e393933e030fe2e30e57c",
+    "mtime": 1787203671.4444954,
+    "ast_hash": "e0692d4c95107c54fe349edfcca3e24f",
     "semantic_hash": ""
   },
   "src-tauri/src/lib.rs": {
@@ -65,8 +65,8 @@
     "semantic_hash": ""
   },
   "src-tauri/src/postgres/query.rs": {
-    "mtime": 1787152586.4261646,
-    "ast_hash": "01b0a469faa996653d941ec50e6c6c98",
+    "mtime": 1787203671.4458554,
+    "ast_hash": "56f8aba9812636d0aa96d4c009a05c05",
     "semantic_hash": ""
   },
   "src-tauri/src/postgres/row_ops.rs": {
@@ -585,9 +585,9 @@
     "semantic_hash": "b6934a0b0d72447ad31e8c3d1ceceb92"
   },
   ".github/workflows/core.yml": {
-    "mtime": 1786358166.9266021,
-    "ast_hash": "b6417164b9084699d59c5e12d5da5e40",
-    "semantic_hash": "b6417164b9084699d59c5e12d5da5e40"
+    "mtime": 1787203671.442232,
+    "ast_hash": "f82b382efb6998bdf241fb2c56a4ba57",
+    "semantic_hash": ""
   },
   "README.md": {
     "mtime": 1786358166.9309256,
@@ -760,8 +760,8 @@
     "semantic_hash": ""
   },
   "src-tauri/src/postgres/cancel.rs": {
-    "mtime": 1787152586.4216232,
-    "ast_hash": "1f0a2d2058cb597488045ddb7b7f0479",
+    "mtime": 1787203671.4453723,
+    "ast_hash": "8d22bffac342c49474a68b1168048477",
     "semantic_hash": ""
   },
   "src-tauri/src/postgres/catalog.rs": {
@@ -1547,6 +1547,21 @@
   "docs/superpowers/specs/2026-08-19-sidebar-redesign-design.md": {
     "mtime": 1787192434.647898,
     "ast_hash": "8bf780df06427b5d072906bd21390473",
+    "semantic_hash": ""
+  },
+  "tests/ci/workflow-hardening.test.ts": {
+    "mtime": 1787203671.4463224,
+    "ast_hash": "8b7c1ad317ad3d179624d6b3b0e911f0",
+    "semantic_hash": ""
+  },
+  ".github/dependabot.yml": {
+    "mtime": 1787203671.4417365,
+    "ast_hash": "dcc5a91dd00cd74d9a5ddcde9b959c9d",
+    "semantic_hash": ""
+  },
+  ".github/workflows/security.yml": {
+    "mtime": 1787203671.4424763,
+    "ast_hash": "e03c5741b56f819c5cb52fdb12838d87",
     "semantic_hash": ""
   }
 }
