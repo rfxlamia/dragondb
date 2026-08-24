@@ -25,6 +25,8 @@ pub struct QueryResultData {
     pub rows: Vec<Vec<ResultCell>>,
     pub rows_affected: Option<u64>,
     pub statement_count: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub displayed_statement_index: Option<u64>,
     pub duration_ms: u64,
 }
 
@@ -42,7 +44,8 @@ pub async fn run_query(
             column_types: vec![],
             rows: vec![],
             rows_affected: Some(0),
-            statement_count: 1,
+            statement_count: 0,
+            displayed_statement_index: None,
             duration_ms: 0,
         });
     }
@@ -54,42 +57,26 @@ pub async fn run_query(
             .await
             .map_err(|e| map_tokio_postgres_error(&e))?;
     }
-    let mut last = QueryResultData {
-        columns: vec![],
-        column_types: vec![],
-        rows: vec![],
-        rows_affected: Some(0),
-        statement_count: 1,
-        duration_ms: 0,
-    };
-    let mut saw_row_result = false;
-    for (index, statement) in statements.iter().enumerate() {
+    let mut outcomes = Vec::with_capacity(statements.len());
+    for statement in &statements {
         let statement_params = if statements.len() == 1 { params } else { &[] };
-        match run_single_query(client, statement, statement_params, started).await {
-            Ok(result) => {
-                if !result.columns.is_empty() {
-                    saw_row_result = true;
-                    last = result;
-                } else if !saw_row_result && index + 1 == statements.len() {
-                    last = result;
-                }
+        let outcome = run_single_query(client, statement, statement_params, started).await;
+        let failed = outcome.is_err();
+        outcomes.push(outcome);
+        if failed {
+            if wrap {
+                let _ = client.batch_execute("ROLLBACK").await;
             }
-            Err(error) => {
-                if wrap {
-                    let _ = client.batch_execute("ROLLBACK").await;
-                }
-                return Err(error);
-            }
+            break;
         }
     }
-    if wrap {
+    if wrap && outcomes.iter().all(Result::is_ok) {
         client
             .batch_execute("COMMIT")
             .await
             .map_err(|e| map_tokio_postgres_error(&e))?;
     }
-    last.duration_ms = started.elapsed().as_millis() as u64;
-    Ok(last)
+    finalize_multi_statement_run(outcomes, wrap, started.elapsed().as_millis() as u64)
 }
 
 async fn run_single_query(
@@ -120,6 +107,7 @@ async fn run_single_query(
             rows: vec![],
             rows_affected: Some(result),
             statement_count: 1,
+            displayed_statement_index: None,
             duration_ms: started.elapsed().as_millis() as u64,
         });
     }
@@ -347,8 +335,118 @@ fn map_text_messages(
         rows,
         rows_affected,
         statement_count: 1,
+        displayed_statement_index: None,
         duration_ms: duration.as_millis() as u64,
     }
+}
+
+/// Combine per-statement outcomes into the IPC result shape and enrich partial failures.
+pub fn finalize_multi_statement_run(
+    outcomes: Vec<Result<QueryResultData, MappedIpcError>>,
+    wrapped: bool,
+    duration_ms: u64,
+) -> Result<QueryResultData, MappedIpcError> {
+    let total = outcomes.len();
+    if total == 0 {
+        return Ok(QueryResultData {
+            columns: vec![],
+            column_types: vec![],
+            rows: vec![],
+            rows_affected: Some(0),
+            statement_count: 0,
+            displayed_statement_index: None,
+            duration_ms,
+        });
+    }
+
+    if total == 1 {
+        return match outcomes.into_iter().next().expect("one outcome") {
+            Ok(mut result) => {
+                result.statement_count = 0;
+                result.displayed_statement_index = None;
+                result.duration_ms = duration_ms;
+                Ok(result)
+            }
+            Err(error) => Err(error),
+        };
+    }
+
+    for (index, outcome) in outcomes.iter().enumerate() {
+        if let Err(error) = outcome {
+            return Err(enrich_multi_statement_error(
+                error.clone(),
+                index,
+                total,
+                wrapped,
+            ));
+        }
+    }
+
+    let results = outcomes
+        .into_iter()
+        .map(|outcome| outcome.expect("checked above"))
+        .collect();
+    Ok(select_displayed_multi_statement_result(results, duration_ms))
+}
+
+fn enrich_multi_statement_error(
+    error: MappedIpcError,
+    failed_index: usize,
+    total: usize,
+    wrapped: bool,
+) -> MappedIpcError {
+    let failed_num = failed_index + 1;
+    let mut message = format!(
+        "Statement {failed_num} of {total} failed: {}",
+        error.message
+    );
+    if failed_index > 0 {
+        let prior = failed_index;
+        if wrapped {
+            message.push_str(&format!(" Statement {prior} was rolled back."));
+        } else {
+            message.push_str(&format!(" Statement {prior} was already committed."));
+        }
+    }
+    MappedIpcError {
+        kind: error.kind,
+        message,
+        position: error.position,
+    }
+}
+
+fn select_displayed_multi_statement_result(
+    results: Vec<QueryResultData>,
+    duration_ms: u64,
+) -> QueryResultData {
+    let total = results.len();
+    let mut last = results.last().cloned().unwrap_or(QueryResultData {
+        columns: vec![],
+        column_types: vec![],
+        rows: vec![],
+        rows_affected: Some(0),
+        statement_count: total as u64,
+        displayed_statement_index: Some(total as u64),
+        duration_ms,
+    });
+    let mut saw_row_result = false;
+    let mut displayed_index = total as u64;
+
+    for (index, result) in results.iter().enumerate() {
+        if !result.columns.is_empty() {
+            saw_row_result = true;
+            last = result.clone();
+            displayed_index = (index + 1) as u64;
+        } else if !saw_row_result && index + 1 == total {
+            last = result.clone();
+            displayed_index = (index + 1) as u64;
+        }
+    }
+
+    last.statement_count = total as u64;
+    last.displayed_statement_index = Some(displayed_index);
+    last.duration_ms = duration_ms;
+    last
 }
 
 fn map_simple_row(
@@ -786,6 +884,100 @@ mod tests {
                 CursorOperation::Begin | CursorOperation::Commit | CursorOperation::Rollback
             )));
         }
+    }
+
+    #[test]
+    fn multi_statement_orchestration_reports_shape_and_failures() {
+        fn sample(columns: &[&str]) -> QueryResultData {
+            QueryResultData {
+                columns: columns.iter().map(|name| (*name).to_string()).collect(),
+                column_types: vec![],
+                rows: vec![],
+                rows_affected: if columns.is_empty() { Some(1) } else { None },
+                statement_count: 1,
+                displayed_statement_index: None,
+                duration_ms: 0,
+            }
+        }
+
+        fn syntax_error(message: &str) -> MappedIpcError {
+            MappedIpcError {
+                kind: IpcErrorKind::Syntax,
+                message: message.into(),
+                position: None,
+            }
+        }
+
+        let success = finalize_multi_statement_run(
+            vec![
+                Ok(sample(&["a"])),
+                Ok(sample(&[])),
+                Ok(sample(&["b"])),
+            ],
+            true,
+            12,
+        )
+        .expect("three-statement success");
+        assert_eq!(success.statement_count, 3);
+        assert_eq!(success.displayed_statement_index, Some(3));
+        assert_eq!(success.columns, vec!["b"]);
+        assert_eq!(success.duration_ms, 12);
+
+        let single = finalize_multi_statement_run(vec![Ok(sample(&["only"]))], false, 4)
+            .expect("single-statement success");
+        assert_eq!(single.statement_count, 0);
+        assert_eq!(single.displayed_statement_index, None);
+
+        let wrapped_failure = finalize_multi_statement_run(
+            vec![
+                Ok(sample(&["a"])),
+                Err(syntax_error("bad syntax")),
+                Ok(sample(&["c"])),
+            ],
+            true,
+            0,
+        )
+        .expect_err("wrapped failure");
+        assert!(
+            wrapped_failure.message.contains("Statement 2 of 3 failed"),
+            "unexpected message: {}",
+            wrapped_failure.message
+        );
+        assert!(
+            wrapped_failure.message.contains("bad syntax"),
+            "original error must be preserved: {}",
+            wrapped_failure.message
+        );
+        assert!(
+            wrapped_failure
+                .message
+                .contains("Statement 1 was rolled back"),
+            "wrapped scripts must report rollback: {}",
+            wrapped_failure.message
+        );
+
+        let unwrapped_failure = finalize_multi_statement_run(
+            vec![
+                Ok(sample(&[])),
+                Err(syntax_error("bad syntax")),
+                Ok(sample(&["c"])),
+            ],
+            false,
+            0,
+        )
+        .expect_err("unwrapped failure");
+        assert!(
+            unwrapped_failure.message.contains("Statement 2 of 3 failed"),
+            "unexpected message: {}",
+            unwrapped_failure.message
+        );
+        assert!(
+            unwrapped_failure
+                .message
+                .contains("Statement 1 was already committed"),
+            "unwrapped scripts must report prior commit: {}",
+            unwrapped_failure.message
+        );
     }
 
     #[test]

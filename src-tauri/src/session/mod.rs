@@ -2188,7 +2188,8 @@ fn sample_query_result() -> QueryResultData {
             text: "1".into(),
         }]],
         rows_affected: None,
-        statement_count: 1,
+        statement_count: 0,
+        displayed_statement_index: None,
         duration_ms: 1,
     }
 }

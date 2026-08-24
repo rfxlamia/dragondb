@@ -301,6 +301,8 @@ pub async fn list_columns(
     session.list_columns(&connection_id, &table).await
 }
 
+/// Execute SQL and return row data plus multi-statement status (`statementCount`,
+/// `displayedStatementIndex`) when the script contains more than one statement.
 #[tauri::command(rename_all = "camelCase")]
 pub async fn run_query(
     state: State<'_, Mutex<AppSession>>,
