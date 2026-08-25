@@ -150,8 +150,8 @@
     "semantic_hash": "0bffdbae52b8ed9e4c9215ccf78036a4"
   },
   "src/App.tsx": {
-    "mtime": 1787586627.1271794,
-    "ast_hash": "9a699ad2d84745e47fc7d4e64f4c6692",
+    "mtime": 1787653165.631457,
+    "ast_hash": "093538a507e32a557fb1a56bbdba4a3e",
     "semantic_hash": ""
   },
   "src/core/canvas-presentation.ts": {
@@ -1320,9 +1320,9 @@
     "semantic_hash": "46420370f15af457684a8169aa1ae881"
   },
   "tests/ui/connection/connection-tables-list.test.tsx": {
-    "mtime": 1787192434.6599278,
-    "ast_hash": "c6f640de34a2204bda27d63a13a76e40",
-    "semantic_hash": "c6f640de34a2204bda27d63a13a76e40"
+    "mtime": 1787653165.6807296,
+    "ast_hash": "8680e1ae0b2a0e42e32dd44f02f14d6d",
+    "semantic_hash": ""
   },
   "tests/ui/connection/create-database-flow.test.ts": {
     "mtime": 1787152586.476175,

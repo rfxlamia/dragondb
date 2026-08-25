@@ -391,7 +391,10 @@ pub fn finalize_multi_statement_run(
         .into_iter()
         .map(|outcome| outcome.expect("checked above"))
         .collect();
-    Ok(select_displayed_multi_statement_result(results, duration_ms))
+    Ok(select_displayed_multi_statement_result(
+        results,
+        duration_ms,
+    ))
 }
 
 fn enrich_multi_statement_error(
@@ -914,11 +917,7 @@ mod tests {
         }
 
         let success = finalize_multi_statement_run(
-            vec![
-                Ok(sample(&["a"])),
-                Ok(sample(&[])),
-                Ok(sample(&["b"])),
-            ],
+            vec![Ok(sample(&["a"])), Ok(sample(&[])), Ok(sample(&["b"]))],
             3,
             true,
             12,
@@ -967,7 +966,9 @@ mod tests {
         )
         .expect_err("unwrapped failure");
         assert!(
-            unwrapped_failure.message.contains("Statement 2 of 3 failed"),
+            unwrapped_failure
+                .message
+                .contains("Statement 2 of 3 failed"),
             "unexpected message: {}",
             unwrapped_failure.message
         );
