@@ -65,9 +65,9 @@
     "semantic_hash": "7bd083631cd33c55ff3c6c4e826e25f5"
   },
   "src-tauri/src/postgres/query.rs": {
-    "mtime": 1787556205.4778543,
-    "ast_hash": "dc074213e5356230725f138b4e85543d",
-    "semantic_hash": "dc074213e5356230725f138b4e85543d"
+    "mtime": 1787657578.0836794,
+    "ast_hash": "dca97e39711827ef5c5e559dbf5fcd06",
+    "semantic_hash": ""
   },
   "src-tauri/src/postgres/row_ops.rs": {
     "mtime": 1787152586.426448,

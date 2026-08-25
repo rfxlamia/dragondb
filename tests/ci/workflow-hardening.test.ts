@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -67,6 +68,10 @@ function expectExactRun(job: WorkflowJob, name: string, command: string): void {
   expect(job.steps?.find((step) => step.name === name)?.run).toBe(command);
 }
 
+function isMissingCommand(error: unknown): boolean {
+  return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT";
+}
+
 describe("CI workflow hardening", () => {
   it("gates frontend and Rust health independently", () => {
     const { definition } = readWorkflow("core.yml");
@@ -80,10 +85,30 @@ describe("CI workflow hardening", () => {
     expect(rust?.name).toBe("rust");
 
     expectPinnedAction(frontend ?? {}, "actions/checkout");
+    const nodeSetup = expectPinnedAction(frontend ?? {}, "actions/setup-node");
+    expect(nodeSetup?.with?.["node-version-file"]).toBe(".nvmrc");
     const bunSetup = expectPinnedAction(frontend ?? {}, "oven-sh/setup-bun");
     expect(bunSetup?.with?.["bun-version"]).toBe("1.3.14");
 
+    const frontendSteps = frontend?.steps ?? [];
+    const checkoutIndex = frontendSteps.findIndex((step) =>
+      step.uses?.startsWith("actions/checkout@"),
+    );
+    const nodeSetupIndex = frontendSteps.findIndex((step) =>
+      step.uses?.startsWith("actions/setup-node@"),
+    );
+    const bunSetupIndex = frontendSteps.findIndex((step) =>
+      step.uses?.startsWith("oven-sh/setup-bun@"),
+    );
+    expect(nodeSetupIndex).toBe(checkoutIndex + 1);
+    expect(nodeSetupIndex).toBeLessThan(bunSetupIndex);
+
     expectExactRun(frontend ?? {}, "Install dependencies", "bun install --frozen-lockfile");
+    expectExactRun(
+      frontend ?? {},
+      "Verify Node runtime",
+      'test "$(node --version)" = "v$(cat .nvmrc)"',
+    );
     expectExactRun(frontend ?? {}, "Typecheck", "bun run typecheck");
     expectExactRun(frontend ?? {}, "Lint", "bun run lint");
     expectExactRun(frontend ?? {}, "Test", "bun run test");
@@ -119,6 +144,50 @@ describe("CI workflow hardening", () => {
 
     const rustCache = rust?.steps?.find((step) => step.uses?.startsWith("Swatinem/rust-cache@"));
     expect(rustCache?.with?.workspaces).toBe("src-tauri -> target");
+  });
+
+  it("declares the Node baseline for local development", () => {
+    const nodeVersionPath = join(process.cwd(), ".nvmrc");
+    expect(existsSync(nodeVersionPath)).toBe(true);
+    if (!existsSync(nodeVersionPath)) return;
+
+    expect(readFileSync(nodeVersionPath, "utf8").trim()).toBe("24.19.0");
+
+    const packageManifest = JSON.parse(
+      readFileSync(join(process.cwd(), "package.json"), "utf8"),
+    ) as { engines?: { node?: string } };
+    expect(packageManifest.engines?.node).toBe(">=24.19.0 <25");
+  });
+
+  it("gates make check on the pinned Node runtime", () => {
+    const makefile = readFileSync(join(process.cwd(), "Makefile"), "utf8");
+    let dryRun: string | undefined;
+
+    try {
+      dryRun = execFileSync("make", ["-n", "check"], {
+        cwd: process.cwd(),
+        encoding: "utf8",
+        env: { ...process.env, BUN: "bun", NODE_VERSION_FILE: ".nvmrc" },
+      });
+    } catch (error) {
+      if (!isMissingCommand(error)) throw error;
+    }
+
+    if (dryRun === undefined) {
+      expect(makefile).toMatch(/^\.PHONY:.*\bcheck-node\b/m);
+      expect(makefile).toMatch(/^check-node:.*##/m);
+      expect(makefile).toMatch(/^check: check-node ##/m);
+      expect(makefile).toContain("node --version");
+      expect(makefile).toContain(".nvmrc");
+      return;
+    }
+
+    const nodeGuardIndex = dryRun.indexOf("node --version");
+    const bunCheckIndex = dryRun.indexOf("bun run check");
+    expect(nodeGuardIndex).toBeGreaterThanOrEqual(0);
+    expect(dryRun).toContain(".nvmrc");
+    expect(bunCheckIndex).toBeGreaterThanOrEqual(0);
+    expect(nodeGuardIndex).toBeLessThan(bunCheckIndex);
   });
 
   it("reviews dependency changes on pull requests", () => {

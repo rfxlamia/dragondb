@@ -2,10 +2,11 @@
 # Prefer `make <target>`; run `bun run <script>` directly for ad-hoc flags.
 
 BUN ?= bun
+NODE_VERSION_FILE ?= .nvmrc
 
 .DEFAULT_GOAL := help
 
-.PHONY: help install dev tauri-dev build build-tauri preview typecheck lint lint-fix test test-watch check tauri-check clean
+.PHONY: help install dev tauri-dev build build-tauri preview typecheck lint lint-fix test test-watch check-node check tauri-check clean
 
 help: ## Show available targets
 	@printf 'DragonDB make targets\n'
@@ -44,7 +45,24 @@ test: ## Run tests once
 test-watch: ## Run tests in watch mode
 	$(BUN) run test:watch
 
-check: ## CI gate: typecheck + lint + test
+check-node: ## Verify active Node matches .nvmrc
+	@command -v node >/dev/null 2>&1 || { \
+		printf 'Node runtime is not available. Activate the version from %s with your Node version manager.\n' "$(NODE_VERSION_FILE)" >&2; \
+		exit 1; \
+	}
+	@test -f "$(NODE_VERSION_FILE)" || { \
+		printf 'Node version file not found: %s\n' "$(NODE_VERSION_FILE)" >&2; \
+		exit 1; \
+	}
+	@expected="$$(tr -d '[:space:]' < "$(NODE_VERSION_FILE)")"; \
+	current="$$(node --version)"; \
+	if [ "$$current" != "v$$expected" ]; then \
+		printf 'Node version mismatch: expected v%s, got %s.\n' "$$expected" "$$current" >&2; \
+		printf 'Activate the Node version declared in %s with your Node version manager, then rerun make check.\n' "$(NODE_VERSION_FILE)" >&2; \
+		exit 1; \
+	fi
+
+check: check-node ## CI gate: typecheck + lint + test
 	$(BUN) run check
 
 tauri-check: ## CI gate for Rust: fmt + clippy + test + check (mirrors CI rust job)
