@@ -35,9 +35,9 @@
     "semantic_hash": "fea2c09b116a57d28360f14cc69d30fd"
   },
   "src-tauri/src/commands.rs": {
-    "mtime": 1787553190.2965603,
-    "ast_hash": "84704daf794bed87186d3dc82f84e2b4",
-    "semantic_hash": "84704daf794bed87186d3dc82f84e2b4"
+    "mtime": 1787586818.574605,
+    "ast_hash": "57276b92f1ace2c07bc2a10dcb045634",
+    "semantic_hash": ""
   },
   "src-tauri/src/lib.rs": {
     "mtime": 1787152586.4209738,
@@ -150,8 +150,8 @@
     "semantic_hash": "0bffdbae52b8ed9e4c9215ccf78036a4"
   },
   "src/App.tsx": {
-    "mtime": 1787576031.019814,
-    "ast_hash": "d4f266bad072f74652173e2749e7bffb",
+    "mtime": 1787586627.1271794,
+    "ast_hash": "9a699ad2d84745e47fc7d4e64f4c6692",
     "semantic_hash": ""
   },
   "src/core/canvas-presentation.ts": {

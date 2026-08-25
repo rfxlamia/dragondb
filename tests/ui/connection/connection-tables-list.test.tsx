@@ -124,7 +124,10 @@ describe("ConnectionTablesList", () => {
     const pickerRow = picker.closest("label");
     expect(searchRow).not.toBeNull();
     expect(pickerRow).not.toBeNull();
+    if (searchRow === null || pickerRow === null) {
+      throw new Error("Expected search and schema picker rows to be rendered");
+    }
     const children = Array.from(region.children);
-    expect(children.indexOf(searchRow!)).toBeLessThan(children.indexOf(pickerRow!));
+    expect(children.indexOf(searchRow)).toBeLessThan(children.indexOf(pickerRow));
   });
 });
