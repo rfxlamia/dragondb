@@ -5,6 +5,7 @@
 //! Database administration uses dedicated session methods, never run_query.
 
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 use tauri::State;
 use tokio::sync::Mutex;
 
@@ -704,6 +705,19 @@ pub async fn save_text_file(
     save_text_with_filter(app, text, default_path, &filter_name, &extensions).await
 }
 
+/// When the native save sheet hides extensions (macOS with a type filter), the
+/// returned path may omit `.csv`. Append the filter's primary extension when missing.
+fn ensure_save_extension(path: PathBuf, extensions: &[String]) -> PathBuf {
+    let primary = extensions.first().filter(|ext| !ext.is_empty());
+    match primary {
+        None => path,
+        Some(ext) => match path.extension().and_then(|e| e.to_str()) {
+            Some(existing) if existing.eq_ignore_ascii_case(ext) => path,
+            _ => path.with_extension(ext),
+        },
+    }
+}
+
 async fn save_text_with_filter(
     app: tauri::AppHandle,
     text: String,
@@ -731,6 +745,7 @@ async fn save_text_with_filter(
         message: format!("Invalid save path: {e}"),
         position: None,
     })?;
+    let path_buf = ensure_save_extension(path_buf, extensions);
 
     let written = tauri::async_runtime::spawn_blocking(move || {
         std::fs::write(&path_buf, text.as_bytes()).map(|()| path_buf)
@@ -755,7 +770,9 @@ async fn save_text_with_filter(
 
 #[cfg(test)]
 mod tests {
-    use super::{history_dto_from_row, HistoryDto, SavedQueryDto, TabStateDto};
+    use super::{
+        ensure_save_extension, history_dto_from_row, HistoryDto, SavedQueryDto, TabStateDto,
+    };
     use crate::postgres::{IpcErrorKind, MappedIpcError};
     use crate::session::{AppSession, SavedQueryWriteInput, TabStateWriteInput};
     use crate::storage::{save_saved_query, SavedQueryWrite};
@@ -786,6 +803,21 @@ mod tests {
             cached_column_names: None,
             visual_document_json: None,
         }
+    }
+
+    #[test]
+    fn ensure_save_extension_appends_primary_extension_when_missing() {
+        let path = PathBuf::from("/tmp/results");
+        let out = ensure_save_extension(path, &["csv".to_string()]);
+        assert_eq!(out.extension().and_then(|e| e.to_str()), Some("csv"));
+        assert_eq!(out.file_stem().and_then(|s| s.to_str()), Some("results"));
+    }
+
+    #[test]
+    fn ensure_save_extension_keeps_existing_matching_extension() {
+        let path = PathBuf::from("/tmp/export.CSV");
+        let out = ensure_save_extension(path, &["csv".to_string()]);
+        assert_eq!(out.to_str(), Some("/tmp/export.CSV"));
     }
 
     #[test]

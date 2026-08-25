@@ -953,7 +953,9 @@ export default function App({ ipc: ipcProp }: AppProps = {}) {
   }
 
   async function handleSaveCsv(csv: string): Promise<void> {
-    await ipc.saveCsvFile(csv).catch(() => undefined);
+    const defaultPath =
+      sourceTable !== undefined ? `${sourceTable.name}.csv` : "results.csv";
+    await ipc.saveCsvFile(csv, defaultPath).catch(() => undefined);
   }
 
   function handleSelectQuery(queryId: string | null): void {
