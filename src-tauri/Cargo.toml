@@ -28,7 +28,7 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 tokio-postgres = "0.7"
 postgres-native-tls = "0.5"
 native-tls = "0.2"
-russh = { version = "0.62", features = ["aws-lc-rs"] }
+russh = { version = "0.63", features = ["aws-lc-rs"] }
 keyring = "4"
 rusqlite = { version = "0.40", features = ["bundled"] }
 uuid = { version = "1", features = ["v4", "serde"] }
